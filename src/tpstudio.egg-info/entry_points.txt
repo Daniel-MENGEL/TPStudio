@@ -1,0 +1,2 @@
+[console_scripts]
+tpstudio = tpstudio.cli:main

@@ -1,0 +1,5 @@
+Metadata-Version: 2.4
+Name: tpstudio
+Version: 0.2.0
+Summary: Outils de génération et correction de TP de physique en CPGE.
+Requires-Python: >=3.10

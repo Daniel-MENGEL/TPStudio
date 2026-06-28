@@ -1,0 +1,14 @@
+README.md
+pyproject.toml
+src/tpstudio/__init__.py
+src/tpstudio/cli.py
+src/tpstudio.egg-info/PKG-INFO
+src/tpstudio.egg-info/SOURCES.txt
+src/tpstudio.egg-info/dependency_links.txt
+src/tpstudio.egg-info/entry_points.txt
+src/tpstudio.egg-info/top_level.txt
+src/tpstudio/models/__init__.py
+src/tpstudio/models/tp.py
+src/tpstudio/parsers/__init__.py
+src/tpstudio/parsers/latex.py
+tests/test_latex_parser.py
