@@ -101,6 +101,26 @@ class Section:
 
 
 @dataclass(slots=True)
+class TeacherCall:
+    """Marqueur local indiquant un appel professeur dans une consigne.
+
+    Dans les fichiers LaTeX, il correspond à la commande inline ``\appel``.
+    Le texte associé est la consigne dans laquelle le marqueur apparaît.
+    """
+
+    line: int = 0
+    text: str = ""
+    section_title: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "line": self.line,
+            "text": self.text,
+            "section_title": self.section_title,
+        }
+
+
+@dataclass(slots=True)
 class Figure:
     """Figure référencée par le TP."""
 
@@ -148,6 +168,7 @@ class TP:
     sections: list[Section] = field(default_factory=list)
     figures: list[Figure] = field(default_factory=list)
     resources: list[Resource] = field(default_factory=list)
+    teacher_calls: list[TeacherCall] = field(default_factory=list)
 
     def block(self, kind: str) -> PedagogicalBlock | None:
         for block in self.blocks:
@@ -191,7 +212,8 @@ class TP:
             f"objectives={len(self.objectives)}, "
             f"equipment={len(self.equipment)}, "
             f"sections={len(self.sections)}, "
-            f"questions={len(self.questions)})"
+            f"questions={len(self.questions)}, "
+            f"teacher_calls={len(self.teacher_calls)})"
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -201,6 +223,7 @@ class TP:
             "blocks": [block.to_dict() for block in self.blocks],
             "figures": [figure.to_dict() for figure in self.figures],
             "resources": [resource.to_dict() for resource in self.resources],
+            "teacher_calls": [call.to_dict() for call in self.teacher_calls],
         }
 
 

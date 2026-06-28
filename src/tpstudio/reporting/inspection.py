@@ -34,6 +34,8 @@ def format_inspection(
         "",
         _format_list("❓ Questions", document.questions),
         "",
+        _format_teacher_calls(document),
+        "",
         _format_sections(document),
         "",
         f"✓ Manifest : {manifest_path}",
@@ -65,6 +67,8 @@ def make_inspection_report(document: TPDocument, tex_path: Path) -> str:
     lines.extend(_markdown_items(document.equipment))
     lines += ["", "## Questions", ""]
     lines.extend(_markdown_items(document.questions))
+    lines += ["", "## Appels professeur", ""]
+    lines.extend(_markdown_teacher_calls(document))
     lines += ["", "## Sections détectées", ""]
 
     if document.sections:
@@ -93,6 +97,18 @@ def _format_list(title: str, items: list[str]) -> str:
     return "\n".join(lines)
 
 
+def _format_teacher_calls(document: TPDocument) -> str:
+    calls = document.teacher_calls
+    if not calls:
+        return "👁 Appels professeur\n    aucun appel détecté"
+
+    lines = [f"👁 Appels professeur ({len(calls)})"]
+    for call in calls:
+        context = f" — {call.section_title}" if call.section_title else ""
+        lines.append(f"    • ligne {call.line}{context} : {call.text}")
+    return "\n".join(lines)
+
+
 def _format_sections(document: TPDocument) -> str:
     if not document.sections:
         return "📚 Sections\n    aucune section détectée"
@@ -103,6 +119,17 @@ def _format_sections(document: TPDocument) -> str:
         item_count = len(section.items)
         lines.append(f"    {index}. {title} — {item_count} item(s)")
     return "\n".join(lines)
+
+
+def _markdown_teacher_calls(document: TPDocument) -> list[str]:
+    if not document.teacher_calls:
+        return ["Aucun appel détecté."]
+
+    lines: list[str] = []
+    for call in document.teacher_calls:
+        context = f" — {call.section_title}" if call.section_title else ""
+        lines.append(f"- ligne {call.line}{context} : {call.text}")
+    return lines
 
 
 def _markdown_items(items: list[str]) -> list[str]:

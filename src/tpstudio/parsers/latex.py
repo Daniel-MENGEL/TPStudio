@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from tpstudio.models import Section, TPBlock, TPDocument, TPMetadata
+from tpstudio.models import Section, TeacherCall, TPBlock, TPDocument, TPMetadata
 
 
 class LatexParser:
@@ -39,7 +39,13 @@ class LatexParser:
         metadata.source_tex = self.tex_path
         blocks = self._parse_blocks(text)
         sections = self._parse_sections(text)
-        return TPDocument(metadata=metadata, blocks=blocks, sections=sections)
+        teacher_calls = self._parse_teacher_calls(text)
+        return TPDocument(
+            metadata=metadata,
+            blocks=blocks,
+            sections=sections,
+            teacher_calls=teacher_calls,
+        )
 
     def _parse_metadata(self, text: str) -> TPMetadata:
         title = self._first_braced(text, "title")
@@ -109,6 +115,58 @@ class LatexParser:
                 )
             )
         return sections
+
+    def _parse_teacher_calls(self, text: str) -> list[TeacherCall]:
+        """Extrait les marqueurs inline ``\appel``.
+
+        La commande ``\appels`` annonce éventuellement une rubrique générale,
+        mais les vrais points d'appel professeur sont les commandes ``\appel``
+        placées au fil des consignes.
+        """
+
+        calls: list[TeacherCall] = []
+        lines = text.splitlines()
+        section_matches = list(re.finditer(self.SECTION_PATTERN, text))
+
+        for match in re.finditer(r"\\appel\b", text):
+            line_number = text.count("\n", 0, match.start()) + 1
+            raw_line = lines[line_number - 1] if 0 <= line_number - 1 < len(lines) else ""
+            cleaned = self._clean_latex_inline(raw_line.replace(r"\appel", ""))
+            cleaned = cleaned.strip(" .\n\t")
+
+            if not cleaned:
+                cleaned = self._previous_non_empty_line(lines, line_number)
+
+            calls.append(
+                TeacherCall(
+                    line=line_number,
+                    text=cleaned,
+                    section_title=self._section_title_at_position(text, section_matches, match.start()),
+                )
+            )
+
+        return calls
+
+    def _previous_non_empty_line(self, lines: list[str], line_number: int) -> str:
+        for index in range(line_number - 2, -1, -1):
+            cleaned = self._clean_latex_inline(lines[index].replace(r"\appel", ""))
+            cleaned = cleaned.strip(" .\n\t")
+            if cleaned:
+                return cleaned
+        return ""
+
+    def _section_title_at_position(
+        self,
+        text: str,
+        section_matches: list[re.Match[str]],
+        position: int,
+    ) -> str:
+        title = ""
+        for match in section_matches:
+            if match.start() > position:
+                break
+            title = self._clean_latex_inline(match.group("title"))
+        return title
 
     def _section_level(self, command_name: str) -> int:
         if command_name == "subsubsection":
