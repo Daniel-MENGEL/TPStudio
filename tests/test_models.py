@@ -24,6 +24,9 @@ def test_tp_model_exposes_common_fields():
     assert tp.title == "Lois de Snell Descartes"
     assert tp.objectives == ["Vérifier les lois de Snell-Descartes"]
     assert tp.equipment == ["Laser"]
+    assert tp.annexes == []
+    assert tp.questions == []
+    assert tp.summary() == "TP(title='Lois de Snell Descartes', objectives=1, equipment=1, sections=1, questions=0)"
     assert tp.block("objectifs") is not None
 
     data = tp.to_dict()

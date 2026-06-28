@@ -7,11 +7,14 @@ from tpstudio.models import Section, TPBlock, TPDocument, TPMetadata
 
 
 class LatexParser:
-    """Parseur spécialisé pour les énoncés de TP au format LaTeX Fabert.
+    r"""Lecteur spécialisé pour les énoncés de TP au format LaTeX Fabert.
 
     Ce n'est pas un parseur LaTeX généraliste. Il exploite volontairement
     la structure homogène des TP : \objectifs, \materiel, \annexes,
     \indications, \questions, etc.
+
+    Le lecteur n'invente pas d'intention pédagogique. Il extrait uniquement
+    les informations explicitement présentes dans le fichier source.
     """
 
     KNOWN_BLOCKS: dict[str, str] = {
@@ -24,7 +27,7 @@ class LatexParser:
         "appels": "Appels professeur",
     }
 
-    SECTION_COMMANDS = ("section", "subsection", "subsubsection")
+    SECTION_PATTERN = r"\\(?P<command>section|subsection|subsubsection)\*?\{(?P<title>[^{}]*)\}"
 
     def __init__(self, tex_path: str | Path):
         self.tex_path = Path(tex_path)
@@ -50,19 +53,27 @@ class LatexParser:
         )
 
     def _parse_blocks(self, text: str) -> list[TPBlock]:
-        positions: list[tuple[int, str]] = []
+        block_positions: list[tuple[int, str]] = []
+        boundary_positions: list[int] = []
+
         for kind in self.KNOWN_BLOCKS:
             for match in re.finditer(rf"\\{kind}\b", text):
-                positions.append((match.start(), kind))
-        positions.sort()
+                block_positions.append((match.start(), kind))
+                boundary_positions.append(match.start())
+
+        for match in re.finditer(self.SECTION_PATTERN, text):
+            boundary_positions.append(match.start())
+
+        block_positions.sort()
+        boundary_positions = sorted(set(boundary_positions + [len(text)]))
 
         blocks: list[TPBlock] = []
-        for idx, (start, kind) in enumerate(positions):
+        for start, kind in block_positions:
             command_match = re.match(rf"\\{kind}\b", text[start:])
             if not command_match:
                 continue
             content_start = start + command_match.end()
-            content_end = positions[idx + 1][0] if idx + 1 < len(positions) else len(text)
+            content_end = self._next_boundary_after(boundary_positions, start)
             raw = text[content_start:content_end].strip()
             raw = self._trim_at_document_end(raw)
             blocks.append(
@@ -75,23 +86,39 @@ class LatexParser:
             )
         return blocks
 
-    def _parse_sections(self, text: str) -> list[str]:
-        sections: list[str] = []
-        pattern = r"\\(?:section|subsection|subsubsection)\*?\{([^{}]*)\}"
-        for match in re.finditer(pattern, text):
-            sections.append(Section(title=self._clean_latex_inline(match.group(1)), level=self._section_level(match.group(0)), raw_command=match.group(0)))
+    def _next_boundary_after(self, boundaries: list[int], start: int) -> int:
+        for boundary in boundaries:
+            if boundary > start:
+                return boundary
+        return boundaries[-1]
+
+    def _parse_sections(self, text: str) -> list[Section]:
+        sections: list[Section] = []
+        matches = list(re.finditer(self.SECTION_PATTERN, text))
+        for idx, match in enumerate(matches):
+            content_start = match.end()
+            content_end = matches[idx + 1].start() if idx + 1 < len(matches) else len(text)
+            raw = self._trim_at_document_end(text[content_start:content_end].strip())
+            sections.append(
+                Section(
+                    title=self._clean_latex_inline(match.group("title")),
+                    level=self._section_level(match.group("command")),
+                    raw_command=match.group(0),
+                    raw=raw,
+                    items=self._extract_items(raw),
+                )
+            )
         return sections
 
-    def _section_level(self, command_text: str) -> int:
-        if command_text.startswith(r"\subsubsection"):
+    def _section_level(self, command_name: str) -> int:
+        if command_name == "subsubsection":
             return 3
-        if command_text.startswith(r"\subsection"):
+        if command_name == "subsection":
             return 2
         return 1
 
     def _extract_items(self, raw: str) -> list[str]:
         items: list[str] = []
-        # Gestion des listes classiques \item ...
         parts = re.split(r"\\item\b", raw)
         if len(parts) > 1:
             for part in parts[1:]:
@@ -101,7 +128,6 @@ class LatexParser:
                     items.append(cleaned)
             return items
 
-        # Fallback : lignes non vides du bloc.
         for line in raw.splitlines():
             cleaned = self._clean_latex_inline(line).strip()
             if cleaned:

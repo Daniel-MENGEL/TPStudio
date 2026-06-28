@@ -42,7 +42,9 @@ def inspect_command(args: argparse.Namespace) -> int:
 
     print(f"✓ Fichier LaTeX : {tex_path.name}")
     print(f"✓ Titre : {document.metadata.title or 'non détecté'}")
-    print(f"✓ Blocs détectés : {len(document.blocks)}")
+    print(f"✓ Objectifs : {len(document.objectives)}")
+    print(f"✓ Matériel : {len(document.equipment)}")
+    print(f"✓ Questions : {len(document.questions)}")
     print(f"✓ Sections détectées : {len(document.sections)}")
     print(f"✓ Manifest : {manifest_path}")
     print(f"✓ Rapport : {report_path}")
@@ -65,7 +67,14 @@ def make_report(data: dict, tex_path: Path) -> str:
     ]
     sections = data.get("sections", [])
     if sections:
-        lines.extend(f"- {section.get('title', section)}" if isinstance(section, dict) else f"- {section}" for section in sections)
+        for section in sections:
+            if isinstance(section, dict):
+                title = section.get("title", "Section sans titre")
+                level = section.get("level", "?")
+                count = len(section.get("items", []))
+                lines.append(f"- {title} — niveau {level}, {count} item(s)")
+            else:
+                lines.append(f"- {section}")
     else:
         lines.append("Aucune section détectée.")
     lines += ["", "## Blocs pédagogiques", ""]

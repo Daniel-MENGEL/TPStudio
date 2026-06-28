@@ -75,19 +75,28 @@ class PedagogicalBlock:
 class Section:
     """Partie logique du TP.
 
-    Pour l'instant une section contient surtout un titre. On l'enrichira
-    ensuite avec des questions, figures ou blocs associés.
+    Une section correspond à une partie repérée dans l'énoncé, par exemple
+    ``Première méthode`` ou ``Vérification graphique``.
+
+    ``raw`` conserve le contenu LaTeX situé sous le titre. ``items`` contient
+    les items de liste détectés dans cette section, ce qui permet déjà
+    d'obtenir les questions principales sans interpréter toute la syntaxe
+    LaTeX.
     """
 
     title: str
     level: int = 1
     raw_command: str = ""
+    raw: str = ""
+    items: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "title": self.title,
             "level": self.level,
             "raw_command": self.raw_command,
+            "raw": self.raw,
+            "items": list(self.items),
         }
 
 
@@ -161,6 +170,29 @@ class TP:
     @property
     def equipment(self) -> list[str]:
         return self.block_items("materiel")
+
+    @property
+    def annexes(self) -> list[str]:
+        return self.block_items("annexes")
+
+    @property
+    def indications(self) -> list[str]:
+        return self.block_items("indications")
+
+    @property
+    def questions(self) -> list[str]:
+        return self.block_items("questions")
+
+    def summary(self) -> str:
+        """Retourne un résumé court, utile en diagnostic et en tests manuels."""
+
+        return (
+            f"TP(title={self.title!r}, "
+            f"objectives={len(self.objectives)}, "
+            f"equipment={len(self.equipment)}, "
+            f"sections={len(self.sections)}, "
+            f"questions={len(self.questions)})"
+        )
 
     def to_dict(self) -> dict[str, Any]:
         return {

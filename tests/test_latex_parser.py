@@ -31,6 +31,13 @@ def test_latex_parser_extracts_basic_blocks(tmp_path: Path):
     document = LatexParser(tex).parse()
     assert document.metadata.title == "Lois de Snell Descartes"
     assert document.metadata.pdf_slug == "Lois-de-Snell-Descartes"
-    assert document.block("objectifs") is not None
-    assert len(document.block("objectifs").items) == 2
+    assert document.objectives == [
+        "Vérifier les lois de Snell Descartes",
+        "Déterminer l'indice de réfraction",
+    ]
+    assert document.equipment == ["Laser", "Disque de Péchard"]
+    assert document.questions == ["Mesurer l'angle limite"]
     assert any(section.title == "Première méthode" for section in document.sections)
+    first_section = document.sections[0]
+    assert first_section.level == 1
+    assert first_section.items == ["Mesurer l'angle limite"]
