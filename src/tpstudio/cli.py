@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from tpstudio.parsers import LatexParser
+from tpstudio.reporting import format_inspection, make_inspection_report
 
 
 def find_tex_file(tp_dir: Path) -> Path:
@@ -25,7 +26,24 @@ def find_tex_file(tp_dir: Path) -> Path:
 
 def inspect_command(args: argparse.Namespace) -> int:
     tp_dir = Path(args.path).expanduser().resolve()
-    tex_path = find_tex_file(tp_dir)
+
+    try:
+        tex_path = find_tex_file(tp_dir)
+    except FileNotFoundError:
+        print("TPStudio - Inspection")
+        print("─────────────────────")
+        print()
+        print("❌ Aucun fichier .tex n'a été trouvé dans :")
+        print()
+        print(f"    {tp_dir}")
+        print()
+        print("Vérifiez que vous avez indiqué le dossier du TP")
+        print("et non le dossier du projet TPStudio.")
+        print()
+        print("Exemple :")
+        print('tpstudio inspect "/Users/daniel/Documents/Sup/TP/Séance n°2/Lois de Snell Descartes"')
+        return 1
+
     document = LatexParser(tex_path).parse()
 
     build_dir = tp_dir / "_build"
@@ -38,55 +56,13 @@ def inspect_command(args: argparse.Namespace) -> int:
     )
 
     report_path = build_dir / "rapport_inspection.md"
-    report_path.write_text(make_report(document.to_dict(), tex_path), encoding="utf-8")
+    report_path.write_text(
+        make_inspection_report(document, tex_path),
+        encoding="utf-8",
+    )
 
-    print(f"✓ Fichier LaTeX : {tex_path.name}")
-    print(f"✓ Titre : {document.metadata.title or 'non détecté'}")
-    print(f"✓ Objectifs : {len(document.objectives)}")
-    print(f"✓ Matériel : {len(document.equipment)}")
-    print(f"✓ Questions : {len(document.questions)}")
-    print(f"✓ Sections détectées : {len(document.sections)}")
-    print(f"✓ Manifest : {manifest_path}")
-    print(f"✓ Rapport : {report_path}")
+    print(format_inspection(document, tex_path, manifest_path, report_path))
     return 0
-
-
-def make_report(data: dict, tex_path: Path) -> str:
-    meta = data["metadata"]
-    lines = [
-        "# Rapport d'inspection TPStudio",
-        "",
-        f"- Fichier LaTeX : `{tex_path.name}`",
-        f"- Titre : {meta.get('title') or 'non détecté'}",
-        f"- Séance : {meta.get('session_label') or 'non détectée'}",
-        f"- Code TP : {meta.get('tp_code') or 'non détecté'}",
-        f"- Slug PDF : {meta.get('pdf_slug') or 'non détecté'}",
-        "",
-        "## Sections détectées",
-        "",
-    ]
-    sections = data.get("sections", [])
-    if sections:
-        for section in sections:
-            if isinstance(section, dict):
-                title = section.get("title", "Section sans titre")
-                level = section.get("level", "?")
-                count = len(section.get("items", []))
-                lines.append(f"- {title} — niveau {level}, {count} item(s)")
-            else:
-                lines.append(f"- {section}")
-    else:
-        lines.append("Aucune section détectée.")
-    lines += ["", "## Blocs pédagogiques", ""]
-    for block in data.get("blocks", []):
-        lines.append(f"### {block['title']} (`{block['kind']}`)")
-        if block.get("items"):
-            for item in block["items"]:
-                lines.append(f"- {item}")
-        else:
-            lines.append("Aucun item détecté.")
-        lines.append("")
-    return "\n".join(lines)
 
 
 def main() -> int:
