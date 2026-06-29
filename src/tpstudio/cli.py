@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
+from tpstudio.improver import improve_notebook
 import json
 from pathlib import Path
 
@@ -85,6 +87,18 @@ def _looks_like_student_notebook(path: Path) -> bool:
     return any(marker in name for marker in student_markers)
 
 
+def improve_command(args: argparse.Namespace) -> int:
+    tp_dir = Path(args.path)
+    output = improve_notebook(tp_dir)
+    print("TPStudio - Improve")
+    print("──────────────────")
+    print("")
+    print(f"✓ Notebook généré : {output}")
+    print("")
+    print("Le fichier original n'a pas été modifié.")
+    return 0
+
+
 def inspect_command(args: argparse.Namespace) -> int:
     tp_dir = Path(args.path).expanduser().resolve()
 
@@ -136,6 +150,13 @@ def main() -> int:
     inspect_parser = subparsers.add_parser("inspect", help="Inspecte un dossier de TP")
     inspect_parser.add_argument("path", help="Chemin vers le dossier du TP")
     inspect_parser.set_defaults(func=inspect_command)
+
+    improve_parser = subparsers.add_parser(
+        "improve",
+        help="crée une copie améliorée du notebook associé au TP",
+    )
+    improve_parser.add_argument("path", help="chemin du dossier de TP")
+    improve_parser.set_defaults(func=improve_command)
 
     args = parser.parse_args()
     return args.func(args)
