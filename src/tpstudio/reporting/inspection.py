@@ -798,10 +798,6 @@ def _notebook_maturity_diagnostic(document: TPDocument) -> dict:
     }
 
 def _format_notebook_improvement_plan(document: TPDocument) -> str:
-    notebook = getattr(document, "notebook", None)
-    if notebook is None:
-        return ""
-
     plan = _notebook_improvement_plan(document)
     lines = ["", "🛠 Plan d’amélioration proposé"]
 
@@ -816,10 +812,6 @@ def _format_notebook_improvement_plan(document: TPDocument) -> str:
 
 
 def _markdown_notebook_improvement_plan(document: TPDocument) -> list[str]:
-    notebook = getattr(document, "notebook", None)
-    if notebook is None:
-        return ["- Aucun notebook détecté."]
-
     plan = _notebook_improvement_plan(document)
     if not plan:
         return ["- Aucune amélioration prioritaire détectée."]
@@ -830,7 +822,7 @@ def _markdown_notebook_improvement_plan(document: TPDocument) -> list[str]:
 def _notebook_improvement_plan(document: TPDocument) -> list[str]:
     notebook = getattr(document, "notebook", None)
     if notebook is None:
-        return ["associer un notebook au dossier du TP"]
+        return _missing_notebook_improvement_plan(document)
 
     markdown_count = _notebook_count(notebook, "markdown_cell_count")
     code_count = _notebook_count(notebook, "code_cell_count")
@@ -877,9 +869,44 @@ def _notebook_improvement_plan(document: TPDocument) -> list[str]:
         plan.append("ajouter éventuellement une courte grille d’évaluation si le notebook doit servir de rapport complet")
 
     if not plan:
-        # Même dans un notebook abouti, proposer une amélioration douce plutôt
-        # qu'un silence complet : cela prépare les futures transformations.
         plan.append("conserver la structure actuelle et n’envisager qu’une harmonisation de forme")
+
+    return plan[:6]
+
+
+def _missing_notebook_improvement_plan(document: TPDocument) -> list[str]:
+    section_count = len(getattr(document, "sections", []) or [])
+    question_count = len(getattr(document, "questions", []) or [])
+    objective_count = len(getattr(document, "objectives", []) or [])
+    teacher_call_count = len(getattr(document, "teacher_calls", []) or [])
+    report_required = bool(
+        getattr(getattr(document, "metadata", None), "report_required", False)
+    )
+
+    plan: list[str] = []
+
+    if section_count:
+        plan.append(f"créer un notebook élève structuré à partir des {section_count} section(s) du LaTeX")
+    elif question_count:
+        plan.append(f"créer un notebook élève structuré à partir des {question_count} question(s) du TP")
+    elif objective_count:
+        plan.append(f"créer un notebook élève structuré à partir des {objective_count} objectif(s) du TP")
+    else:
+        plan.append("créer un notebook élève minimal associé au TP")
+
+    if report_required:
+        plan.append("prévoir des cellules Markdown de rédaction car le LaTeX demande un rapport")
+
+    if section_count:
+        plan.append("reprendre les grandes sections comme titres Markdown du notebook")
+
+    if question_count:
+        plan.append("transformer les questions importantes en zones « Réponse : » ou en consignes de rédaction")
+
+    if teacher_call_count:
+        plan.append("placer des repères d’appel professeur aux étapes expérimentales sensibles")
+
+    plan.append("ajouter seulement les cellules de code nécessaires aux calculs, tracés ou exploitations de mesures")
 
     return plan[:6]
 
