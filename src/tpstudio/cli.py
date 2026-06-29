@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from tpstudio.parsers import LatexParser
+from tpstudio.readers import NotebookReader
 from tpstudio.reporting import format_inspection, make_inspection_report
 
 
@@ -18,6 +19,22 @@ def find_tex_file(tp_dir: Path) -> Path:
     folder_words = set(tp_dir.name.lower().replace("-", " ").split())
     scored = []
     for path in tex_files:
+        words = set(path.stem.lower().replace("-", " ").split())
+        scored.append((len(folder_words & words), path))
+    scored.sort(key=lambda item: item[0], reverse=True)
+    return scored[0][1]
+
+
+def find_notebook_file(tp_dir: Path) -> Path | None:
+    notebook_files = sorted(p for p in tp_dir.glob("*.ipynb") if not p.name.startswith("."))
+    if not notebook_files:
+        return None
+    if len(notebook_files) == 1:
+        return notebook_files[0]
+
+    folder_words = set(tp_dir.name.lower().replace("-", " ").split())
+    scored = []
+    for path in notebook_files:
         words = set(path.stem.lower().replace("-", " ").split())
         scored.append((len(folder_words & words), path))
     scored.sort(key=lambda item: item[0], reverse=True)
@@ -45,6 +62,8 @@ def inspect_command(args: argparse.Namespace) -> int:
         return 1
 
     document = LatexParser(tex_path).parse()
+    notebook_path = find_notebook_file(tp_dir)
+    notebook = NotebookReader(notebook_path).parse() if notebook_path else None
 
     build_dir = tp_dir / "_build"
     build_dir.mkdir(exist_ok=True)
@@ -57,11 +76,11 @@ def inspect_command(args: argparse.Namespace) -> int:
 
     report_path = build_dir / "rapport_inspection.md"
     report_path.write_text(
-        make_inspection_report(document, tex_path),
+        make_inspection_report(document, tex_path, notebook),
         encoding="utf-8",
     )
 
-    print(format_inspection(document, tex_path, manifest_path, report_path))
+    print(format_inspection(document, tex_path, manifest_path, report_path, notebook))
     return 0
 
 

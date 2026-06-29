@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tpstudio.models import TPDocument
+from tpstudio.models import Notebook, TPDocument
 
 
 def format_inspection(
@@ -10,6 +10,7 @@ def format_inspection(
     tex_path: Path,
     manifest_path: Path,
     report_path: Path,
+    notebook: Notebook | None = None,
 ) -> str:
     """Construit l'affichage lisible de la commande `tpstudio inspect`."""
 
@@ -40,6 +41,8 @@ def format_inspection(
         "",
         _format_sections(document),
         "",
+        _format_notebook(notebook),
+        "",
         f"✓ Manifest : {manifest_path}",
         f"✓ Rapport : {report_path}",
     ]
@@ -47,7 +50,7 @@ def format_inspection(
     return "\n".join(lines)
 
 
-def make_inspection_report(document: TPDocument, tex_path: Path) -> str:
+def make_inspection_report(document: TPDocument, tex_path: Path, notebook: Notebook | None = None) -> str:
     """Construit le rapport Markdown écrit dans `_build/rapport_inspection.md`."""
 
     meta = document.metadata
@@ -170,3 +173,32 @@ def _markdown_items(items: list[str]) -> list[str]:
     if not items:
         return ["Aucun élément détecté."]
     return [f"- {item}" for item in items]
+
+def _format_notebook(notebook) -> str:
+    if notebook is None:
+        return "📓 Notebook\n    aucun notebook détecté"
+
+    name = notebook.path.name if notebook.path else "notebook"
+    return "\n".join(
+        [
+            f"📓 Notebook : {name}",
+            f"    • cellules : {notebook.cell_count}",
+            f"    • markdown : {notebook.markdown_cell_count}",
+            f"    • code : {notebook.code_cell_count}",
+            f"    • cellules avec Réponse : {notebook.response_cell_count}",
+        ]
+    )
+
+
+def _markdown_notebook(notebook) -> list[str]:
+    if notebook is None:
+        return ["Aucun notebook détecté."]
+
+    name = notebook.path.name if notebook.path else "notebook"
+    return [
+        f"- Fichier : `{name}`",
+        f"- Cellules : {notebook.cell_count}",
+        f"- Markdown : {notebook.markdown_cell_count}",
+        f"- Code : {notebook.code_cell_count}",
+        f"- Cellules avec `Réponse :` : {notebook.response_cell_count}",
+    ]

@@ -1,6 +1,8 @@
 from .tp import (
     Figure,
     Metadata,
+    Notebook,
+    NotebookCell,
     PedagogicalBlock,
     Resource,
     Section,
@@ -14,6 +16,8 @@ from .tp import (
 __all__ = [
     "Figure",
     "Metadata",
+    "Notebook",
+    "NotebookCell",
     "PedagogicalBlock",
     "Resource",
     "Section",

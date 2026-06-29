@@ -125,12 +125,115 @@ class TeacherCall:
 
 
 @dataclass(slots=True)
+class NotebookCell:
+    """Cellule extraite d'un notebook Jupyter.
+
+    On conserve volontairement peu d'informations pour commencer : le type,
+    le texte source et quelques métadonnées simples. Le NotebookReader ne
+    corrige rien et n'interprète pas encore les réponses des étudiants.
+    """
+
+    index: int
+    cell_type: str
+    source: str = ""
+    execution_count: int | None = None
+
+    @property
+    def line_count(self) -> int:
+        return len(self.source.splitlines())
+
+    @property
+    def char_count(self) -> int:
+        return len(self.source)
+
+    @property
+    def is_markdown(self) -> bool:
+        return self.cell_type == "markdown"
+
+    @property
+    def is_code(self) -> bool:
+        return self.cell_type == "code"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "index": self.index,
+            "cell_type": self.cell_type,
+            "source": self.source,
+            "execution_count": self.execution_count,
+            "line_count": self.line_count,
+            "char_count": self.char_count,
+        }
+
+
+@dataclass(slots=True)
+class Notebook:
+    """Représentation minimale d'un notebook Jupyter lu par TPStudio."""
+
+    path: Path | None = None
+    cells: list[NotebookCell] = field(default_factory=list)
+
+    @property
+    def markdown_cells(self) -> list[NotebookCell]:
+        return [cell for cell in self.cells if cell.is_markdown]
+
+    @property
+    def code_cells(self) -> list[NotebookCell]:
+        return [cell for cell in self.cells if cell.is_code]
+
+    @property
+    def answer_cells(self) -> list[NotebookCell]:
+        return [cell for cell in self.cells if "Réponse" in cell.source]
+
+    @property
+    def cell_count(self) -> int:
+        return len(self.cells)
+
+    @property
+    def markdown_cell_count(self) -> int:
+        return len(self.markdown_cells)
+
+    @property
+    def code_cell_count(self) -> int:
+        return len(self.code_cells)
+
+    @property
+    def response_cell_count(self) -> int:
+        return len(self.answer_cells)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "path": str(self.path) if self.path else None,
+            "cell_count": len(self.cells),
+            "markdown_cell_count": len(self.markdown_cells),
+            "code_cell_count": len(self.code_cells),
+            "answer_cell_count": len(self.answer_cells),
+            "cells": [cell.to_dict() for cell in self.cells],
+        }
+
+
+@dataclass(slots=True)
 class Figure:
     """Figure référencée par le TP."""
 
     path: Path | None = None
     caption: str = ""
     label: str = ""
+
+    @property
+    def cell_count(self) -> int:
+        return len(self.cells)
+
+    @property
+    def markdown_cell_count(self) -> int:
+        return len(self.markdown_cells)
+
+    @property
+    def code_cell_count(self) -> int:
+        return len(self.code_cells)
+
+    @property
+    def response_cell_count(self) -> int:
+        return len(self.answer_cells)
 
     def to_dict(self) -> dict[str, Any]:
         return {
