@@ -49,6 +49,7 @@ def format_inspection(
         "",
         _format_notebook_role(document),
         _format_guided_writing_zones(document),
+        _format_notebook_maturity(document),
         "",
         _format_notebook(notebook),
         "",
@@ -66,6 +67,8 @@ def format_inspection(
     lines.extend(_markdown_notebook_role(document))
     lines += ["", "## Zones de rédaction guidée", ""]
     lines.extend(_markdown_guided_writing_zones(document))
+    lines += ["", "## Maturité pédagogique du notebook", ""]
+    lines.extend(_markdown_notebook_maturity(document))
 
     return "\n".join(lines)
 
@@ -616,6 +619,180 @@ def _cell_source_text(cell) -> str:
         if isinstance(value, list):
             return "".join(str(item) for item in value)
     return ""
+
+def _format_notebook_maturity(document: TPDocument) -> str:
+    notebook = getattr(document, "notebook", None)
+    if notebook is None:
+        return ""
+
+    diagnostic = _notebook_maturity_diagnostic(document)
+    lines = ["", "🧭 Maturité pédagogique du notebook"]
+    lines.append(f"    {diagnostic['symbol']} {diagnostic['level']}")
+
+    if diagnostic["strengths"]:
+        lines.append("")
+        lines.append("📌 Points forts")
+        for item in diagnostic["strengths"]:
+            lines.append(f"    • {item}")
+
+    if diagnostic["improvements"]:
+        lines.append("")
+        lines.append("🔧 Améliorations suggérées")
+        for item in diagnostic["improvements"]:
+            lines.append(f"    • {item}")
+
+    return "\n".join(lines)
+
+
+def _markdown_notebook_maturity(document: TPDocument) -> list[str]:
+    notebook = getattr(document, "notebook", None)
+    if notebook is None:
+        return ["- Aucun notebook détecté."]
+
+    diagnostic = _notebook_maturity_diagnostic(document)
+    lines = [f"- {diagnostic['symbol']} **{diagnostic['level']}**"]
+
+    if diagnostic["strengths"]:
+        lines.append("")
+        lines.append("### Points forts")
+        for item in diagnostic["strengths"]:
+            lines.append(f"- {item}")
+
+    if diagnostic["improvements"]:
+        lines.append("")
+        lines.append("### Améliorations suggérées")
+        for item in diagnostic["improvements"]:
+            lines.append(f"- {item}")
+
+    return lines
+
+
+def _notebook_maturity_diagnostic(document: TPDocument) -> dict:
+    notebook = getattr(document, "notebook", None)
+    if notebook is None:
+        return {
+            "level": "aucun notebook détecté",
+            "symbol": "ℹ",
+            "strengths": [],
+            "improvements": ["associer un notebook au dossier du TP"],
+        }
+
+    markdown_count = _notebook_count(notebook, "markdown_cell_count")
+    code_count = _notebook_count(notebook, "code_cell_count")
+    response_count = _notebook_count(notebook, "response_cell_count")
+    heading_count = getattr(notebook, "heading_count", 0)
+
+    report_required = bool(
+        getattr(getattr(document, "metadata", None), "report_required", False)
+    )
+
+    zones = _guided_writing_zones(notebook) if "_guided_writing_zones" in globals() else {
+        "counts": {},
+        "total": 0,
+    }
+    counts = zones.get("counts", {})
+    zone_total = zones.get("total", 0)
+
+    protocol_count = counts.get("protocole", 0)
+    exploitation_count = counts.get("exploitation / calcul", 0)
+    comment_count = counts.get("observation / commentaire", 0)
+    conclusion_count = counts.get("conclusion / bilan", 0)
+    guided_response_count = counts.get("réponse guidée", 0)
+    evaluation_count = counts.get("évaluation", 0)
+
+    strengths: list[str] = []
+    improvements: list[str] = []
+
+    score = 0
+
+    if report_required:
+        score += 1
+        strengths.append("le LaTeX demande explicitement un rapport")
+
+    if heading_count >= 3:
+        score += 1
+        strengths.append(f"structure claire : {heading_count} titre(s) de partie")
+    elif heading_count > 0:
+        strengths.append(f"structure partielle : {heading_count} titre(s) de partie")
+        improvements.append("renforcer la structure avec quelques titres de partie supplémentaires")
+    else:
+        improvements.append("structurer le notebook avec des titres de partie")
+
+    if markdown_count >= code_count:
+        score += 1
+        strengths.append(f"place importante laissée à la rédaction ({markdown_count} markdown / {code_count} code)")
+    elif markdown_count >= max(code_count - 2, 1):
+        score += 1
+        strengths.append(f"équilibre presque atteint entre rédaction et calcul ({markdown_count} markdown / {code_count} code)")
+    else:
+        improvements.append("ajouter davantage de cellules Markdown autour des calculs")
+
+    if protocol_count:
+        score += 1
+        strengths.append("présence de zones de protocole")
+    else:
+        improvements.append("ajouter une zone de protocole explicite")
+
+    if exploitation_count:
+        score += 1
+        strengths.append("exploitation/calcul bien représentés")
+    else:
+        improvements.append("prévoir une zone d'exploitation des données ou des calculs")
+
+    if comment_count:
+        score += 1
+        strengths.append("présence de zones de commentaire ou d'interprétation")
+    else:
+        improvements.append("ajouter une zone de commentaire ou d'interprétation après les résultats importants")
+
+    if conclusion_count:
+        score += 1
+        strengths.append("présence d'une conclusion ou d'un bilan")
+    else:
+        improvements.append("ajouter une conclusion ou un bilan final")
+
+    if response_count or guided_response_count:
+        score += 1
+        strengths.append("présence de zones de réponse guidée")
+    else:
+        improvements.append("ajouter des cellules ou paragraphes repérés par « Réponse : »")
+
+    if evaluation_count:
+        score += 1
+        strengths.append("présence d'une évaluation ou d'une grille de critères")
+    else:
+        improvements.append("ajouter éventuellement une grille d'évaluation si le notebook devient un rapport complet")
+
+    if zone_total >= 6:
+        score += 1
+    elif zone_total <= 2:
+        improvements.append("rendre les zones de rédaction plus explicites")
+
+    if score >= 8:
+        level = "rapport guidé très abouti"
+        symbol = "✓"
+    elif score >= 6:
+        level = "support de rapport bien guidé"
+        symbol = "✓"
+    elif score >= 4:
+        level = "support de rapport partiellement guidé"
+        symbol = "ℹ"
+    elif score >= 2:
+        level = "notebook surtout calculatoire avec quelques éléments de rapport"
+        symbol = "ℹ"
+    else:
+        level = "notebook principalement calculatoire"
+        symbol = "⚠"
+
+    # Garder les suggestions les plus utiles, sans noyer l'affichage.
+    improvements = improvements[:5]
+
+    return {
+        "level": level,
+        "symbol": symbol,
+        "strengths": strengths,
+        "improvements": improvements,
+    }
 
 def _format_coherence(document: TPDocument) -> str:
     """Construit un diagnostic simple de cohérence LaTeX / Notebook.
