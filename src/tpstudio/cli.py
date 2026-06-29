@@ -26,19 +26,63 @@ def find_tex_file(tp_dir: Path) -> Path:
 
 
 def find_notebook_file(tp_dir: Path) -> Path | None:
-    notebook_files = sorted(p for p in tp_dir.glob("*.ipynb") if not p.name.startswith("."))
+    """Trouve le notebook élève le plus probable dans un dossier de TP.
+
+    Quand plusieurs notebooks sont présents, TPStudio évite les fichiers de
+    correction ou de solution et préfère le notebook destiné aux étudiants.
+    """
+
+    notebook_files = sorted(
+        p for p in tp_dir.glob("*.ipynb")
+        if not p.name.startswith(".")
+        and not p.name.endswith("-checkpoint.ipynb")
+    )
     if not notebook_files:
         return None
-    if len(notebook_files) == 1:
-        return notebook_files[0]
+
+    student_candidates = [
+        path for path in notebook_files
+        if not _looks_like_correction_notebook(path)
+    ]
+
+    candidates = student_candidates or notebook_files
+    if len(candidates) == 1:
+        return candidates[0]
 
     folder_words = set(tp_dir.name.lower().replace("-", " ").split())
     scored = []
-    for path in notebook_files:
+    for path in candidates:
         words = set(path.stem.lower().replace("-", " ").split())
-        scored.append((len(folder_words & words), path))
+        student_bonus = 2 if _looks_like_student_notebook(path) else 0
+        scored.append((len(folder_words & words) + student_bonus, path))
     scored.sort(key=lambda item: item[0], reverse=True)
     return scored[0][1]
+
+
+def _looks_like_correction_notebook(path: Path) -> bool:
+    name = path.stem.lower()
+    correction_markers = (
+        "correction",
+        "corrige",
+        "corrigé",
+        "solution",
+        "solutions",
+        "prof",
+        "teacher",
+    )
+    return any(marker in name for marker in correction_markers)
+
+
+def _looks_like_student_notebook(path: Path) -> bool:
+    name = path.stem.lower()
+    student_markers = (
+        "eleve",
+        "élève",
+        "etudiant",
+        "étudiant",
+        "student",
+    )
+    return any(marker in name for marker in student_markers)
 
 
 def inspect_command(args: argparse.Namespace) -> int:
