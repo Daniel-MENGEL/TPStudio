@@ -47,6 +47,8 @@ def format_inspection(
         "",
         _format_coherence(document),
         "",
+        _format_notebook_role(document),
+        "",
         _format_notebook(notebook),
         "",
         _format_notebook_headings(notebook),
@@ -59,6 +61,8 @@ def format_inspection(
 
     lines += ["", "## Cohérence LaTeX / Notebook", ""]
     lines.extend(_markdown_coherence(document))
+    lines += ["", "## Rôle pédagogique probable du notebook", ""]
+    lines.extend(_markdown_notebook_role(document))
 
     return "\n".join(lines)
 
@@ -329,6 +333,113 @@ def _normalize_title(text: str) -> str:
     text = re.sub(r"[^a-z0-9]+", " ", text)
     words = [word for word in text.split() if len(word) >= 3]
     return " ".join(words)
+
+
+def _format_notebook_role(document: TPDocument) -> str:
+    notebook = getattr(document, "notebook", None)
+    if notebook is None:
+        return "📓 Rôle probable du notebook\n    aucun notebook détecté"
+
+    role, reasons, suggestions = _notebook_role_diagnostic(notebook)
+
+    lines = ["📓 Rôle probable du notebook"]
+    if role == "report":
+        lines.append("    ✓ support de rapport numérique à compléter")
+    elif role == "calculator":
+        lines.append("    ℹ outil de calcul associé au TP")
+    else:
+        lines.append("    ℹ rôle mixte ou encore difficile à déterminer")
+
+    for reason in reasons:
+        lines.append(f"    • {reason}")
+
+    if suggestions:
+        lines.append("")
+        lines.append("🎯 Évolution possible vers support de rapport")
+        for suggestion in suggestions:
+            lines.append(f"    • {suggestion}")
+
+    return "\n".join(lines)
+
+
+def _markdown_notebook_role(document: TPDocument) -> list[str]:
+    notebook = getattr(document, "notebook", None)
+    if notebook is None:
+        return ["Aucun notebook détecté."]
+
+    role, reasons, suggestions = _notebook_role_diagnostic(notebook)
+
+    if role == "report":
+        lines = ["- Rôle probable : support de rapport numérique à compléter."]
+    elif role == "calculator":
+        lines = ["- Rôle probable : outil de calcul associé au TP."]
+    else:
+        lines = ["- Rôle probable : mixte ou encore difficile à déterminer."]
+
+    for reason in reasons:
+        lines.append(f"- {reason}")
+
+    if suggestions:
+        lines.append("")
+        lines.append("### Évolution possible vers support de rapport")
+        for suggestion in suggestions:
+            lines.append(f"- {suggestion}")
+
+    return lines
+
+
+def _notebook_role_diagnostic(notebook) -> tuple[str, list[str], list[str]]:
+    cell_count = _notebook_count(notebook, "cell_count")
+    markdown_count = _notebook_count(notebook, "markdown_cell_count")
+    code_count = _notebook_count(notebook, "code_cell_count")
+    response_count = _notebook_count(notebook, "response_cell_count")
+    heading_count = getattr(notebook, "heading_count", 0)
+
+    reasons: list[str] = []
+    suggestions: list[str] = []
+
+    if cell_count == 0:
+        return "mixed", ["notebook vide"], ["ajouter une structure minimale de rapport"]
+
+    if response_count > 0:
+        reasons.append(f"{response_count} cellule(s) contenant « Réponse : »")
+    else:
+        reasons.append("aucune cellule contenant « Réponse : »")
+
+    if code_count > markdown_count:
+        reasons.append(f"dominante code ({code_count} code / {markdown_count} markdown)")
+    elif markdown_count > code_count:
+        reasons.append(f"dominante rédactionnelle ({markdown_count} markdown / {code_count} code)")
+    else:
+        reasons.append(f"équilibre texte/code ({markdown_count} markdown / {code_count} code)")
+
+    if heading_count:
+        reasons.append(f"{heading_count} titre(s) de partie détecté(s)")
+    else:
+        reasons.append("aucun titre de partie détecté")
+
+    if response_count >= 2 and markdown_count >= code_count:
+        role = "report"
+    elif response_count >= 1 and markdown_count >= max(2, code_count // 2):
+        role = "mixed"
+    elif code_count > 2 * max(markdown_count, 1) and response_count == 0:
+        role = "calculator"
+    elif response_count == 0 and code_count >= markdown_count:
+        role = "calculator"
+    else:
+        role = "mixed"
+
+    if response_count == 0:
+        suggestions.append("ajouter des cellules Markdown « Réponse : » après les calculs importants")
+    if markdown_count < code_count:
+        suggestions.append("ajouter davantage de consignes Markdown pour guider la rédaction")
+    if heading_count == 0:
+        suggestions.append("structurer le notebook avec des titres correspondant aux sections du TP")
+    if role == "calculator":
+        suggestions.append("conserver les cellules de calcul, mais les entourer de zones d'interprétation et de conclusion")
+
+    return role, reasons, suggestions
+
 
 def _format_coherence(document: TPDocument) -> str:
     """Construit un diagnostic simple de cohérence LaTeX / Notebook.
