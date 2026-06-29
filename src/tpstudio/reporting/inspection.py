@@ -50,6 +50,7 @@ def format_inspection(
         _format_notebook_role(document),
         _format_guided_writing_zones(document),
         _format_notebook_maturity(document),
+        _format_notebook_improvement_plan(document),
         "",
         _format_notebook(notebook),
         "",
@@ -69,6 +70,8 @@ def format_inspection(
     lines.extend(_markdown_guided_writing_zones(document))
     lines += ["", "## Maturité pédagogique du notebook", ""]
     lines.extend(_markdown_notebook_maturity(document))
+    lines += ["", "## Plan d’amélioration proposé", ""]
+    lines.extend(_markdown_notebook_improvement_plan(document))
 
     return "\n".join(lines)
 
@@ -793,6 +796,92 @@ def _notebook_maturity_diagnostic(document: TPDocument) -> dict:
         "strengths": strengths,
         "improvements": improvements,
     }
+
+def _format_notebook_improvement_plan(document: TPDocument) -> str:
+    notebook = getattr(document, "notebook", None)
+    if notebook is None:
+        return ""
+
+    plan = _notebook_improvement_plan(document)
+    lines = ["", "🛠 Plan d’amélioration proposé"]
+
+    if not plan:
+        lines.append("    ✓ aucune amélioration prioritaire détectée")
+        return "\n".join(lines)
+
+    for index, item in enumerate(plan, start=1):
+        lines.append(f"    {index}. {item}")
+
+    return "\n".join(lines)
+
+
+def _markdown_notebook_improvement_plan(document: TPDocument) -> list[str]:
+    notebook = getattr(document, "notebook", None)
+    if notebook is None:
+        return ["- Aucun notebook détecté."]
+
+    plan = _notebook_improvement_plan(document)
+    if not plan:
+        return ["- Aucune amélioration prioritaire détectée."]
+
+    return [f"{index}. {item}" for index, item in enumerate(plan, start=1)]
+
+
+def _notebook_improvement_plan(document: TPDocument) -> list[str]:
+    notebook = getattr(document, "notebook", None)
+    if notebook is None:
+        return ["associer un notebook au dossier du TP"]
+
+    markdown_count = _notebook_count(notebook, "markdown_cell_count")
+    code_count = _notebook_count(notebook, "code_cell_count")
+    response_count = _notebook_count(notebook, "response_cell_count")
+    heading_count = getattr(notebook, "heading_count", 0)
+
+    zones = _guided_writing_zones(notebook) if "_guided_writing_zones" in globals() else {
+        "counts": {},
+        "total": 0,
+    }
+    counts = zones.get("counts", {})
+
+    plan: list[str] = []
+
+    if heading_count == 0:
+        plan.append("ajouter des titres Markdown pour faire apparaître les grandes étapes du TP")
+    elif heading_count < 3:
+        plan.append("compléter la structure du notebook avec quelques titres de partie supplémentaires")
+
+    if markdown_count < code_count - 2:
+        plan.append("ajouter des cellules Markdown autour des blocs de code importants pour guider la rédaction")
+
+    if counts.get("protocole", 0) == 0:
+        plan.append("ajouter une zone de protocole avant la première manipulation ou le premier traitement de données")
+
+    if counts.get("exploitation / calcul", 0) == 0 and code_count > 0:
+        plan.append("ajouter une zone d’exploitation expliquant le rôle des calculs ou des tracés")
+
+    if counts.get("observation / commentaire", 0) == 0:
+        plan.append("ajouter une zone de commentaire ou d’interprétation après les résultats importants")
+
+    if counts.get("conclusion / bilan", 0) == 0:
+        plan.append("ajouter une conclusion ou un bilan final à la fin du notebook")
+
+    if response_count == 0 and counts.get("réponse guidée", 0) == 0:
+        plan.append("ajouter des cellules ou paragraphes repérés par « Réponse : » aux endroits que l’élève doit rédiger")
+    elif response_count < 2 and counts.get("réponse guidée", 0) < 2:
+        plan.append("ajouter quelques zones de réponse supplémentaires pour faciliter la correction")
+
+    report_required = bool(
+        getattr(getattr(document, "metadata", None), "report_required", False)
+    )
+    if report_required and counts.get("évaluation", 0) == 0:
+        plan.append("ajouter éventuellement une courte grille d’évaluation si le notebook doit servir de rapport complet")
+
+    if not plan:
+        # Même dans un notebook abouti, proposer une amélioration douce plutôt
+        # qu'un silence complet : cela prépare les futures transformations.
+        plan.append("conserver la structure actuelle et n’envisager qu’une harmonisation de forme")
+
+    return plan[:6]
 
 def _format_coherence(document: TPDocument) -> str:
     """Construit un diagnostic simple de cohérence LaTeX / Notebook.
