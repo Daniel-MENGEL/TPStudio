@@ -275,6 +275,7 @@ class TP:
     sections: list[Section] = field(default_factory=list)
     figures: list[Figure] = field(default_factory=list)
     resources: list[Resource] = field(default_factory=list)
+    notebook: Notebook | None = None
     teacher_calls: list[TeacherCall] = field(default_factory=list)
 
     def block(self, kind: str) -> PedagogicalBlock | None:
@@ -330,6 +331,7 @@ class TP:
             "blocks": [block.to_dict() for block in self.blocks],
             "figures": [figure.to_dict() for figure in self.figures],
             "resources": [resource.to_dict() for resource in self.resources],
+            "notebook": self.notebook.to_dict() if self.notebook else None,
             "teacher_calls": [call.to_dict() for call in self.teacher_calls],
         }
 

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from tpstudio.models import Metadata, PedagogicalBlock, Section, TP
+from tpstudio.models import Metadata, Notebook, NotebookCell, PedagogicalBlock, Section, TP
 
 
 def test_tp_model_exposes_common_fields():
@@ -32,3 +32,19 @@ def test_tp_model_exposes_common_fields():
     data = tp.to_dict()
     assert data["metadata"]["title"] == "Lois de Snell Descartes"
     assert data["sections"][0]["title"] == "Première méthode"
+
+
+
+def test_tp_model_can_hold_notebook():
+    notebook = Notebook(
+        cells=[
+            NotebookCell(index=1, cell_type="markdown", source="Réponse : test"),
+            NotebookCell(index=2, cell_type="code", source="x = 1"),
+        ]
+    )
+    tp = TP(notebook=notebook)
+
+    assert tp.notebook is notebook
+    assert tp.notebook.cell_count == 2
+    assert tp.notebook.response_cell_count == 1
+    assert tp.to_dict()["notebook"]["cell_count"] == 2

@@ -64,6 +64,7 @@ def inspect_command(args: argparse.Namespace) -> int:
     document = LatexParser(tex_path).parse()
     notebook_path = find_notebook_file(tp_dir)
     notebook = NotebookReader(notebook_path).parse() if notebook_path else None
+    document.notebook = notebook
 
     build_dir = tp_dir / "_build"
     build_dir.mkdir(exist_ok=True)

@@ -14,6 +14,8 @@ def format_inspection(
 ) -> str:
     """Construit l'affichage lisible de la commande `tpstudio inspect`."""
 
+    notebook = notebook if notebook is not None else document.notebook
+
     lines: list[str] = [
         "TPStudio - Inspection",
         "─────────────────────",
