@@ -48,6 +48,7 @@ def format_inspection(
         _format_coherence(document),
         "",
         _format_notebook_role(document),
+        _format_guided_writing_zones(document),
         "",
         _format_notebook(notebook),
         "",
@@ -63,6 +64,8 @@ def format_inspection(
     lines.extend(_markdown_coherence(document))
     lines += ["", "## Rôle pédagogique probable du notebook", ""]
     lines.extend(_markdown_notebook_role(document))
+    lines += ["", "## Zones de rédaction guidée", ""]
+    lines.extend(_markdown_guided_writing_zones(document))
 
     return "\n".join(lines)
 
@@ -404,6 +407,31 @@ def _notebook_role_diagnostic(notebook, document: TPDocument | None = None) -> t
     if cell_count == 0:
         return "mixed", ["notebook vide"], ["ajouter une structure minimale de rapport"]
 
+    guided_counts = {}
+    guided_total = 0
+    if "_guided_writing_zones" in globals():
+        guided = _guided_writing_zones(notebook)
+        guided_counts = guided.get("counts", {})
+        guided_total = guided.get("total", 0)
+
+    interpretation_count = guided_counts.get("observation / commentaire", 0)
+    conclusion_count = guided_counts.get("conclusion / bilan", 0)
+    guided_response_count = guided_counts.get("réponse guidée", 0)
+    evaluation_count = guided_counts.get("évaluation", 0)
+
+    report_guidance_score = (
+        interpretation_count
+        + conclusion_count
+        + guided_response_count
+        + evaluation_count
+    )
+    has_report_guidance = report_guidance_score >= 2
+    has_complete_report_guidance = (
+        interpretation_count >= 1
+        and conclusion_count >= 1
+        and (guided_response_count >= 1 or response_count >= 1)
+    )
+
     if report_required:
         reasons.append("rapport demandé dans le LaTeX")
 
@@ -424,11 +452,19 @@ def _notebook_role_diagnostic(notebook, document: TPDocument | None = None) -> t
     else:
         reasons.append("aucun titre de partie détecté")
 
-    # Un notebook peut être un support de rapport même sans cellules
-    # explicitement marquées « Réponse : ».
+    if has_report_guidance:
+        reasons.append(f"{guided_total} zone(s) de rédaction guidée détectée(s)")
+
+    # Un notebook peut être un support de rapport même si le code est
+    # légèrement majoritaire, dès lors que les zones de rédaction sont
+    # explicites : commentaire, conclusion, réponse guidée, évaluation.
     if response_count >= 2 and markdown_count >= code_count:
         role = "report"
     elif report_required and markdown_count >= code_count and heading_count >= 3:
+        role = "report"
+    elif report_required and heading_count >= 3 and has_complete_report_guidance:
+        role = "report"
+    elif report_required and heading_count >= 3 and response_count >= 1 and has_report_guidance:
         role = "report"
     elif report_required and markdown_count >= max(code_count // 2, 1) and heading_count >= 3:
         role = "mixed"
@@ -446,7 +482,7 @@ def _notebook_role_diagnostic(notebook, document: TPDocument | None = None) -> t
             suggestions.append("ajouter des marqueurs « Réponse : » pour faciliter la correction future")
         else:
             suggestions.append("ajouter des cellules Markdown « Réponse : » après les calculs importants")
-    if markdown_count < code_count:
+    if markdown_count < code_count and not has_complete_report_guidance:
         suggestions.append("ajouter davantage de consignes Markdown pour guider la rédaction")
     if heading_count == 0:
         suggestions.append("structurer le notebook avec des titres correspondant aux étapes du TP")
@@ -455,6 +491,131 @@ def _notebook_role_diagnostic(notebook, document: TPDocument | None = None) -> t
 
     return role, reasons, suggestions
 
+
+def _format_guided_writing_zones(document: TPDocument) -> str:
+    notebook = getattr(document, "notebook", None)
+    if notebook is None:
+        return ""
+
+    zones = _guided_writing_zones(notebook)
+    if not zones:
+        return ""
+
+    lines = ["", "📝 Zones de rédaction guidée"]
+    if zones["total"] == 0:
+        lines.append("    ℹ aucune zone explicite détectée")
+        lines.append("    • le notebook peut rester exploitable, mais la rédaction est peu balisée")
+        return "\n".join(lines)
+
+    lines.append(f"    ✓ {zones['total']} zone(s) détectée(s)")
+    for label, count in zones["counts"].items():
+        if count:
+            lines.append(f"    • {label} : {count}")
+
+    if zones["suggestions"]:
+        lines.append("")
+        lines.append("💡 Amélioration possible du guidage")
+        for suggestion in zones["suggestions"]:
+            lines.append(f"    • {suggestion}")
+
+    return "\n".join(lines)
+
+
+def _markdown_guided_writing_zones(document: TPDocument) -> list[str]:
+    notebook = getattr(document, "notebook", None)
+    if notebook is None:
+        return ["- Aucun notebook détecté."]
+
+    zones = _guided_writing_zones(notebook)
+    lines: list[str] = []
+
+    if zones["total"] == 0:
+        lines.append("- Aucune zone explicite détectée.")
+        lines.append("- Le notebook peut rester exploitable, mais la rédaction est peu balisée.")
+        return lines
+
+    lines.append(f"- {zones['total']} zone(s) détectée(s).")
+    for label, count in zones["counts"].items():
+        if count:
+            lines.append(f"- {label} : {count}")
+
+    if zones["suggestions"]:
+        lines.append("")
+        lines.append("### Amélioration possible du guidage")
+        for suggestion in zones["suggestions"]:
+            lines.append(f"- {suggestion}")
+
+    return lines
+
+
+def _guided_writing_zones(notebook) -> dict:
+    categories = {
+        "protocole": ("protocole", "méthode", "montage", "manipulation"),
+        "exploitation / calcul": ("exploitation", "calcul", "traitement", "données"),
+        "observation / commentaire": (
+            "observer",
+            "observation",
+            "commentaire",
+            "commenter",
+            "interprétation",
+            "interpreter",
+            "interpréter",
+            "analyse",
+            "analyser",
+        ),
+        "conclusion / bilan": ("conclusion", "conclure", "bilan", "synthèse"),
+        "réponse guidée": ("réponse", "à compléter", "compléter", "rédiger"),
+        "évaluation": ("évaluation", "grille", "barème", "critère", "note finale"),
+    }
+
+    counts = {label: 0 for label in categories}
+    total = 0
+
+    for cell in getattr(notebook, "cells", []):
+        cell_type = getattr(cell, "cell_type", "")
+        if cell_type != "markdown":
+            continue
+
+        source = _cell_source_text(cell).lower()
+        if not source.strip():
+            continue
+
+        found_in_cell = False
+        for label, markers in categories.items():
+            if any(marker in source for marker in markers):
+                counts[label] += 1
+                found_in_cell = True
+
+        if found_in_cell:
+            total += 1
+
+    suggestions: list[str] = []
+    if counts["protocole"] == 0:
+        suggestions.append("ajouter une zone de protocole explicite")
+    if counts["observation / commentaire"] == 0:
+        suggestions.append("ajouter une zone d'interprétation ou de commentaire")
+    if counts["conclusion / bilan"] == 0:
+        suggestions.append("ajouter une zone de conclusion ou de bilan")
+    if counts["réponse guidée"] == 0:
+        suggestions.append("ajouter des zones de réponse clairement repérées")
+    if counts["évaluation"] == 0:
+        suggestions.append("prévoir plus tard une grille d'évaluation si le notebook devient un rapport complet")
+
+    return {
+        "counts": counts,
+        "total": total,
+        "suggestions": suggestions,
+    }
+
+
+def _cell_source_text(cell) -> str:
+    for attribute in ("source", "content", "text"):
+        value = getattr(cell, attribute, None)
+        if isinstance(value, str):
+            return value
+        if isinstance(value, list):
+            return "".join(str(item) for item in value)
+    return ""
 
 def _format_coherence(document: TPDocument) -> str:
     """Construit un diagnostic simple de cohérence LaTeX / Notebook.
