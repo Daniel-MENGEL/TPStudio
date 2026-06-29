@@ -125,15 +125,24 @@ def _improvement_cells(data: dict) -> list[dict]:
     suggestions = _suggestions_from_notebook_text(existing_text)
 
     lines = [
-        "## Améliorations proposées\n",
+        "---\n",
         "\n",
-        "> Cette section a été ajoutée automatiquement par TPStudio.\n",
+        "## 🛠 Améliorations proposées par TPStudio\n",
+        "\n",
+        "> Cette section a été ajoutée automatiquement.  \n",
         "> Elle sert de base de travail et doit être relue avant diffusion aux étudiants.\n",
+        "\n",
+        "### Points à vérifier\n",
         "\n",
     ]
 
     for suggestion in suggestions:
         lines.append(f"- {suggestion}\n")
+
+    lines.extend([
+        "\n",
+        "> Les propositions ci-dessus ne modifient pas le travail demandé : elles indiquent seulement les zones qui pourraient être mieux guidées ou mieux explicitées.\n",
+    ])
 
     improvement_cell = {
         "cell_type": "markdown",
@@ -188,9 +197,11 @@ def _evaluation_grid_cell() -> dict:
             }
         },
         "source": [
-            "## Évaluation par compétences\n",
+            "---\n",
             "\n",
-            "Donnée à titre indicatif, cette partie sera complétée par le professeur au moment de la correction.\n",
+            "## 📊 Évaluation par compétences\n",
+            "\n",
+            "> Donnée à titre indicatif. Cette partie sera complétée par le professeur au moment de la correction.\n",
             "\n",
             "| Compétence évaluée | Barème |\n",
             "|---|---:|\n",
@@ -200,6 +211,8 @@ def _evaluation_grid_cell() -> dict:
             "| Présenter les valeurs mesurées : tableaux, courbes annotées, valeurs avec incertitudes justifiées et commentées | /3 |\n",
             "| Interpréter les résultats obtenus : comparaison aux valeurs attendues, explication des écarts éventuels | /3 |\n",
             "| Nombre de questions résolues | /3 |\n",
+            "\n",
+            "### Formule indicative\n",
             "\n",
             "La note est calculée avec la formule :\n",
             "\n",
