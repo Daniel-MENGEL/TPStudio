@@ -43,11 +43,16 @@ def format_inspection(
         "",
         _format_sections(document),
         "",
+        _format_coherence(document),
+        "",
         _format_notebook(notebook),
         "",
         f"✓ Manifest : {manifest_path}",
         f"✓ Rapport : {report_path}",
     ]
+
+    lines += ["", "## Cohérence LaTeX / Notebook", ""]
+    lines.extend(_markdown_coherence(document))
 
     return "\n".join(lines)
 
@@ -204,3 +209,155 @@ def _markdown_notebook(notebook) -> list[str]:
         f"- Code : {notebook.code_cell_count}",
         f"- Cellules avec `Réponse :` : {notebook.response_cell_count}",
     ]
+
+
+
+def _format_coherence(document: TPDocument) -> str:
+    """Construit un diagnostic simple de cohérence LaTeX / Notebook.
+
+    Ce diagnostic reste volontairement prudent : il observe des signaux
+    faibles sans décider à la place de l'enseignant.
+    """
+
+    notebook = getattr(document, "notebook", None)
+    sections = getattr(document, "sections", []) or []
+    teacher_calls = getattr(document, "teacher_calls", []) or []
+
+    lines = ["🔎 Cohérence LaTeX / Notebook"]
+
+    if notebook is None:
+        lines.append("    ⚠ aucun notebook associé détecté")
+        if sections:
+            lines.append(f"    ℹ {len(sections)} section(s) LaTeX détectée(s)")
+        return "\n".join(lines)
+
+    cell_count = _notebook_count(notebook, "cell_count")
+    markdown_count = _notebook_count(notebook, "markdown_cell_count")
+    code_count = _notebook_count(notebook, "code_cell_count")
+    response_count = _notebook_count(notebook, "response_cell_count")
+
+    lines.append("    ✓ notebook trouvé")
+    lines.append(f"    ℹ {len(sections)} section(s) LaTeX détectée(s)")
+    lines.append(f"    ℹ {cell_count} cellule(s) notebook détectée(s)")
+
+    if response_count == 0:
+        lines.append("    ⚠ aucune cellule contenant « Réponse : »")
+    else:
+        lines.append(f"    ✓ {response_count} cellule(s) contenant « Réponse : »")
+
+    if cell_count == 0:
+        lines.append("    ⚠ notebook vide")
+    elif markdown_count == 0:
+        lines.append("    ⚠ aucune cellule Markdown : notebook très orienté code")
+    elif code_count > 2 * markdown_count:
+        lines.append(
+            f"    ℹ notebook plutôt orienté code ({code_count} code / {markdown_count} markdown)"
+        )
+    elif markdown_count > 2 * max(code_count, 1):
+        lines.append(
+            f"    ℹ notebook plutôt orienté texte ({markdown_count} markdown / {code_count} code)"
+        )
+    else:
+        lines.append(
+            f"    ✓ équilibre global texte/code ({markdown_count} markdown / {code_count} code)"
+        )
+
+    if teacher_calls:
+        lines.append(f"    ℹ {len(teacher_calls)} appel(s) professeur dans le LaTeX")
+
+    return "\n".join(lines)
+
+
+def _markdown_coherence(document: TPDocument) -> list[str]:
+    """Version Markdown du diagnostic de cohérence."""
+
+    notebook = getattr(document, "notebook", None)
+    sections = getattr(document, "sections", []) or []
+    teacher_calls = getattr(document, "teacher_calls", []) or []
+
+    if notebook is None:
+        lines = ["- ⚠ Aucun notebook associé détecté."]
+        if sections:
+            lines.append(f"- {len(sections)} section(s) LaTeX détectée(s).")
+        return lines
+
+    cell_count = _notebook_count(notebook, "cell_count")
+    markdown_count = _notebook_count(notebook, "markdown_cell_count")
+    code_count = _notebook_count(notebook, "code_cell_count")
+    response_count = _notebook_count(notebook, "response_cell_count")
+
+    lines = [
+        "- ✓ Notebook trouvé.",
+        f"- {len(sections)} section(s) LaTeX détectée(s).",
+        f"- {cell_count} cellule(s) notebook détectée(s).",
+    ]
+
+    if response_count == 0:
+        lines.append("- ⚠ Aucune cellule contenant `Réponse :`.")
+    else:
+        lines.append(f"- ✓ {response_count} cellule(s) contenant `Réponse :`.")
+
+    if cell_count == 0:
+        lines.append("- ⚠ Notebook vide.")
+    elif markdown_count == 0:
+        lines.append("- ⚠ Aucune cellule Markdown : notebook très orienté code.")
+    elif code_count > 2 * markdown_count:
+        lines.append(
+            f"- ℹ Notebook plutôt orienté code : {code_count} cellule(s) code / {markdown_count} cellule(s) Markdown."
+        )
+    elif markdown_count > 2 * max(code_count, 1):
+        lines.append(
+            f"- ℹ Notebook plutôt orienté texte : {markdown_count} cellule(s) Markdown / {code_count} cellule(s) code."
+        )
+    else:
+        lines.append(
+            f"- ✓ Équilibre global texte/code : {markdown_count} cellule(s) Markdown / {code_count} cellule(s) code."
+        )
+
+    if teacher_calls:
+        lines.append(f"- ℹ {len(teacher_calls)} appel(s) professeur détecté(s) dans le LaTeX.")
+
+    return lines
+
+
+def _notebook_count(notebook: object, attr: str) -> int:
+    """Récupère un compteur de notebook, même si son nom évolue légèrement."""
+
+    value = getattr(notebook, attr, None)
+    if isinstance(value, int):
+        return value
+
+    cells = getattr(notebook, "cells", None)
+    if not isinstance(cells, list):
+        return 0
+
+    if attr == "cell_count":
+        return len(cells)
+
+    if attr == "markdown_cell_count":
+        return sum(1 for cell in cells if _cell_type(cell) == "markdown")
+
+    if attr == "code_cell_count":
+        return sum(1 for cell in cells if _cell_type(cell) == "code")
+
+    if attr == "response_cell_count":
+        return sum(1 for cell in cells if "Réponse :" in _cell_source(cell))
+
+    return 0
+
+
+def _cell_type(cell: object) -> str:
+    if isinstance(cell, dict):
+        return str(cell.get("cell_type", ""))
+    return str(getattr(cell, "cell_type", ""))
+
+
+def _cell_source(cell: object) -> str:
+    if isinstance(cell, dict):
+        source = cell.get("source", "")
+    else:
+        source = getattr(cell, "source", "")
+
+    if isinstance(source, list):
+        return "".join(str(part) for part in source)
+    return str(source)
