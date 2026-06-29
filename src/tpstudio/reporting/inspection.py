@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
+import unicodedata
 
 from tpstudio.models import Notebook, TPDocument
 
@@ -46,6 +48,10 @@ def format_inspection(
         _format_coherence(document),
         "",
         _format_notebook(notebook),
+        "",
+        _format_notebook_headings(notebook),
+        "",
+        _format_section_heading_alignment(document),
         "",
         f"✓ Manifest : {manifest_path}",
         f"✓ Rapport : {report_path}",
@@ -95,6 +101,22 @@ def make_inspection_report(document: TPDocument, tex_path: Path, notebook: Noteb
             )
     else:
         lines.append("Aucune section détectée.")
+
+    lines += ["", "## Titres Markdown du notebook", ""]
+    nb = notebook if notebook is not None else document.notebook
+    if nb is None or not nb.markdown_headings:
+        lines.append("Aucun titre Markdown détecté.")
+    else:
+        for heading in nb.markdown_headings:
+            prefix = "#" * heading.level
+            lines.append(f"- cellule {heading.cell_index} — `{prefix} {heading.title}`")
+
+    lines += ["", "## Correspondance sections / notebook", ""]
+    if nb is None:
+        lines.append("Aucun notebook détecté.")
+    else:
+        rendered = _format_section_heading_alignment(document).splitlines()[1:]
+        lines.extend(f"- {line.strip()}" for line in rendered if line.strip())
 
     lines += ["", "## Blocs pédagogiques", ""]
     for block in document.blocks:
@@ -211,6 +233,102 @@ def _markdown_notebook(notebook) -> list[str]:
     ]
 
 
+
+
+def _format_notebook_headings(notebook) -> str:
+    if notebook is None:
+        return "🧩 Titres Markdown du notebook\n    aucun notebook détecté"
+
+    headings = getattr(notebook, "markdown_headings", [])
+    if not headings:
+        return "🧩 Titres Markdown du notebook\n    aucun titre Markdown détecté"
+
+    lines = [f"🧩 Titres Markdown du notebook ({len(headings)})"]
+    for heading in headings:
+        prefix = "#" * heading.level
+        lines.append(f"    • cellule {heading.cell_index} — {prefix} {heading.title}")
+    return "\n".join(lines)
+
+
+def _format_section_heading_alignment(document: TPDocument) -> str:
+    notebook = getattr(document, "notebook", None)
+    sections = getattr(document, "sections", []) or []
+    if notebook is None:
+        return "🧭 Correspondance sections / notebook\n    aucun notebook détecté"
+
+    headings = getattr(notebook, "markdown_headings", [])
+    if not sections:
+        return "🧭 Correspondance sections / notebook\n    aucune section LaTeX détectée"
+    if not headings:
+        return "🧭 Correspondance sections / notebook\n    ⚠ aucun titre Markdown détecté dans le notebook"
+
+    lines = ["🧭 Correspondance sections / notebook"]
+    min_cell_index = 0
+    used_heading_ids: set[int] = set()
+
+    for section in sections:
+        section_title = section.title or "Section sans titre"
+        match, score = _best_heading_match(
+            section_title,
+            headings,
+            min_cell_index=min_cell_index,
+            used_heading_ids=used_heading_ids,
+        )
+        if match is not None and score >= 0.34:
+            used_heading_ids.add(id(match))
+            min_cell_index = match.cell_index
+            lines.append(
+                f"    ✓ {section_title} → cellule {match.cell_index} : {match.title}"
+            )
+        else:
+            lines.append(f"    ⚠ {section_title} → aucun titre proche trouvé")
+    return "\n".join(lines)
+
+
+def _best_heading_match(
+    section_title: str,
+    headings,
+    min_cell_index: int = 0,
+    used_heading_ids: set[int] | None = None,
+):
+    used_heading_ids = used_heading_ids or set()
+    best = None
+    best_score = 0.0
+    for heading in headings:
+        if id(heading) in used_heading_ids:
+            continue
+        if heading.cell_index < min_cell_index:
+            continue
+        score = _title_similarity(section_title, heading.title)
+        if score > best_score:
+            best = heading
+            best_score = score
+    return best, best_score
+
+
+def _title_similarity(left: str, right: str) -> float:
+    left_norm = _normalize_title(left)
+    right_norm = _normalize_title(right)
+    if not left_norm or not right_norm:
+        return 0.0
+    if left_norm in right_norm or right_norm in left_norm:
+        return 1.0
+
+    left_words = set(left_norm.split())
+    right_words = set(right_norm.split())
+    if not left_words or not right_words:
+        return 0.0
+    common = left_words & right_words
+    return len(common) / max(len(left_words), len(right_words))
+
+
+def _normalize_title(text: str) -> str:
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(char for char in text if not unicodedata.combining(char))
+    text = text.lower()
+    text = re.sub(r"[^a-z0-9]+", " ", text)
+    words = [word for word in text.split() if len(word) >= 3]
+    return " ".join(words)
 
 def _format_coherence(document: TPDocument) -> str:
     """Construit un diagnostic simple de cohérence LaTeX / Notebook.

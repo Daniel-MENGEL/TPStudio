@@ -166,6 +166,26 @@ class NotebookCell:
 
 
 @dataclass(slots=True)
+class NotebookHeading:
+    """Titre Markdown repéré dans un notebook Jupyter.
+
+    Exemple : une ligne ``## Première méthode`` devient un titre de
+    niveau 2 associé à l'indice de la cellule qui le contient.
+    """
+
+    cell_index: int
+    level: int
+    title: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "cell_index": self.cell_index,
+            "level": self.level,
+            "title": self.title,
+        }
+
+
+@dataclass(slots=True)
 class Notebook:
     """Représentation minimale d'un notebook Jupyter lu par TPStudio."""
 
@@ -200,6 +220,45 @@ class Notebook:
     def response_cell_count(self) -> int:
         return len(self.answer_cells)
 
+
+    @property
+    def markdown_headings(self) -> list[NotebookHeading]:
+        """Titres Markdown détectés dans les cellules du notebook.
+
+        On accepte volontairement les deux écritures :
+        - ``## Titre`` : écriture Markdown habituelle ;
+        - ``##Titre`` : écriture tolérée car présente dans certains notebooks.
+        """
+
+        headings: list[NotebookHeading] = []
+        for cell in self.markdown_cells:
+            for line in cell.source.splitlines():
+                stripped = line.strip()
+                if not stripped.startswith("#"):
+                    continue
+
+                level = len(stripped) - len(stripped.lstrip("#"))
+                if level < 1 or level > 6:
+                    continue
+
+                title = stripped[level:].strip()
+                if not title:
+                    continue
+
+                headings.append(
+                    NotebookHeading(
+                        cell_index=cell.index,
+                        level=level,
+                        title=title,
+                    )
+                )
+
+        return headings
+
+    @property
+    def heading_count(self) -> int:
+        return len(self.markdown_headings)
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "path": str(self.path) if self.path else None,
@@ -207,6 +266,8 @@ class Notebook:
             "markdown_cell_count": len(self.markdown_cells),
             "code_cell_count": len(self.code_cells),
             "answer_cell_count": len(self.answer_cells),
+            "heading_count": len(self.markdown_headings),
+            "headings": [heading.to_dict() for heading in self.markdown_headings],
             "cells": [cell.to_dict() for cell in self.cells],
         }
 

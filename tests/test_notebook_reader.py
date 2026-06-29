@@ -38,4 +38,8 @@ def test_notebook_reader_counts_cells(tmp_path):
     assert notebook.markdown_cell_count == 1
     assert notebook.code_cell_count == 1
     assert notebook.response_cell_count == 1
+    assert notebook.heading_count == 1
+    assert notebook.markdown_headings[0].level == 1
+    assert notebook.markdown_headings[0].title == "Titre"
+    assert notebook.markdown_headings[0].cell_index == 1
     assert notebook.cells[0].source.startswith("# Titre")
