@@ -340,11 +340,11 @@ def _format_notebook_role(document: TPDocument) -> str:
     if notebook is None:
         return "📓 Rôle probable du notebook\n    aucun notebook détecté"
 
-    role, reasons, suggestions = _notebook_role_diagnostic(notebook)
+    role, reasons, suggestions = _notebook_role_diagnostic(notebook, document)
 
     lines = ["📓 Rôle probable du notebook"]
     if role == "report":
-        lines.append("    ✓ support de rapport numérique à compléter")
+        lines.append("    ✓ support de rapport numérique probable")
     elif role == "calculator":
         lines.append("    ℹ outil de calcul associé au TP")
     else:
@@ -367,10 +367,10 @@ def _markdown_notebook_role(document: TPDocument) -> list[str]:
     if notebook is None:
         return ["Aucun notebook détecté."]
 
-    role, reasons, suggestions = _notebook_role_diagnostic(notebook)
+    role, reasons, suggestions = _notebook_role_diagnostic(notebook, document)
 
     if role == "report":
-        lines = ["- Rôle probable : support de rapport numérique à compléter."]
+        lines = ["- Rôle probable : support de rapport numérique probable."]
     elif role == "calculator":
         lines = ["- Rôle probable : outil de calcul associé au TP."]
     else:
@@ -388,12 +388,15 @@ def _markdown_notebook_role(document: TPDocument) -> list[str]:
     return lines
 
 
-def _notebook_role_diagnostic(notebook) -> tuple[str, list[str], list[str]]:
+def _notebook_role_diagnostic(notebook, document: TPDocument | None = None) -> tuple[str, list[str], list[str]]:
     cell_count = _notebook_count(notebook, "cell_count")
     markdown_count = _notebook_count(notebook, "markdown_cell_count")
     code_count = _notebook_count(notebook, "code_cell_count")
     response_count = _notebook_count(notebook, "response_cell_count")
     heading_count = getattr(notebook, "heading_count", 0)
+    report_required = bool(
+        getattr(getattr(document, "metadata", None), "report_required", False)
+    )
 
     reasons: list[str] = []
     suggestions: list[str] = []
@@ -401,10 +404,13 @@ def _notebook_role_diagnostic(notebook) -> tuple[str, list[str], list[str]]:
     if cell_count == 0:
         return "mixed", ["notebook vide"], ["ajouter une structure minimale de rapport"]
 
+    if report_required:
+        reasons.append("rapport demandé dans le LaTeX")
+
     if response_count > 0:
         reasons.append(f"{response_count} cellule(s) contenant « Réponse : »")
     else:
-        reasons.append("aucune cellule contenant « Réponse : »")
+        reasons.append("aucune cellule contenant « Réponse : » explicite")
 
     if code_count > markdown_count:
         reasons.append(f"dominante code ({code_count} code / {markdown_count} markdown)")
@@ -418,23 +424,32 @@ def _notebook_role_diagnostic(notebook) -> tuple[str, list[str], list[str]]:
     else:
         reasons.append("aucun titre de partie détecté")
 
+    # Un notebook peut être un support de rapport même sans cellules
+    # explicitement marquées « Réponse : ».
     if response_count >= 2 and markdown_count >= code_count:
         role = "report"
+    elif report_required and markdown_count >= code_count and heading_count >= 3:
+        role = "report"
+    elif report_required and markdown_count >= max(code_count // 2, 1) and heading_count >= 3:
+        role = "mixed"
     elif response_count >= 1 and markdown_count >= max(2, code_count // 2):
         role = "mixed"
     elif code_count > 2 * max(markdown_count, 1) and response_count == 0:
         role = "calculator"
-    elif response_count == 0 and code_count >= markdown_count:
+    elif response_count == 0 and code_count >= markdown_count and heading_count < 3:
         role = "calculator"
     else:
         role = "mixed"
 
     if response_count == 0:
-        suggestions.append("ajouter des cellules Markdown « Réponse : » après les calculs importants")
+        if role == "report":
+            suggestions.append("ajouter des marqueurs « Réponse : » pour faciliter la correction future")
+        else:
+            suggestions.append("ajouter des cellules Markdown « Réponse : » après les calculs importants")
     if markdown_count < code_count:
         suggestions.append("ajouter davantage de consignes Markdown pour guider la rédaction")
     if heading_count == 0:
-        suggestions.append("structurer le notebook avec des titres correspondant aux sections du TP")
+        suggestions.append("structurer le notebook avec des titres correspondant aux étapes du TP")
     if role == "calculator":
         suggestions.append("conserver les cellules de calcul, mais les entourer de zones d'interprétation et de conclusion")
 
