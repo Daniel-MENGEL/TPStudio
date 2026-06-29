@@ -28,6 +28,8 @@ def format_inspection(
 
     lines += [
         "",
+        _format_general_instructions(document),
+        "",
         _format_list("🎯 Objectifs", document.objectives),
         "",
         _format_list("🧰 Matériel", document.equipment),
@@ -58,6 +60,10 @@ def make_inspection_report(document: TPDocument, tex_path: Path) -> str:
         f"- Code TP : {meta.tp_code or 'non détecté'}",
         f"- Slug PDF : {meta.pdf_slug or 'non détecté'}",
         "",
+        "## Consignes générales",
+        "",
+        *_markdown_general_instructions(document),
+        "",
         "## Objectifs",
         "",
     ]
@@ -82,12 +88,40 @@ def make_inspection_report(document: TPDocument, tex_path: Path) -> str:
 
     lines += ["", "## Blocs pédagogiques", ""]
     for block in document.blocks:
+        if block.kind in {"rapport", "appels"}:
+            continue
         lines.append(f"### {block.title} (`{block.kind}`)")
         lines.extend(_markdown_items(block.items))
         lines.append("")
 
     return "\n".join(lines)
 
+
+
+def _format_general_instructions(document: TPDocument) -> str:
+    flags: list[str] = []
+    if document.metadata.report_required:
+        flags.append("✓ rapport demandé")
+    if document.metadata.teacher_calls_enabled:
+        flags.append("✓ appels professeur activés")
+
+    if not flags:
+        return "🧾 Consignes générales\n    aucune consigne générale détectée"
+
+    lines = ["🧾 Consignes générales"]
+    lines.extend(f"    {flag}" for flag in flags)
+    return "\n".join(lines)
+
+
+def _markdown_general_instructions(document: TPDocument) -> list[str]:
+    items: list[str] = []
+    if document.metadata.report_required:
+        items.append("- Rapport demandé aux étudiants.")
+    if document.metadata.teacher_calls_enabled:
+        items.append("- Appels professeur possibles lorsque le symbole apparaît.")
+    if not items:
+        return ["Aucune consigne générale détectée."]
+    return items
 
 def _format_list(title: str, items: list[str]) -> str:
     if not items:

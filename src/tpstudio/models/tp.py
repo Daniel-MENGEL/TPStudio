@@ -30,6 +30,8 @@ class Metadata:
     tp_code: str = ""
     pdf_slug: str = ""
     duration: str = ""
+    report_required: bool = False
+    teacher_calls_enabled: bool = False
     source_tex: Path | None = None
     source_notebook: Path | None = None
 
@@ -40,6 +42,8 @@ class Metadata:
             "tp_code": self.tp_code,
             "pdf_slug": self.pdf_slug,
             "duration": self.duration,
+            "report_required": self.report_required,
+            "teacher_calls_enabled": self.teacher_calls_enabled,
             "source_tex": str(self.source_tex) if self.source_tex else None,
             "source_notebook": str(self.source_notebook) if self.source_notebook else None,
         }

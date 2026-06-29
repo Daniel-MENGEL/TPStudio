@@ -23,8 +23,6 @@ class LatexParser:
         "annexes": "Annexes",
         "indications": "Indications",
         "questions": "Questions",
-        "rapport": "Rapport",
-        "appels": "Appels professeur",
     }
 
     SECTION_PATTERN = r"\\(?P<command>section|subsection|subsubsection)\*?\{(?P<title>[^{}]*)\}"
@@ -56,6 +54,8 @@ class LatexParser:
             session_label=self._clean_latex_inline(session_label),
             tp_code=self._clean_latex_inline(tp_code),
             pdf_slug=self._clean_latex_inline(pdf_slug),
+            report_required=self._has_command(text, "rapport"),
+            teacher_calls_enabled=self._has_command(text, "appels"),
         )
 
     def _parse_blocks(self, text: str) -> list[TPBlock]:
@@ -191,6 +191,9 @@ class LatexParser:
             if cleaned:
                 items.append(cleaned)
         return items
+
+    def _has_command(self, text: str, command: str) -> bool:
+        return re.search(rf"\\{command}\b", text) is not None
 
     def _first_braced(self, text: str, command: str) -> str:
         match = re.search(rf"\\{command}\s*\{{([^{{}}]*)\}}", text, re.S)
