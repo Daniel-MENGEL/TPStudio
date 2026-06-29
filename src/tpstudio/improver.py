@@ -50,8 +50,7 @@ def improve_notebook(tp_dir: Path) -> Path:
     output = _available_output_path(notebook.with_name(f"{notebook.stem}-ameliore.ipynb"))
     data = json.loads(notebook.read_text(encoding="utf-8"))
 
-    cells = data.setdefault("cells", [])
-    cells.extend(_improvement_cells(data))
+    _improve_existing_notebook_data(data)
 
     output.write_text(
         json.dumps(data, ensure_ascii=False, indent=2),
@@ -114,6 +113,434 @@ def _available_output_path(path: Path) -> Path:
             return candidate
 
     raise FileExistsError(f"Impossible de trouver un nom disponible pour {path}")
+
+
+def _improve_existing_notebook_data(data: dict) -> None:
+    # Ajoute des cellules d'amélioration à des emplacements plus pédagogiques.
+    # Le notebook source n'est jamais modifié : cette fonction ne travaille
+    # que sur la copie chargée en mémoire avant écriture.
+
+    cells = data.setdefault("cells", [])
+    existing_text = _notebook_text(data).lower()
+
+    _insert_measurement_result_cells(cells)
+
+    contextual_insertions = _contextual_improvement_cells(existing_text)
+    improvement_cells = _improvement_cells(data)
+
+    if contextual_insertions:
+        insertion_index = _before_improvements_insertion_index(cells, improvement_cells)
+        cells[insertion_index:insertion_index] = contextual_insertions
+
+    cells.extend(improvement_cells)
+
+
+def _insert_measurement_result_cells(cells: list[dict]) -> None:
+    # Insère les zones de résultats au plus près des parties concernées.
+    # Pour le moment, l'heuristique s'appuie sur les titres et sur quelques
+    # marqueurs de code courants.
+
+    if _notebook_already_contains_generated_kind(cells, "measurement_result"):
+        return
+
+    headings = _notebook_headings_from_cells(cells)
+    suggestions: list[dict] = []
+    seen: set[str] = set()
+
+    for heading in headings:
+        suggestion = _result_prompt_from_heading(heading)
+        if suggestion is None:
+            continue
+
+        key = suggestion["title"].lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        suggestions.append(suggestion)
+
+    insertions: list[tuple[int, dict]] = []
+
+    for suggestion in suggestions:
+        cell = _result_cell_from_suggestion(suggestion)
+        index = _measurement_result_insertion_index(cells, suggestion)
+        insertions.append((index, cell))
+
+    if len(suggestions) >= 2 and not _notebook_contains_title(cells, "comparaison des résultats obtenus"):
+        comparison_cell = _generated_markdown_cell(
+            [
+                "### Comparaison des résultats obtenus\n",
+                "\n",
+                "**Réponse :**\n",
+                "\n",
+                "Comparer les différentes valeurs mesurées lorsqu'elles concernent une même grandeur physique ou des méthodes différentes.\n",
+                "\n",
+                "On attend notamment :\n",
+                "- les valeurs comparées avec leurs incertitudes ;\n",
+                "- le calcul éventuel d'un écart normalisé ;\n",
+                "- une conclusion sur la compatibilité des résultats.\n",
+            ],
+            kind="measurement_comparison",
+        )
+        insertions.append((_comparison_insertion_index(cells), comparison_cell))
+
+    # Insertion en partant de la fin pour ne pas décaler les indices déjà calculés.
+    for index, cell in sorted(insertions, key=lambda item: item[0], reverse=True):
+        cells[index:index] = [cell]
+
+
+def _result_cell_from_suggestion(suggestion: dict) -> dict:
+    return _generated_markdown_cell(
+        [
+            f"### Résultat — {suggestion['title']}\n",
+            "\n",
+            "**Réponse :**\n",
+            "\n",
+            suggestion["intro"] + "\n",
+            "\n",
+            "On attend notamment :\n",
+            *[f"- {item}\n" for item in suggestion["items"]],
+        ],
+        kind="measurement_result",
+    )
+
+
+def _measurement_result_insertion_index(cells: list[dict], suggestion: dict) -> int:
+    title = suggestion.get("title", "").lower()
+
+    if "angle au sommet" in title or ("angle" in title and "prisme" in title):
+        # Résultat de A : à la fin de la partie consacrée à l'angle,
+        # juste avant la partie consacrée à l'indice du prisme.
+        #
+        # Attention : le titre général du notebook contient parfois aussi
+        # "indice" et "prisme". On cherche donc explicitement un vrai titre
+        # de partie du type "## Mesure de l'indice ... prisme".
+        index = _find_specific_heading_index(
+            cells,
+            required=("mesure", "indice", "prisme"),
+            min_level=2,
+        )
+        if index is not None:
+            return index
+
+    if "indice" in title and "prisme" in title:
+        # Résultat de n : après la cellule de code qui effectue le calcul de n.
+        index = _find_code_index_after_marker(cells, ("#calcul de n", "calcul de n", "calcul n"))
+        if index is not None:
+            return index + 1
+
+    # Fallback : après le dernier code de la partie dont le titre ressemble.
+    heading_words = _important_words(title)
+    heading_index = _find_heading_index_from_words(cells, heading_words)
+    if heading_index is not None:
+        next_heading = _find_next_heading_index(cells, heading_index + 1)
+        section_end = next_heading if next_heading is not None else len(cells)
+        last_code = _find_last_code_index(cells, heading_index + 1, section_end)
+        if last_code is not None:
+            return last_code + 1
+        return section_end
+
+    return _best_contextual_insertion_index(cells)
+
+
+def _comparison_insertion_index(cells: list[dict]) -> int:
+    # La comparaison doit suivre le calcul d'écart normalisé quand il existe.
+    index = _find_code_index_after_marker(cells, ("écart normalisé", "ecart normalisé", "ecart normalise"))
+    if index is not None:
+        return index + 1
+    return _best_contextual_insertion_index(cells)
+
+
+def _notebook_headings_from_cells(cells: list[dict]) -> list[str]:
+    headings: list[str] = []
+    for cell in cells:
+        if cell.get("cell_type") != "markdown":
+            continue
+        for line in _cell_text(cell).splitlines():
+            stripped = line.strip()
+            if not stripped.startswith("#"):
+                continue
+            title = stripped.lstrip("#").strip()
+            if title:
+                headings.append(title)
+    return headings
+
+
+def _result_prompt_from_heading(heading: str) -> dict | None:
+    normalized = heading.lower()
+
+    if _looks_like_import_or_general_heading(normalized):
+        return None
+
+    if "angle" in normalized and ("prisme" in normalized or "sommet" in normalized or " a" in normalized):
+        return {
+            "title": "Angle au sommet du prisme",
+            "intro": "Présenter ici la valeur mesurée de l'angle au sommet du prisme, avec son incertitude.",
+            "items": [
+                "les angles mesurés au goniomètre ;",
+                "la méthode utilisée pour déterminer l'angle A ;",
+                "la valeur finale de A avec son incertitude ;",
+                "un court commentaire sur la précision de la mesure.",
+            ],
+        }
+
+    if "indice" in normalized and ("prisme" in normalized or "$n$" in normalized or " n" in normalized):
+        return {
+            "title": "Indice du prisme",
+            "intro": "Présenter ici la valeur obtenue pour l'indice du prisme, avec son incertitude.",
+            "items": [
+                "la valeur de l'angle au minimum de déviation si elle intervient ;",
+                "la formule ou la méthode de calcul utilisée ;",
+                "la valeur finale de n avec son incertitude ;",
+                "une comparaison éventuelle avec une valeur attendue.",
+            ],
+        }
+
+    if "masse en eau" in normalized:
+        return {
+            "title": "Masse en eau du calorimètre",
+            "intro": "Présenter ici la masse en eau du calorimètre obtenue expérimentalement.",
+            "items": [
+                "les mesures de température et de masse utilisées ;",
+                "le bilan énergétique exploité ;",
+                "la valeur finale avec son incertitude ;",
+                "un commentaire sur les principales sources d'erreur.",
+            ],
+        }
+
+    if "capacité thermique" in normalized or "capacite thermique" in normalized:
+        return {
+            "title": _clean_heading_for_result_title(heading),
+            "intro": "Présenter ici la capacité thermique déterminée expérimentalement.",
+            "items": [
+                "les grandeurs mesurées ;",
+                "le bilan énergétique ou la relation utilisée ;",
+                "la valeur finale avec son incertitude ;",
+                "une comparaison éventuelle avec une valeur tabulée.",
+            ],
+        }
+
+    if "chaleur latente" in normalized or "fusion" in normalized:
+        return {
+            "title": "Chaleur latente de fusion",
+            "intro": "Présenter ici la valeur expérimentale de la chaleur latente de fusion.",
+            "items": [
+                "les mesures nécessaires au bilan énergétique ;",
+                "la relation utilisée ;",
+                "la valeur finale avec son incertitude ;",
+                "une comparaison avec une valeur attendue.",
+            ],
+        }
+
+    if any(marker in normalized for marker in ("mesure", "détermination", "determination")):
+        return {
+            "title": _clean_heading_for_result_title(heading),
+            "intro": "Présenter ici le résultat expérimental associé à cette partie.",
+            "items": [
+                "les mesures utilisées ;",
+                "la méthode d'exploitation ;",
+                "la valeur finale avec son incertitude si elle est disponible ;",
+                "un court commentaire sur la cohérence du résultat.",
+            ],
+        }
+
+    return None
+
+
+def _find_specific_heading_index(
+    cells: list[dict],
+    required: tuple[str, ...],
+    min_level: int = 1,
+) -> int | None:
+    for index, cell in enumerate(cells):
+        if cell.get("cell_type") != "markdown":
+            continue
+
+        for line in _cell_text(cell).splitlines():
+            stripped = line.strip()
+            if not stripped.startswith("#"):
+                continue
+
+            level = len(stripped) - len(stripped.lstrip("#"))
+            if level < min_level:
+                continue
+
+            title = stripped.lstrip("#").strip().lower()
+            if all(marker in title for marker in required):
+                return index
+
+    return None
+
+
+def _find_heading_index(cells: list[dict], markers: tuple[str, ...]) -> int | None:
+    for index, cell in enumerate(cells):
+        if cell.get("cell_type") != "markdown":
+            continue
+        source = _cell_text(cell).lower()
+        lines = [line.strip() for line in source.splitlines()]
+        heading_lines = [line for line in lines if line.startswith("#")]
+        if any(all(marker in line for marker in markers) for line in heading_lines):
+            return index
+    return None
+
+
+def _find_heading_index_from_words(cells: list[dict], words: set[str]) -> int | None:
+    if not words:
+        return None
+    for index, cell in enumerate(cells):
+        if cell.get("cell_type") != "markdown":
+            continue
+        for line in _cell_text(cell).lower().splitlines():
+            if not line.strip().startswith("#"):
+                continue
+            line_words = _important_words(line)
+            if words & line_words:
+                return index
+    return None
+
+
+def _find_next_heading_index(cells: list[dict], start: int) -> int | None:
+    for index in range(start, len(cells)):
+        if cells[index].get("cell_type") != "markdown":
+            continue
+        if any(line.strip().startswith("#") for line in _cell_text(cells[index]).splitlines()):
+            return index
+    return None
+
+
+def _find_last_code_index(cells: list[dict], start: int, end: int) -> int | None:
+    for index in range(end - 1, start - 1, -1):
+        if cells[index].get("cell_type") == "code":
+            return index
+    return None
+
+
+def _find_code_index_after_marker(cells: list[dict], markers: tuple[str, ...]) -> int | None:
+    for index in range(len(cells) - 1, -1, -1):
+        if cells[index].get("cell_type") != "code":
+            continue
+        source = _cell_text(cells[index]).lower()
+        if any(marker in source for marker in markers):
+            return index
+    return None
+
+
+def _important_words(text: str) -> set[str]:
+    words = set(_words(text))
+    ignored = {
+        "resultat", "résultat", "mesure", "mesures", "du", "de", "des",
+        "la", "le", "les", "au", "aux", "d", "l", "un", "une",
+    }
+    return {word for word in words if word not in ignored and len(word) >= 3}
+
+
+def _notebook_already_contains_generated_kind(cells: list[dict], kind: str) -> bool:
+    for cell in cells:
+        metadata = cell.get("metadata", {})
+        tpstudio = metadata.get("tpstudio", {}) if isinstance(metadata, dict) else {}
+        if tpstudio.get("kind") == kind:
+            return True
+    return False
+
+
+def _notebook_contains_title(cells: list[dict], title: str) -> bool:
+    target = title.lower()
+    return any(target in _cell_text(cell).lower() for cell in cells)
+
+
+def _looks_like_import_or_general_heading(normalized: str) -> bool:
+    markers = (
+        "importation",
+        "bibliothèque",
+        "bibliotheque",
+        "fonctions utiles",
+        "texte du tp",
+        "<center>",
+    )
+    return any(marker in normalized for marker in markers)
+
+
+def _clean_heading_for_result_title(heading: str) -> str:
+    title = heading.replace("<center>", "").replace("</center>", "")
+    title = title.replace("**", "").replace("$", "")
+    title = " ".join(title.split())
+    return title.strip() or "Résultat expérimental"
+
+
+def _contextual_improvement_cells(existing_text: str) -> list[dict]:
+    # A19e : on reste volontairement sobre.
+    #
+    # Les cellules de type "Résultat — ..." et "Comparaison des résultats"
+    # portent déjà la rédaction attendue. On évite donc d'ajouter une
+    # "Réponse guidée" générique ou un "Commentaire / interprétation" qui
+    # ferait doublon.
+    #
+    # On ajoute seulement une conclusion si le notebook n'en contient pas.
+
+    cells: list[dict] = []
+
+    if not any(marker in existing_text for marker in ("conclusion", "bilan", "synthèse")):
+        cells.append(_generated_markdown_cell(
+            [
+                "### Conclusion / bilan\n",
+                "\n",
+                "**Réponse :**\n",
+                "\n",
+                "À compléter par l'étudiant : résumer les résultats principaux du TP et indiquer les limites de la méthode utilisée.\n",
+            ],
+            kind="contextual_conclusion",
+        ))
+
+    return cells
+
+
+def _before_improvements_insertion_index(cells: list[dict], improvement_cells: list[dict]) -> int:
+    # Place les cellules de conclusion juste avant le bloc final
+    # "Améliorations proposées par TPStudio".
+    #
+    # Dans l'état actuel, ce bloc final n'est pas encore dans cells :
+    # il sera ajouté juste après. L'emplacement voulu est donc la fin
+    # actuelle du notebook.
+
+    return len(cells)
+
+
+def _best_contextual_insertion_index(cells: list[dict]) -> int:
+    # Choisit un emplacement raisonnable pour les cellules de rédaction.
+
+    for index, cell in enumerate(cells):
+        source = _cell_text(cell).lower()
+        if "évaluation par compétences" in source or "evaluation par competences" in source:
+            return index
+
+    for index in range(len(cells) - 1, -1, -1):
+        if cells[index].get("cell_type") == "code":
+            return index + 1
+
+    return len(cells)
+
+
+def _notebook_text(data: dict) -> str:
+    return "\n".join(_cell_text(cell) for cell in data.get("cells", []))
+
+
+def _cell_text(cell: dict) -> str:
+    source = cell.get("source", "")
+    if isinstance(source, list):
+        return "".join(str(item) for item in source)
+    return str(source)
+
+
+def _generated_markdown_cell(source: list[str], kind: str) -> dict:
+    return {
+        "cell_type": "markdown",
+        "metadata": {
+            "tpstudio": {
+                "generated": True,
+                "kind": kind,
+            }
+        },
+        "source": source,
+    }
 
 
 def _improvement_cells(data: dict) -> list[dict]:
