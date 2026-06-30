@@ -31,32 +31,76 @@ STUDENT_MARKERS = (
 )
 
 
-def improve_notebook(tp_dir: Path) -> Path:
-    """Crée une copie améliorée du notebook associé à un dossier de TP.
+def improve_notebook(tp_path: Path) -> Path:
+    # tp_path peut être soit le dossier du TP, soit directement un notebook.
+    # La CLI actuelle appelle cette fonction avec le dossier du TP.
+    if tp_path.is_file() and tp_path.suffix == ".ipynb":
+        notebook_path = tp_path
+        folder = tp_path.parent
+    else:
+        folder = tp_path
+        notebook_path = _find_source_notebook_for_improve(folder)
 
-    Si un notebook existe, il est copié puis enrichi avec une section finale.
-    Si aucun notebook n'existe, une première ébauche est créée à partir du
-    fichier LaTeX du dossier.
-    """
+    output = _next_available_path(
+        notebook_path.with_name(f"{notebook_path.stem}-ameliore.ipynb")
+    )
 
-    tp_dir = Path(tp_dir)
-    if not tp_dir.exists():
-        raise FileNotFoundError(f"Dossier introuvable : {tp_dir}")
+    data = json.loads(notebook_path.read_text(encoding="utf-8"))
+    latex_text = _read_latex_text_near(notebook_path)
 
-    notebook = _find_student_notebook(tp_dir)
-    if notebook is None:
-        return _create_initial_notebook_from_latex(tp_dir)
-
-    output = _available_output_path(notebook.with_name(f"{notebook.stem}-ameliore.ipynb"))
-    data = json.loads(notebook.read_text(encoding="utf-8"))
-
-    _improve_existing_notebook_data(data)
+    _improve_existing_notebook_data(data, latex_text=latex_text)
 
     output.write_text(
         json.dumps(data, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
     return output
+
+
+def _find_source_notebook_for_improve(folder: Path) -> Path:
+    notebooks = sorted(folder.glob("*.ipynb"))
+    if not notebooks:
+        raise FileNotFoundError(f"Aucun notebook trouvé dans {folder}")
+
+    ignored_markers = (
+        "correction",
+        "corrige",
+        "corrigé",
+        "solution",
+        "solutions",
+        "prof",
+        "teacher",
+        "ameliore",
+        "amélioré",
+        "amelioree",
+        "améliorée",
+    )
+
+    candidates = [
+        notebook for notebook in notebooks
+        if not any(marker in notebook.stem.lower() for marker in ignored_markers)
+    ]
+
+    if candidates:
+        return candidates[0]
+
+    return notebooks[0]
+
+
+def _next_available_path(path: Path) -> Path:
+    if not path.exists():
+        return path
+
+    suffix = path.suffix
+    stem = path.stem
+    parent = path.parent
+
+    counter = 2
+    while True:
+        candidate = parent / f"{stem}-{counter}{suffix}"
+        if not candidate.exists():
+            return candidate
+        counter += 1
 
 
 def _find_student_notebook(tp_dir: Path) -> Path | None:
@@ -115,7 +159,7 @@ def _available_output_path(path: Path) -> Path:
     raise FileExistsError(f"Impossible de trouver un nom disponible pour {path}")
 
 
-def _improve_existing_notebook_data(data: dict) -> None:
+def _improve_existing_notebook_data(data: dict, latex_text: str = "") -> None:
     # Ajoute des cellules d'amélioration à des emplacements plus pédagogiques.
     # Le notebook source n'est jamais modifié : cette fonction ne travaille
     # que sur la copie chargée en mémoire avant écriture.
@@ -126,7 +170,7 @@ def _improve_existing_notebook_data(data: dict) -> None:
     _insert_measurement_result_cells(cells)
 
     contextual_insertions = _contextual_improvement_cells(existing_text)
-    improvement_cells = _improvement_cells(data)
+    improvement_cells = _improvement_cells(data, latex_text=latex_text)
 
     if contextual_insertions:
         insertion_index = _before_improvements_insertion_index(cells, improvement_cells)
@@ -596,7 +640,7 @@ def _generated_markdown_cell(source: list[str], kind: str) -> dict:
     }
 
 
-def _improvement_cells(data: dict) -> list[dict]:
+def _improvement_cells(data: dict, latex_text: str = "") -> list[dict]:
     existing_text = "\n".join(
         "".join(cell.get("source", [])) if isinstance(cell.get("source"), list) else str(cell.get("source", ""))
         for cell in data.get("cells", [])
@@ -637,7 +681,7 @@ def _improvement_cells(data: dict) -> list[dict]:
 
     return [
         improvement_cell,
-        _evaluation_grid_cell(),
+        _evaluation_cell_for_context(latex_text),
     ]
 
 
@@ -665,6 +709,68 @@ def _suggestions_from_notebook_text(text: str) -> list[str]:
 
     return suggestions[:6]
 
+
+
+def _evaluation_cell_for_context(latex_text: str) -> dict:
+    if _has_report_instruction(latex_text):
+        return _evaluation_grid_cell()
+    return _light_end_of_tp_checklist_cell()
+
+
+def _has_report_instruction(latex_text: str) -> bool:
+    if not latex_text:
+        return False
+
+    for line in latex_text.splitlines():
+        active_part = line.split("%", 1)[0]
+        if "\\rapport" in active_part:
+            return True
+
+    return False
+
+
+def _read_latex_text_near(notebook_path: Path) -> str:
+    folder = notebook_path.parent
+    tex_files = sorted(folder.glob("*.tex"))
+    if not tex_files:
+        return ""
+
+    parts: list[str] = []
+    for tex_file in tex_files:
+        try:
+            content = tex_file.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            content = tex_file.read_text(encoding="latin-1")
+        parts.append(f"\n% --- TPStudio source: {tex_file.name} ---\n")
+        parts.append(content)
+
+    return "\n".join(parts)
+
+
+def _light_end_of_tp_checklist_cell() -> dict:
+    return {
+        "cell_type": "markdown",
+        "metadata": {
+            "tpstudio": {
+                "generated": True,
+                "kind": "light_end_of_tp_checklist",
+            }
+        },
+        "source": [
+            "## ✅ Checklist de fin de TP\n",
+            "\n",
+            "> Cette checklist est indicative. Elle sert à vérifier que le notebook est exploitable et compréhensible, sans transformer le TP en rapport complet.\n",
+            "\n",
+            "| Point à vérifier | Fait |\n",
+            "|---|:---:|\n",
+            "| Les mesures principales sont indiquées avec leurs unités | ☐ |\n",
+            "| Les calculs importants sont présents et lisibles | ☐ |\n",
+            "| Les résultats finaux sont clairement identifiés | ☐ |\n",
+            "| Les incertitudes ou écarts sont mentionnés lorsque c'est pertinent | ☐ |\n",
+            "| Les comparaisons demandées sont commentées brièvement | ☐ |\n",
+            "| Le bilan final résume ce qui a été obtenu | ☐ |\n",
+        ],
+    }
 
 
 def _evaluation_grid_cell() -> dict:
