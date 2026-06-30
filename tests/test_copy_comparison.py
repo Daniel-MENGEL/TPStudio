@@ -160,3 +160,56 @@ def test_compare_copy_adds_readable_context_to_student_feedback(tmp_path: Path) 
     report = format_copy_comparison_report(comparison)
     assert "cellule 3 — partie « Vérification de la loi de la réfraction » — erreur d'exécution présente" in report
     assert "Cellule 3 — partie « Vérification de la loi de la réfraction » : erreur d'exécution à corriger" in report
+
+
+def test_compare_copy_student_feedback_distinguishes_code_to_complete(tmp_path: Path) -> None:
+    model = tmp_path / "modele.ipynb"
+    copy = tmp_path / "copie.ipynb"
+
+    _write_notebook(
+        model,
+        [
+            {"cell_type": "markdown", "metadata": {}, "source": ["**Réponse :**\n\n"]},
+        ],
+    )
+    _write_notebook(
+        copy,
+        [
+            {"cell_type": "markdown", "metadata": {}, "source": ["## Tracé expérimental\n"]},
+            {
+                "cell_type": "code",
+                "metadata": {},
+                "execution_count": None,
+                "outputs": [],
+                "source": ["x = ?\n"],
+            },
+            {
+                "cell_type": "code",
+                "metadata": {},
+                "execution_count": 8,
+                "outputs": [{"output_type": "stream", "text": ["?\n"]}],
+                "source": ["print(?)\n"],
+            },
+            {
+                "cell_type": "code",
+                "metadata": {},
+                "execution_count": None,
+                "outputs": [],
+                "source": ["import numpy as np\n"],
+            },
+        ],
+    )
+
+    comparison = compare_copy_to_model(model, copy)
+
+    assert comparison.readiness_level == "à reprendre"
+
+    feedback = student_feedback_for_comparison(comparison)
+    assert any("code à compléter" in message for message in feedback)
+    assert any("Cellule 2 — partie « Tracé expérimental » : complétez cette cellule puis exécutez-la." in message for message in feedback)
+    assert any("Cellule 3 — partie « Tracé expérimental » : le code contient encore un « ? »" in message for message in feedback)
+    assert any("Cellule 4 — partie « Tracé expérimental » : cellule de code à exécuter." in message for message in feedback)
+
+    report = format_copy_comparison_report(comparison)
+    assert "cellules à compléter : 2" in report
+    assert "certaines cellules contiennent encore du code à compléter" in report

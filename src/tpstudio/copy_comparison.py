@@ -28,6 +28,9 @@ class CopyComparison:
         if self.copy.code_cells_with_errors:
             return "à reprendre"
 
+        if getattr(self.copy, "code_cells_to_complete", 0):
+            return "à reprendre"
+
         if self.model.response_cells and self.copy.response_cells == 0:
             return "faible"
 
@@ -104,6 +107,8 @@ def format_copy_comparison_report(comparison: CopyComparison) -> str:
     lines.append(f"    • cellules de code : {copy.code_cells}")
     if copy.empty_code_cells:
         lines.append(f"    • cellules de code vides ignorées : {copy.empty_code_cells}")
+    if getattr(copy, "code_cells_to_complete", 0):
+        lines.append(f"    • cellules à compléter : {copy.code_cells_to_complete}")
     lines.append(f"    • cellules non exécutées : {copy.code_cells_not_executed}")
     lines.append(f"    • cellules avec erreur : {copy.code_cells_with_errors}")
     lines.append("")
@@ -139,7 +144,9 @@ def format_copy_comparison_report(comparison: CopyComparison) -> str:
     else:
         lines.append("    • les cellules « Résultat » semblent présentes")
 
-    if copy.code_cells_with_errors:
+    if getattr(copy, "code_cells_to_complete", 0):
+        lines.append("    • certaines cellules contiennent encore du code à compléter")
+    elif copy.code_cells_with_errors:
         lines.append("    • des erreurs d'exécution empêchent une correction fiable")
     elif copy.code_cells_not_executed:
         lines.append("    • certaines cellules de code non vides n'ont pas été exécutées")
@@ -162,6 +169,25 @@ def student_feedback_for_comparison(comparison: CopyComparison) -> list[str]:
     messages: list[str] = []
     copy = comparison.copy
 
+    code_to_complete_issues = [
+        issue
+        for issue in copy.issues
+        if issue.kind in {"code_to_complete", "code_to_complete_not_executed"}
+    ]
+    if code_to_complete_issues:
+        messages.append(
+            "Certaines cellules contiennent encore du code à compléter, par exemple un « ? »."
+        )
+        for issue in code_to_complete_issues:
+            if issue.kind == "code_to_complete_not_executed":
+                messages.append(
+                    f"{_student_cell_label(comparison, issue.cell_number)} : complétez cette cellule puis exécutez-la."
+                )
+            else:
+                messages.append(
+                    f"{_student_cell_label(comparison, issue.cell_number)} : le code contient encore un « ? » ; complétez puis relancez."
+                )
+
     if copy.code_cells_with_errors:
         messages.append(
             "Le notebook contient des erreurs d'exécution : il faut le relancer et corriger les cellules indiquées."
@@ -172,15 +198,17 @@ def student_feedback_for_comparison(comparison: CopyComparison) -> list[str]:
                     f"{_student_cell_label(comparison, issue.cell_number)} : erreur d'exécution à corriger."
                 )
 
-    if copy.code_cells_not_executed:
+    plain_not_executed_issues = [
+        issue for issue in copy.issues if issue.kind == "not_executed"
+    ]
+    if plain_not_executed_issues:
         messages.append(
-            "Certaines cellules de code non vides n'ont pas été exécutées : relancer le notebook avant rendu."
+            "Certaines cellules de code non vides n'ont pas été exécutées : relancez le notebook avant rendu."
         )
-        for issue in copy.issues:
-            if issue.kind == "not_executed":
-                messages.append(
-                    f"{_student_cell_label(comparison, issue.cell_number)} : cellule de code à exécuter."
-                )
+        for issue in plain_not_executed_issues:
+            messages.append(
+                f"{_student_cell_label(comparison, issue.cell_number)} : cellule de code à exécuter."
+            )
 
     if copy.empty_response_cells:
         messages.append(
