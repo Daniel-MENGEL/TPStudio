@@ -247,3 +247,52 @@ def test_student_inspection_estimates_correction_readiness(tmp_path: Path) -> No
     assert "🧪 Corrigeabilité automatique" in report
     assert "niveau : très bonne" in report
     assert "zones « Réponse : » présentes" in report
+
+
+def test_student_inspection_distinguishes_code_to_complete(tmp_path: Path) -> None:
+    notebook = tmp_path / "copie.ipynb"
+    _write_notebook(
+        notebook,
+        [
+            {
+                "cell_type": "code",
+                "metadata": {},
+                "execution_count": None,
+                "outputs": [],
+                "source": ["x = ?\n"],
+            },
+            {
+                "cell_type": "code",
+                "metadata": {},
+                "execution_count": 8,
+                "outputs": [{"output_type": "stream", "text": ["?\n"]}],
+                "source": ["print(?)\n"],
+            },
+            {
+                "cell_type": "code",
+                "metadata": {},
+                "execution_count": None,
+                "outputs": [],
+                "source": ["import numpy as np\n"],
+            },
+        ],
+    )
+
+    diagnostic = inspect_student_notebook(notebook)
+
+    assert diagnostic.code_cells_to_complete == 2
+    assert diagnostic.code_cells_not_executed == 2
+
+    issues = {issue.cell_number: issue for issue in diagnostic.issues}
+    assert issues[1].kind == "code_to_complete_not_executed"
+    assert issues[1].message == "cellule à compléter et à exécuter"
+    assert issues[2].kind == "code_to_complete"
+    assert issues[2].message == "cellule exécutée avec du code à compléter"
+    assert issues[3].kind == "not_executed"
+    assert issues[3].message == "cellule de code non exécutée"
+
+    report = format_student_notebook_report(diagnostic)
+    assert "cellule 1 — cellule à compléter et à exécuter" in report
+    assert "cellule 2 — cellule exécutée avec du code à compléter" in report
+    assert "cellule 3 — cellule de code non exécutée" in report
+    assert "cellules à compléter : 2" in report

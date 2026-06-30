@@ -37,6 +37,7 @@ class StudentNotebookDiagnostic:
     markdown_cells: int
     code_cells: int
     empty_code_cells: int
+    code_cells_to_complete: int
     response_cells: int
     empty_response_cells: int
     filled_response_cells: int
@@ -58,7 +59,11 @@ class StudentNotebookDiagnostic:
 
     @property
     def has_code_issues(self) -> bool:
-        return self.code_cells_not_executed > 0 or self.code_cells_with_errors > 0
+        return (
+            self.code_cells_not_executed > 0
+            or self.code_cells_with_errors > 0
+            or self.code_cells_to_complete > 0
+        )
 
 
 def inspect_student_notebook(notebook_path: str | Path) -> StudentNotebookDiagnostic:
@@ -73,6 +78,7 @@ def inspect_student_notebook(notebook_path: str | Path) -> StudentNotebookDiagno
     markdown_cells = 0
     code_cells = 0
     empty_code_cells = 0
+    code_cells_to_complete = 0
     response_cells = 0
     empty_response_cells = 0
     result_cells = 0
@@ -137,18 +143,44 @@ def inspect_student_notebook(notebook_path: str | Path) -> StudentNotebookDiagno
 
             outputs = cell.get("outputs", [])
             has_outputs = bool(outputs)
+            is_not_executed = cell.get("execution_count") is None
+            contains_placeholder = _code_contains_completion_placeholder(text)
+
+            if contains_placeholder:
+                code_cells_to_complete += 1
 
             if has_outputs:
                 code_cells_with_outputs += 1
             else:
                 code_cells_without_outputs += 1
 
-            if cell.get("execution_count") is None:
+            if contains_placeholder and is_not_executed:
                 code_cells_not_executed += 1
                 issues.append(
                     StudentCellIssue(
                         cell_number=cell_number,
                         severity="warning",
+                        kind="code_to_complete_not_executed",
+                        message="cellule à compléter et à exécuter",
+                        preview=_preview(text),
+                    )
+                )
+            elif contains_placeholder:
+                issues.append(
+                    StudentCellIssue(
+                        cell_number=cell_number,
+                        severity="warning",
+                        kind="code_to_complete",
+                        message="cellule exécutée avec du code à compléter",
+                        preview=_preview(text),
+                    )
+                )
+            elif is_not_executed:
+                code_cells_not_executed += 1
+                issues.append(
+                    StudentCellIssue(
+                        cell_number=cell_number,
+                        severity="info",
                         kind="not_executed",
                         message="cellule de code non exécutée",
                         preview=_preview(text),
@@ -185,6 +217,7 @@ def inspect_student_notebook(notebook_path: str | Path) -> StudentNotebookDiagno
         code_cells=code_cells,
         executable_code_cells=executable_code_cells,
         response_cells=response_cells,
+        code_cells_to_complete=code_cells_to_complete,
         code_cells_not_executed=code_cells_not_executed,
         code_cells_with_errors=code_cells_with_errors,
     )
@@ -197,6 +230,7 @@ def inspect_student_notebook(notebook_path: str | Path) -> StudentNotebookDiagno
         checklist_cells=checklist_cells,
         headings=headings,
         executable_code_cells=executable_code_cells,
+        code_cells_to_complete=code_cells_to_complete,
         code_cells_not_executed=code_cells_not_executed,
         code_cells_with_errors=code_cells_with_errors,
     )
@@ -207,6 +241,7 @@ def inspect_student_notebook(notebook_path: str | Path) -> StudentNotebookDiagno
         markdown_cells=markdown_cells,
         code_cells=code_cells,
         empty_code_cells=empty_code_cells,
+        code_cells_to_complete=code_cells_to_complete,
         response_cells=response_cells,
         empty_response_cells=empty_response_cells,
         filled_response_cells=filled_response_cells,
@@ -262,6 +297,7 @@ def format_student_notebook_report(diagnostic: StudentNotebookDiagnostic) -> str
             lines.append(f"    • cellules de code vides ignorées : {diagnostic.empty_code_cells}")
         lines.append(f"    • cellules avec sortie : {diagnostic.code_cells_with_outputs}")
         lines.append(f"    • cellules sans sortie : {diagnostic.code_cells_without_outputs}")
+        lines.append(f"    • cellules à compléter : {diagnostic.code_cells_to_complete}")
         lines.append(f"    • cellules non exécutées : {diagnostic.code_cells_not_executed}")
         lines.append(f"    • cellules avec erreur : {diagnostic.code_cells_with_errors}")
     lines.append("")
@@ -307,6 +343,8 @@ def format_student_notebook_report(diagnostic: StudentNotebookDiagnostic) -> str
 
     if diagnostic.code_cells_with_errors:
         lines.append("    ⚠ des erreurs d'exécution sont présentes")
+    elif diagnostic.code_cells_to_complete:
+        lines.append("    ⚠ certaines cellules contiennent encore du code à compléter")
     elif diagnostic.code_cells_not_executed:
         lines.append("    ⚠ certaines cellules de code n'ont pas été exécutées")
     elif diagnostic.code_cells:
@@ -321,6 +359,7 @@ def _global_issues_for_copy(
     code_cells: int,
     executable_code_cells: int,
     response_cells: int,
+    code_cells_to_complete: int,
     code_cells_not_executed: int,
     code_cells_with_errors: int,
 ) -> list[StudentGlobalIssue]:
@@ -348,6 +387,15 @@ def _global_issues_for_copy(
                 severity="info",
                 kind="difficult_auto_correction",
                 message="correction automatique difficile avec ce notebook",
+            )
+        )
+
+    if code_cells_to_complete > 0:
+        issues.append(
+            StudentGlobalIssue(
+                severity="warning",
+                kind="code_to_complete",
+                message="certaines cellules contiennent encore du code à compléter",
             )
         )
 
@@ -389,6 +437,7 @@ def _correction_readiness_for_copy(
     checklist_cells: int,
     headings: int,
     executable_code_cells: int,
+    code_cells_to_complete: int,
     code_cells_not_executed: int,
     code_cells_with_errors: int,
 ) -> CorrectionReadiness:
@@ -424,6 +473,8 @@ def _correction_readiness_for_copy(
         reasons.append("aucune cellule de code non vide à vérifier")
     elif code_cells_with_errors > 0:
         reasons.append("erreurs d'exécution présentes")
+    elif code_cells_to_complete > 0:
+        reasons.append("certaines cellules contiennent encore du code à compléter")
     elif code_cells_not_executed > 0:
         reasons.append("certaines cellules de code non vides ne sont pas exécutées")
     else:
@@ -528,6 +579,16 @@ def _is_effectively_empty_code(source: str) -> bool:
             continue
         return False
     return True
+
+
+def _code_contains_completion_placeholder(source: str) -> bool:
+    for line in source.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if "?" in stripped:
+            return True
+    return False
 
 
 def _has_error_output(outputs: object) -> bool:

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+import json
+import re
 from pathlib import Path
 
 from tpstudio.student_inspection import (
@@ -19,6 +21,7 @@ class CopyComparison:
     missing_result_cells: int
     missing_interpretation_cells: int
     missing_checklist_cells: int
+    copy_contexts: dict[int, str] = field(default_factory=dict)
 
     @property
     def readiness_level(self) -> str:
@@ -38,6 +41,9 @@ class CopyComparison:
 
         return "faible"
 
+    def context_for_cell(self, cell_number: int) -> str:
+        return self.copy_contexts.get(cell_number, "")
+
 
 def compare_copy_to_model(model_path: str | Path, copy_path: str | Path) -> CopyComparison:
     model = inspect_student_notebook(model_path)
@@ -52,6 +58,7 @@ def compare_copy_to_model(model_path: str | Path, copy_path: str | Path) -> Copy
         missing_result_cells=max(model.result_cells - copy.result_cells, 0),
         missing_interpretation_cells=max(model.interpretation_cells - copy.interpretation_cells, 0),
         missing_checklist_cells=max(model.checklist_cells - copy.checklist_cells, 0),
+        copy_contexts=_cell_contexts_for_notebook(copy_path),
     )
 
 
@@ -107,7 +114,11 @@ def format_copy_comparison_report(comparison: CopyComparison) -> str:
     else:
         for issue in copy.issues:
             symbol = "⚠" if issue.severity == "warning" else "ℹ"
-            line = f"    {symbol} cellule {issue.cell_number} — {issue.message}"
+            context = comparison.context_for_cell(issue.cell_number)
+            label = f"cellule {issue.cell_number}"
+            if context:
+                label += f" — {context}"
+            line = f"    {symbol} {label} — {issue.message}"
             if issue.preview:
                 line += f" : {issue.preview}"
             lines.append(line)
@@ -157,17 +168,29 @@ def student_feedback_for_comparison(comparison: CopyComparison) -> list[str]:
         )
         for issue in copy.issues:
             if issue.kind == "execution_error":
-                messages.append(f"Cellule {issue.cell_number} : erreur d'exécution à corriger.")
+                messages.append(
+                    f"{_student_cell_label(comparison, issue.cell_number)} : erreur d'exécution à corriger."
+                )
 
     if copy.code_cells_not_executed:
         messages.append(
             "Certaines cellules de code non vides n'ont pas été exécutées : relancer le notebook avant rendu."
         )
+        for issue in copy.issues:
+            if issue.kind == "not_executed":
+                messages.append(
+                    f"{_student_cell_label(comparison, issue.cell_number)} : cellule de code à exécuter."
+                )
 
     if copy.empty_response_cells:
         messages.append(
             f"{copy.empty_response_cells} réponse(s) sont vides ou à compléter."
         )
+        for issue in copy.issues:
+            if issue.kind == "empty_response":
+                messages.append(
+                    f"{_student_cell_label(comparison, issue.cell_number)} : réponse à compléter."
+                )
 
     if comparison.model.response_cells and copy.response_cells == 0:
         messages.append(
@@ -189,3 +212,65 @@ def student_feedback_for_comparison(comparison: CopyComparison) -> list[str]:
         )
 
     return messages
+
+
+def _student_cell_label(comparison: CopyComparison, cell_number: int) -> str:
+    context = comparison.context_for_cell(cell_number)
+    if context:
+        return f"Cellule {cell_number} — {context}"
+    return f"Cellule {cell_number}"
+
+
+def _cell_contexts_for_notebook(notebook_path: str | Path) -> dict[int, str]:
+    path = Path(notebook_path)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+    cells = data.get("cells", [])
+    if not isinstance(cells, list):
+        return {}
+
+    contexts: dict[int, str] = {}
+    current_heading = ""
+
+    for index, cell in enumerate(cells):
+        cell_number = index + 1
+        text = _cell_text(cell)
+
+        if cell.get("cell_type") == "markdown":
+            heading = _last_markdown_heading(text)
+            if heading:
+                current_heading = heading
+
+        if current_heading:
+            contexts[cell_number] = f"partie « {current_heading} »"
+
+    return contexts
+
+
+def _last_markdown_heading(text: str) -> str:
+    headings: list[str] = []
+    for line in text.splitlines():
+        match = re.match(r"^#{1,6}\s+(?P<title>.+?)\s*$", line.strip())
+        if match:
+            headings.append(_clean_heading(match.group("title")))
+
+    if headings:
+        return headings[-1]
+
+    return ""
+
+
+def _clean_heading(title: str) -> str:
+    title = re.sub(r"[*_`]+", "", title)
+    title = re.sub(r"\s+", " ", title)
+    return title.strip(" .:-—\n\t")
+
+
+def _cell_text(cell: dict) -> str:
+    source = cell.get("source", "")
+    if isinstance(source, list):
+        return "".join(str(part) for part in source)
+    return str(source)

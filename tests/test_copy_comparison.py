@@ -126,3 +126,37 @@ def test_compare_copy_student_feedback_mentions_execution_errors(tmp_path: Path)
     report = format_copy_comparison_report(comparison)
     assert "Retour possible à l'étudiant" in report
     assert "Cellule 2 : erreur d'exécution à corriger" in report
+
+
+def test_compare_copy_adds_readable_context_to_student_feedback(tmp_path: Path) -> None:
+    model = tmp_path / "modele.ipynb"
+    copy = tmp_path / "copie.ipynb"
+
+    _write_notebook(
+        model,
+        [
+            {"cell_type": "markdown", "metadata": {}, "source": ["**Réponse :**\n\n"]},
+        ],
+    )
+    _write_notebook(
+        copy,
+        [
+            {"cell_type": "markdown", "metadata": {}, "source": ["## Vérification de la loi de la réfraction\n"]},
+            {"cell_type": "markdown", "metadata": {}, "source": ["**Réponse :** valeur\n"]},
+            {
+                "cell_type": "code",
+                "metadata": {},
+                "execution_count": 2,
+                "outputs": [{"output_type": "error", "ename": "ValueError"}],
+                "source": ["raise ValueError()\n"],
+            },
+        ],
+    )
+
+    comparison = compare_copy_to_model(model, copy)
+
+    assert comparison.context_for_cell(3) == "partie « Vérification de la loi de la réfraction »"
+
+    report = format_copy_comparison_report(comparison)
+    assert "cellule 3 — partie « Vérification de la loi de la réfraction » — erreur d'exécution présente" in report
+    assert "Cellule 3 — partie « Vérification de la loi de la réfraction » : erreur d'exécution à corriger" in report
