@@ -99,6 +99,7 @@ def test_student_inspection_formats_report(tmp_path: Path) -> None:
     assert "réponses vides ou à compléter : 1" in report
     assert "Cellules à vérifier" in report
     assert "cellule 1 — réponse vide ou à compléter" in report
+    assert "Points globaux à vérifier" in report
 
 
 def test_student_inspection_lists_cell_issues(tmp_path: Path) -> None:
@@ -138,3 +139,76 @@ def test_student_inspection_lists_cell_issues(tmp_path: Path) -> None:
     assert "cellule 2 — réponse très courte à relire" in report
     assert "cellule 3 — cellule de code non exécutée" in report
     assert "cellule 4 — erreur d'exécution présente" in report
+
+
+def test_student_inspection_lists_global_issues_separately(tmp_path: Path) -> None:
+    notebook = tmp_path / "copie.ipynb"
+    _write_notebook(
+        notebook,
+        [
+            {"cell_type": "markdown", "metadata": {}, "source": ["## Résultats\n"]},
+            {
+                "cell_type": "code",
+                "metadata": {},
+                "execution_count": 1,
+                "outputs": [],
+                "source": ["x = 1\n"],
+            },
+        ],
+    )
+
+    diagnostic = inspect_student_notebook(notebook)
+
+    assert diagnostic.issues == []
+    global_kinds = [issue.kind for issue in diagnostic.global_issues]
+    assert "no_response_zones" in global_kinds
+    assert "difficult_auto_correction" in global_kinds
+
+    report = format_student_notebook_report(diagnostic)
+    assert "✓ aucune cellule problématique évidente détectée" in report
+    assert "⚠ Points globaux à vérifier" in report
+    assert "aucune zone « Réponse : » détectée" in report
+    assert "correction automatique difficile avec ce notebook" in report
+
+
+def test_student_inspection_ignores_empty_code_cells(tmp_path: Path) -> None:
+    notebook = tmp_path / "copie.ipynb"
+    _write_notebook(
+        notebook,
+        [
+            {
+                "cell_type": "code",
+                "metadata": {},
+                "execution_count": None,
+                "outputs": [],
+                "source": ["\n"],
+            },
+            {
+                "cell_type": "code",
+                "metadata": {},
+                "execution_count": None,
+                "outputs": [],
+                "source": ["# brouillon laissé vide\n"],
+            },
+            {
+                "cell_type": "code",
+                "metadata": {},
+                "execution_count": None,
+                "outputs": [],
+                "source": ["print('à exécuter')\n"],
+            },
+        ],
+    )
+
+    diagnostic = inspect_student_notebook(notebook)
+
+    assert diagnostic.code_cells == 3
+    assert diagnostic.empty_code_cells == 2
+    assert diagnostic.code_cells_not_executed == 1
+    assert [issue.cell_number for issue in diagnostic.issues if issue.kind == "not_executed"] == [3]
+
+    report = format_student_notebook_report(diagnostic)
+    assert "cellules de code vides ignorées : 2" in report
+    assert "cellule 1 — cellule de code non exécutée" not in report
+    assert "cellule 2 — cellule de code non exécutée" not in report
+    assert "cellule 3 — cellule de code non exécutée" in report

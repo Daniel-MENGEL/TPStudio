@@ -16,11 +16,19 @@ class StudentCellIssue:
 
 
 @dataclass
+class StudentGlobalIssue:
+    severity: str
+    kind: str
+    message: str
+
+
+@dataclass
 class StudentNotebookDiagnostic:
     path: Path
     total_cells: int
     markdown_cells: int
     code_cells: int
+    empty_code_cells: int
     response_cells: int
     empty_response_cells: int
     filled_response_cells: int
@@ -30,6 +38,7 @@ class StudentNotebookDiagnostic:
     code_cells_with_errors: int
     headings: int
     issues: list[StudentCellIssue] = field(default_factory=list)
+    global_issues: list[StudentGlobalIssue] = field(default_factory=list)
 
     @property
     def has_response_zones(self) -> bool:
@@ -51,6 +60,7 @@ def inspect_student_notebook(notebook_path: str | Path) -> StudentNotebookDiagno
     total_cells = len(cells)
     markdown_cells = 0
     code_cells = 0
+    empty_code_cells = 0
     response_cells = 0
     empty_response_cells = 0
     code_cells_with_outputs = 0
@@ -97,6 +107,10 @@ def inspect_student_notebook(notebook_path: str | Path) -> StudentNotebookDiagno
         elif cell_type == "code":
             code_cells += 1
 
+            if _is_effectively_empty_code(text):
+                empty_code_cells += 1
+                continue
+
             outputs = cell.get("outputs", [])
             has_outputs = bool(outputs)
 
@@ -140,12 +154,21 @@ def inspect_student_notebook(notebook_path: str | Path) -> StudentNotebookDiagno
                 )
 
     filled_response_cells = response_cells - empty_response_cells
+    global_issues = _global_issues_for_copy(
+        markdown_cells=markdown_cells,
+        code_cells=code_cells,
+        executable_code_cells=code_cells - empty_code_cells,
+        response_cells=response_cells,
+        code_cells_not_executed=code_cells_not_executed,
+        code_cells_with_errors=code_cells_with_errors,
+    )
 
     return StudentNotebookDiagnostic(
         path=path,
         total_cells=total_cells,
         markdown_cells=markdown_cells,
         code_cells=code_cells,
+        empty_code_cells=empty_code_cells,
         response_cells=response_cells,
         empty_response_cells=empty_response_cells,
         filled_response_cells=filled_response_cells,
@@ -155,6 +178,7 @@ def inspect_student_notebook(notebook_path: str | Path) -> StudentNotebookDiagno
         code_cells_with_errors=code_cells_with_errors,
         headings=headings,
         issues=issues,
+        global_issues=global_issues,
     )
 
 
@@ -168,6 +192,8 @@ def format_student_notebook_report(diagnostic: StudentNotebookDiagnostic) -> str
     lines.append(f"    • cellules : {diagnostic.total_cells}")
     lines.append(f"    • markdown : {diagnostic.markdown_cells}")
     lines.append(f"    • code : {diagnostic.code_cells}")
+    if diagnostic.empty_code_cells:
+        lines.append(f"    • code vide ignoré : {diagnostic.empty_code_cells}")
     lines.append(f"    • titres Markdown : {diagnostic.headings}")
     lines.append("")
 
@@ -184,6 +210,8 @@ def format_student_notebook_report(diagnostic: StudentNotebookDiagnostic) -> str
     if diagnostic.code_cells == 0:
         lines.append("    ℹ aucune cellule de code")
     else:
+        if diagnostic.empty_code_cells:
+            lines.append(f"    • cellules de code vides ignorées : {diagnostic.empty_code_cells}")
         lines.append(f"    • cellules avec sortie : {diagnostic.code_cells_with_outputs}")
         lines.append(f"    • cellules sans sortie : {diagnostic.code_cells_without_outputs}")
         lines.append(f"    • cellules non exécutées : {diagnostic.code_cells_not_executed}")
@@ -195,11 +223,20 @@ def format_student_notebook_report(diagnostic: StudentNotebookDiagnostic) -> str
         lines.append("    ✓ aucune cellule problématique évidente détectée")
     else:
         for issue in diagnostic.issues:
-            symbol = "⚠" if issue.severity == "warning" else "ℹ"
+            symbol = _severity_symbol(issue.severity)
             line = f"    {symbol} cellule {issue.cell_number} — {issue.message}"
             if issue.preview:
                 line += f" : {issue.preview}"
             lines.append(line)
+    lines.append("")
+
+    lines.append("⚠ Points globaux à vérifier")
+    if not diagnostic.global_issues:
+        lines.append("    ✓ aucun point global évident détecté")
+    else:
+        for issue in diagnostic.global_issues:
+            symbol = _severity_symbol(issue.severity)
+            lines.append(f"    {symbol} {issue.message}")
     lines.append("")
 
     lines.append("🧭 Diagnostic provisoire")
@@ -215,9 +252,74 @@ def format_student_notebook_report(diagnostic: StudentNotebookDiagnostic) -> str
     elif diagnostic.code_cells_not_executed:
         lines.append("    ⚠ certaines cellules de code n'ont pas été exécutées")
     elif diagnostic.code_cells:
-        lines.append("    ✓ les cellules de code semblent exécutées")
+        lines.append("    ✓ les cellules de code semblent exécutées ou vides")
 
     return "\n".join(lines)
+
+
+def _global_issues_for_copy(
+    *,
+    markdown_cells: int,
+    code_cells: int,
+    executable_code_cells: int,
+    response_cells: int,
+    code_cells_not_executed: int,
+    code_cells_with_errors: int,
+) -> list[StudentGlobalIssue]:
+    issues: list[StudentGlobalIssue] = []
+
+    if markdown_cells == 0:
+        issues.append(
+            StudentGlobalIssue(
+                severity="warning",
+                kind="no_markdown_cells",
+                message="aucune cellule Markdown détectée",
+            )
+        )
+
+    if response_cells == 0:
+        issues.append(
+            StudentGlobalIssue(
+                severity="warning",
+                kind="no_response_zones",
+                message="aucune zone « Réponse : » détectée",
+            )
+        )
+        issues.append(
+            StudentGlobalIssue(
+                severity="info",
+                kind="difficult_auto_correction",
+                message="correction automatique difficile avec ce notebook",
+            )
+        )
+
+    if executable_code_cells > 0 and code_cells_not_executed == executable_code_cells:
+        issues.append(
+            StudentGlobalIssue(
+                severity="warning",
+                kind="no_code_executed",
+                message="aucune cellule de code non vide n'a été exécutée",
+            )
+        )
+    elif code_cells_not_executed > 0:
+        issues.append(
+            StudentGlobalIssue(
+                severity="warning",
+                kind="some_code_not_executed",
+                message="certaines cellules de code non vides n'ont pas été exécutées",
+            )
+        )
+
+    if code_cells_with_errors > 0:
+        issues.append(
+            StudentGlobalIssue(
+                severity="warning",
+                kind="code_execution_errors",
+                message="des erreurs d'exécution sont présentes",
+            )
+        )
+
+    return issues
 
 
 def _cell_text(cell: dict) -> str:
@@ -274,6 +376,17 @@ def _is_short_response(text: str) -> bool:
     return len(words) <= 3
 
 
+def _is_effectively_empty_code(source: str) -> bool:
+    for line in source.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("#"):
+            continue
+        return False
+    return True
+
+
 def _has_error_output(outputs: object) -> bool:
     if not isinstance(outputs, list):
         return False
@@ -307,3 +420,11 @@ def _preview(text: str, max_length: int = 80) -> str:
         return collapsed
 
     return collapsed[: max_length - 1].rstrip() + "…"
+
+
+def _severity_symbol(severity: str) -> str:
+    if severity == "warning":
+        return "⚠"
+    if severity == "info":
+        return "ℹ"
+    return "•"
