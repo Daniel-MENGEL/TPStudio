@@ -16,3 +16,7 @@ Elle détecte le fichier `.tex`, extrait les métadonnées et les blocs pédagog
 - `rapport_inspection.md`.
 
 Le parseur est spécialisé pour la structure habituelle des TP : `\objectifs`, `\materiel`, `\annexes`, `\indications`, `\questions`, `\rapport`, `\appels`.
+
+## Documentation
+
+- [Commande `improve`](docs/improve.md) : génération non destructive de notebooks améliorés.

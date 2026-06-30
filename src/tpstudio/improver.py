@@ -6,6 +6,18 @@ nouvelle, destinée à être relue et validée par l'enseignant.
 
 from __future__ import annotations
 
+# Génération non destructive de notebooks améliorés.
+#
+# Ce module contient la logique de la commande `tpstudio improve`.
+#
+# Principes importants :
+# - ne jamais modifier le notebook source ;
+# - ignorer les notebooks déjà générés en `-ameliore` comme sources ;
+# - utiliser `\\rapport` actif dans le LaTeX pour décider entre grille complète
+#   et checklist légère ;
+# - placer les cellules de résultat au plus près des sections concernées.
+
+
 import json
 import re
 from pathlib import Path
