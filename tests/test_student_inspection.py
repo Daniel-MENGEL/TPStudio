@@ -100,6 +100,7 @@ def test_student_inspection_formats_report(tmp_path: Path) -> None:
     assert "Cellules à vérifier" in report
     assert "cellule 1 — réponse vide ou à compléter" in report
     assert "Points globaux à vérifier" in report
+    assert "Corrigeabilité automatique" in report
 
 
 def test_student_inspection_lists_cell_issues(tmp_path: Path) -> None:
@@ -212,3 +213,37 @@ def test_student_inspection_ignores_empty_code_cells(tmp_path: Path) -> None:
     assert "cellule 1 — cellule de code non exécutée" not in report
     assert "cellule 2 — cellule de code non exécutée" not in report
     assert "cellule 3 — cellule de code non exécutée" in report
+
+
+def test_student_inspection_estimates_correction_readiness(tmp_path: Path) -> None:
+    notebook = tmp_path / "copie.ipynb"
+    _write_notebook(
+        notebook,
+        [
+            {"cell_type": "markdown", "metadata": {}, "source": ["## Mesure\n"]},
+            {"cell_type": "markdown", "metadata": {}, "source": ["**Réponse :** La mesure est cohérente.\n"]},
+            {"cell_type": "markdown", "metadata": {}, "source": ["### Résultat — mesure\n"]},
+            {"cell_type": "markdown", "metadata": {}, "source": ["### Interprétation\n"]},
+            {"cell_type": "markdown", "metadata": {}, "source": ["### Checklist finale\n"]},
+            {
+                "cell_type": "code",
+                "metadata": {},
+                "execution_count": 1,
+                "outputs": [{"output_type": "stream", "text": ["ok\n"]}],
+                "source": ["print('ok')\n"],
+            },
+        ],
+    )
+
+    diagnostic = inspect_student_notebook(notebook)
+
+    assert diagnostic.result_cells == 1
+    assert diagnostic.interpretation_cells == 1
+    assert diagnostic.checklist_cells == 1
+    assert diagnostic.correction_readiness is not None
+    assert diagnostic.correction_readiness.level == "très bonne"
+
+    report = format_student_notebook_report(diagnostic)
+    assert "🧪 Corrigeabilité automatique" in report
+    assert "niveau : très bonne" in report
+    assert "zones « Réponse : » présentes" in report

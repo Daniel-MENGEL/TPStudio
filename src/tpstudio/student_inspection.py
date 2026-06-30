@@ -23,6 +23,14 @@ class StudentGlobalIssue:
 
 
 @dataclass
+class CorrectionReadiness:
+    level: str
+    score: int
+    max_score: int
+    reasons: list[str] = field(default_factory=list)
+
+
+@dataclass
 class StudentNotebookDiagnostic:
     path: Path
     total_cells: int
@@ -32,6 +40,9 @@ class StudentNotebookDiagnostic:
     response_cells: int
     empty_response_cells: int
     filled_response_cells: int
+    result_cells: int
+    interpretation_cells: int
+    checklist_cells: int
     code_cells_with_outputs: int
     code_cells_without_outputs: int
     code_cells_not_executed: int
@@ -39,6 +50,7 @@ class StudentNotebookDiagnostic:
     headings: int
     issues: list[StudentCellIssue] = field(default_factory=list)
     global_issues: list[StudentGlobalIssue] = field(default_factory=list)
+    correction_readiness: CorrectionReadiness | None = None
 
     @property
     def has_response_zones(self) -> bool:
@@ -63,6 +75,9 @@ def inspect_student_notebook(notebook_path: str | Path) -> StudentNotebookDiagno
     empty_code_cells = 0
     response_cells = 0
     empty_response_cells = 0
+    result_cells = 0
+    interpretation_cells = 0
+    checklist_cells = 0
     code_cells_with_outputs = 0
     code_cells_without_outputs = 0
     code_cells_not_executed = 0
@@ -78,6 +93,15 @@ def inspect_student_notebook(notebook_path: str | Path) -> StudentNotebookDiagno
         if cell_type == "markdown":
             markdown_cells += 1
             headings += _count_markdown_headings(text)
+
+            if _contains_result_marker(text):
+                result_cells += 1
+
+            if _contains_interpretation_marker(text):
+                interpretation_cells += 1
+
+            if _contains_checklist_marker(text):
+                checklist_cells += 1
 
             if _contains_response_marker(text):
                 response_cells += 1
@@ -154,11 +178,25 @@ def inspect_student_notebook(notebook_path: str | Path) -> StudentNotebookDiagno
                 )
 
     filled_response_cells = response_cells - empty_response_cells
+    executable_code_cells = code_cells - empty_code_cells
+
     global_issues = _global_issues_for_copy(
         markdown_cells=markdown_cells,
         code_cells=code_cells,
-        executable_code_cells=code_cells - empty_code_cells,
+        executable_code_cells=executable_code_cells,
         response_cells=response_cells,
+        code_cells_not_executed=code_cells_not_executed,
+        code_cells_with_errors=code_cells_with_errors,
+    )
+
+    correction_readiness = _correction_readiness_for_copy(
+        response_cells=response_cells,
+        empty_response_cells=empty_response_cells,
+        result_cells=result_cells,
+        interpretation_cells=interpretation_cells,
+        checklist_cells=checklist_cells,
+        headings=headings,
+        executable_code_cells=executable_code_cells,
         code_cells_not_executed=code_cells_not_executed,
         code_cells_with_errors=code_cells_with_errors,
     )
@@ -172,6 +210,9 @@ def inspect_student_notebook(notebook_path: str | Path) -> StudentNotebookDiagno
         response_cells=response_cells,
         empty_response_cells=empty_response_cells,
         filled_response_cells=filled_response_cells,
+        result_cells=result_cells,
+        interpretation_cells=interpretation_cells,
+        checklist_cells=checklist_cells,
         code_cells_with_outputs=code_cells_with_outputs,
         code_cells_without_outputs=code_cells_without_outputs,
         code_cells_not_executed=code_cells_not_executed,
@@ -179,6 +220,7 @@ def inspect_student_notebook(notebook_path: str | Path) -> StudentNotebookDiagno
         headings=headings,
         issues=issues,
         global_issues=global_issues,
+        correction_readiness=correction_readiness,
     )
 
 
@@ -204,6 +246,12 @@ def format_student_notebook_report(diagnostic: StudentNotebookDiagnostic) -> str
         lines.append(f"    • cellules avec Réponse : {diagnostic.response_cells}")
         lines.append(f"    • réponses complétées : {diagnostic.filled_response_cells}")
         lines.append(f"    • réponses vides ou à compléter : {diagnostic.empty_response_cells}")
+    lines.append("")
+
+    lines.append("🧩 Structure attendue")
+    lines.append(f"    • cellules Résultat : {diagnostic.result_cells}")
+    lines.append(f"    • cellules d'interprétation : {diagnostic.interpretation_cells}")
+    lines.append(f"    • checklist / grille : {diagnostic.checklist_cells}")
     lines.append("")
 
     lines.append("💻 Code")
@@ -237,6 +285,16 @@ def format_student_notebook_report(diagnostic: StudentNotebookDiagnostic) -> str
         for issue in diagnostic.global_issues:
             symbol = _severity_symbol(issue.severity)
             lines.append(f"    {symbol} {issue.message}")
+    lines.append("")
+
+    lines.append("🧪 Corrigeabilité automatique")
+    readiness = diagnostic.correction_readiness
+    if readiness is None:
+        lines.append("    ℹ non évaluée")
+    else:
+        lines.append(f"    niveau : {readiness.level} ({readiness.score}/{readiness.max_score})")
+        for reason in readiness.reasons:
+            lines.append(f"    • {reason}")
     lines.append("")
 
     lines.append("🧭 Diagnostic provisoire")
@@ -322,6 +380,79 @@ def _global_issues_for_copy(
     return issues
 
 
+def _correction_readiness_for_copy(
+    *,
+    response_cells: int,
+    empty_response_cells: int,
+    result_cells: int,
+    interpretation_cells: int,
+    checklist_cells: int,
+    headings: int,
+    executable_code_cells: int,
+    code_cells_not_executed: int,
+    code_cells_with_errors: int,
+) -> CorrectionReadiness:
+    score = 0
+    max_score = 6
+    reasons: list[str] = []
+
+    if response_cells > 0:
+        score += 2
+        reasons.append("zones « Réponse : » présentes")
+    else:
+        reasons.append("zones « Réponse : » absentes")
+
+    if response_cells > 0 and empty_response_cells == 0:
+        score += 1
+        reasons.append("aucune réponse vide détectée")
+    elif empty_response_cells > 0:
+        reasons.append(f"{empty_response_cells} réponse(s) vide(s) ou à compléter")
+
+    if result_cells > 0:
+        score += 1
+        reasons.append("cellules « Résultat » présentes")
+    else:
+        reasons.append("cellules « Résultat » absentes")
+
+    if interpretation_cells > 0:
+        score += 1
+        reasons.append("cellules d'interprétation présentes")
+    else:
+        reasons.append("cellules d'interprétation absentes")
+
+    if executable_code_cells == 0:
+        reasons.append("aucune cellule de code non vide à vérifier")
+    elif code_cells_with_errors > 0:
+        reasons.append("erreurs d'exécution présentes")
+    elif code_cells_not_executed > 0:
+        reasons.append("certaines cellules de code non vides ne sont pas exécutées")
+    else:
+        score += 1
+        reasons.append("code non vide exécuté sans erreur détectée")
+
+    if checklist_cells > 0:
+        reasons.append("checklist ou grille finale présente")
+
+    if headings < 2:
+        reasons.append("structure Markdown limitée")
+
+    if score <= 1:
+        level = "faible"
+    elif score <= 3:
+        level = "partielle"
+    elif score <= 5:
+        level = "bonne"
+    else:
+        level = "très bonne"
+
+    return CorrectionReadiness(
+        level=level,
+        score=score,
+        max_score=max_score,
+        reasons=reasons,
+    )
+
+
 def _cell_text(cell: dict) -> str:
     source = cell.get("source", "")
     if isinstance(source, list):
@@ -335,6 +466,18 @@ def _count_markdown_headings(text: str) -> int:
 
 def _contains_response_marker(text: str) -> bool:
     return re.search(r"réponse\s*:", text, flags=re.I) is not None
+
+
+def _contains_result_marker(text: str) -> bool:
+    return re.search(r"résultat\s*[—:-]|resultat\s*[—:-]", text, flags=re.I) is not None
+
+
+def _contains_interpretation_marker(text: str) -> bool:
+    return re.search(r"interpr[ée]tation|commentaire|analyse", text, flags=re.I) is not None
+
+
+def _contains_checklist_marker(text: str) -> bool:
+    return re.search(r"checklist|grille|évaluation|evaluation", text, flags=re.I) is not None
 
 
 def _response_text(text: str) -> str:
