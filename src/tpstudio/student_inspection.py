@@ -1,9 +1,18 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import json
 import re
 from pathlib import Path
+
+
+@dataclass
+class StudentCellIssue:
+    cell_number: int
+    severity: str
+    kind: str
+    message: str
+    preview: str = ""
 
 
 @dataclass
@@ -20,6 +29,7 @@ class StudentNotebookDiagnostic:
     code_cells_not_executed: int
     code_cells_with_errors: int
     headings: int
+    issues: list[StudentCellIssue] = field(default_factory=list)
 
     @property
     def has_response_zones(self) -> bool:
@@ -48,8 +58,10 @@ def inspect_student_notebook(notebook_path: str | Path) -> StudentNotebookDiagno
     code_cells_not_executed = 0
     code_cells_with_errors = 0
     headings = 0
+    issues: list[StudentCellIssue] = []
 
-    for cell in cells:
+    for index, cell in enumerate(cells):
+        cell_number = index + 1
         cell_type = cell.get("cell_type")
         text = _cell_text(cell)
 
@@ -59,23 +71,73 @@ def inspect_student_notebook(notebook_path: str | Path) -> StudentNotebookDiagno
 
             if _contains_response_marker(text):
                 response_cells += 1
+
                 if _is_empty_response(text):
                     empty_response_cells += 1
+                    issues.append(
+                        StudentCellIssue(
+                            cell_number=cell_number,
+                            severity="warning",
+                            kind="empty_response",
+                            message="réponse vide ou à compléter",
+                            preview=_preview(text),
+                        )
+                    )
+                elif _is_short_response(text):
+                    issues.append(
+                        StudentCellIssue(
+                            cell_number=cell_number,
+                            severity="info",
+                            kind="short_response",
+                            message="réponse très courte à relire",
+                            preview=_preview(text),
+                        )
+                    )
 
         elif cell_type == "code":
             code_cells += 1
 
             outputs = cell.get("outputs", [])
-            if outputs:
+            has_outputs = bool(outputs)
+
+            if has_outputs:
                 code_cells_with_outputs += 1
             else:
                 code_cells_without_outputs += 1
 
             if cell.get("execution_count") is None:
                 code_cells_not_executed += 1
+                issues.append(
+                    StudentCellIssue(
+                        cell_number=cell_number,
+                        severity="warning",
+                        kind="not_executed",
+                        message="cellule de code non exécutée",
+                        preview=_preview(text),
+                    )
+                )
+            elif not has_outputs and _code_likely_expected_output(text):
+                issues.append(
+                    StudentCellIssue(
+                        cell_number=cell_number,
+                        severity="info",
+                        kind="missing_output",
+                        message="cellule de code exécutée sans sortie visible",
+                        preview=_preview(text),
+                    )
+                )
 
             if _has_error_output(outputs):
                 code_cells_with_errors += 1
+                issues.append(
+                    StudentCellIssue(
+                        cell_number=cell_number,
+                        severity="warning",
+                        kind="execution_error",
+                        message="erreur d'exécution présente",
+                        preview=_preview(text),
+                    )
+                )
 
     filled_response_cells = response_cells - empty_response_cells
 
@@ -92,6 +154,7 @@ def inspect_student_notebook(notebook_path: str | Path) -> StudentNotebookDiagno
         code_cells_not_executed=code_cells_not_executed,
         code_cells_with_errors=code_cells_with_errors,
         headings=headings,
+        issues=issues,
     )
 
 
@@ -127,6 +190,18 @@ def format_student_notebook_report(diagnostic: StudentNotebookDiagnostic) -> str
         lines.append(f"    • cellules avec erreur : {diagnostic.code_cells_with_errors}")
     lines.append("")
 
+    lines.append("🔎 Cellules à vérifier")
+    if not diagnostic.issues:
+        lines.append("    ✓ aucune cellule problématique évidente détectée")
+    else:
+        for issue in diagnostic.issues:
+            symbol = "⚠" if issue.severity == "warning" else "ℹ"
+            line = f"    {symbol} cellule {issue.cell_number} — {issue.message}"
+            if issue.preview:
+                line += f" : {issue.preview}"
+            lines.append(line)
+    lines.append("")
+
     lines.append("🧭 Diagnostic provisoire")
     if not diagnostic.has_response_zones:
         lines.append("    ⚠ copie difficile à corriger automatiquement : aucune zone « Réponse : » détectée")
@@ -160,17 +235,23 @@ def _contains_response_marker(text: str) -> bool:
     return re.search(r"réponse\s*:", text, flags=re.I) is not None
 
 
-def _is_empty_response(text: str) -> bool:
+def _response_text(text: str) -> str:
     match = re.search(r"réponse\s*:", text, flags=re.I)
     if not match:
-        return False
+        return ""
 
     answer = text[match.end():]
     answer = re.sub(r"[*_`#>\-\s]+", " ", answer)
-    answer = answer.strip(" .:\n\t").lower()
+    return answer.strip(" .:\n\t")
 
+
+def _is_empty_response(text: str) -> bool:
+    answer = _response_text(text)
     if not answer:
         return True
+
+    lowered = answer.lower()
+    normalized = lowered.replace("é", "e").replace("è", "e").replace("ê", "e")
 
     placeholders = {
         "a completer",
@@ -181,8 +262,16 @@ def _is_empty_response(text: str) -> bool:
         "...",
     }
 
-    normalized = answer.replace("é", "e").replace("è", "e").replace("ê", "e")
-    return answer in placeholders or normalized in placeholders
+    return lowered in placeholders or normalized in placeholders
+
+
+def _is_short_response(text: str) -> bool:
+    answer = _response_text(text)
+    if not answer:
+        return False
+
+    words = re.findall(r"\w+", answer, flags=re.UNICODE)
+    return len(words) <= 3
 
 
 def _has_error_output(outputs: object) -> bool:
@@ -194,3 +283,27 @@ def _has_error_output(outputs: object) -> bool:
             return True
 
     return False
+
+
+def _code_likely_expected_output(source: str) -> bool:
+    lowered = source.lower()
+    markers = [
+        "print(",
+        "plt.",
+        ".plot(",
+        "display(",
+        "show(",
+        "input(",
+    ]
+    return any(marker in lowered for marker in markers)
+
+
+def _preview(text: str, max_length: int = 80) -> str:
+    collapsed = " ".join(text.split())
+    if not collapsed:
+        return ""
+
+    if len(collapsed) <= max_length:
+        return collapsed
+
+    return collapsed[: max_length - 1].rstrip() + "…"

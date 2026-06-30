@@ -97,3 +97,44 @@ def test_student_inspection_formats_report(tmp_path: Path) -> None:
 
     assert "Inspection de copie" in report
     assert "réponses vides ou à compléter : 1" in report
+    assert "Cellules à vérifier" in report
+    assert "cellule 1 — réponse vide ou à compléter" in report
+
+
+def test_student_inspection_lists_cell_issues(tmp_path: Path) -> None:
+    notebook = tmp_path / "copie.ipynb"
+    _write_notebook(
+        notebook,
+        [
+            {"cell_type": "markdown", "metadata": {}, "source": ["**Réponse :**\n\n"]},
+            {"cell_type": "markdown", "metadata": {}, "source": ["**Réponse :** Oui\n"]},
+            {
+                "cell_type": "code",
+                "metadata": {},
+                "execution_count": None,
+                "outputs": [],
+                "source": ["print('resultat')\n"],
+            },
+            {
+                "cell_type": "code",
+                "metadata": {},
+                "execution_count": 2,
+                "outputs": [{"output_type": "error", "ename": "ValueError"}],
+                "source": ["raise ValueError()\n"],
+            },
+        ],
+    )
+
+    diagnostic = inspect_student_notebook(notebook)
+
+    kinds = [issue.kind for issue in diagnostic.issues]
+    assert "empty_response" in kinds
+    assert "short_response" in kinds
+    assert "not_executed" in kinds
+    assert "execution_error" in kinds
+
+    report = format_student_notebook_report(diagnostic)
+    assert "cellule 1 — réponse vide ou à compléter" in report
+    assert "cellule 2 — réponse très courte à relire" in report
+    assert "cellule 3 — cellule de code non exécutée" in report
+    assert "cellule 4 — erreur d'exécution présente" in report
