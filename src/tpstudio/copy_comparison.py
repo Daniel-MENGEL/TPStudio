@@ -134,5 +134,58 @@ def format_copy_comparison_report(comparison: CopyComparison) -> str:
         lines.append("    • certaines cellules de code non vides n'ont pas été exécutées")
     elif copy.code_cells:
         lines.append("    • le code de la copie semble exécuté sans erreur détectée")
+    lines.append("")
+
+    lines.append("💬 Retour possible à l'étudiant")
+    feedback = student_feedback_for_comparison(comparison)
+    if not feedback:
+        lines.append("    ✓ aucune remarque technique bloquante évidente")
+    else:
+        for message in feedback:
+            lines.append(f"    • {message}")
 
     return "\n".join(lines)
+
+
+def student_feedback_for_comparison(comparison: CopyComparison) -> list[str]:
+    messages: list[str] = []
+    copy = comparison.copy
+
+    if copy.code_cells_with_errors:
+        messages.append(
+            "Le notebook contient des erreurs d'exécution : il faut le relancer et corriger les cellules indiquées."
+        )
+        for issue in copy.issues:
+            if issue.kind == "execution_error":
+                messages.append(f"Cellule {issue.cell_number} : erreur d'exécution à corriger.")
+
+    if copy.code_cells_not_executed:
+        messages.append(
+            "Certaines cellules de code non vides n'ont pas été exécutées : relancer le notebook avant rendu."
+        )
+
+    if copy.empty_response_cells:
+        messages.append(
+            f"{copy.empty_response_cells} réponse(s) sont vides ou à compléter."
+        )
+
+    if comparison.model.response_cells and copy.response_cells == 0:
+        messages.append(
+            "La copie ne reprend pas les zones « Réponse : » du modèle distribué."
+        )
+    elif comparison.missing_response_cells:
+        messages.append(
+            "Certaines zones « Réponse : » attendues ne sont pas identifiables."
+        )
+
+    if comparison.missing_result_cells:
+        messages.append(
+            "Certains résultats attendus ne sont pas identifiables dans la copie."
+        )
+
+    if comparison.missing_interpretation_cells:
+        messages.append(
+            "Certaines interprétations attendues ne sont pas identifiables."
+        )
+
+    return messages
