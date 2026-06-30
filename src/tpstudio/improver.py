@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from pathlib import Path
 from typing import Iterable
 
@@ -44,14 +45,39 @@ STUDENT_MARKERS = (
 
 
 def improve_notebook(tp_path: Path) -> Path:
-    # tp_path peut être soit le dossier du TP, soit directement un notebook.
-    # La CLI actuelle appelle cette fonction avec le dossier du TP.
+    # Améliore un TP à partir d'un dossier ou d'un notebook.
+    #
+    # Si un notebook élève existe, TPStudio génère une copie améliorée de ce
+    # notebook. Si aucun notebook n'existe encore, TPStudio crée une première
+    # trame de notebook à partir du fichier LaTeX du TP.
+
     if tp_path.is_file() and tp_path.suffix == ".ipynb":
         notebook_path = tp_path
-        folder = tp_path.parent
-    else:
-        folder = tp_path
+        latex_text = _read_latex_text_near(notebook_path)
+
+        output = _next_available_path(
+            notebook_path.with_name(f"{notebook_path.stem}-ameliore.ipynb")
+        )
+
+        data = json.loads(notebook_path.read_text(encoding="utf-8"))
+        _improve_existing_notebook_data(data, latex_text=latex_text)
+        _remove_generic_comment_cells(data)
+        _reposition_result_cells_by_matching_heading(data)
+        _reposition_comparison_after_results(data)
+
+        output.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        return output
+
+    folder = tp_path
+
+    try:
         notebook_path = _find_source_notebook_for_improve(folder)
+    except FileNotFoundError:
+        latex_path = _find_latex_file_for_improve(folder)
+        return improve_latex_only(latex_path)
 
     output = _next_available_path(
         notebook_path.with_name(f"{notebook_path.stem}-ameliore.ipynb")
@@ -61,12 +87,48 @@ def improve_notebook(tp_path: Path) -> Path:
     latex_text = _read_latex_text_near(notebook_path)
 
     _improve_existing_notebook_data(data, latex_text=latex_text)
+    _remove_generic_comment_cells(data)
+    _reposition_result_cells_by_matching_heading(data)
+    _reposition_comparison_after_results(data)
 
     output.write_text(
         json.dumps(data, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
     return output
+
+
+def improve_latex_only(latex_path: Path) -> Path:
+    latex_text = _read_text_file(latex_path)
+
+    output = _next_available_path(
+        latex_path.with_name(f"{_slugify(latex_path.stem)}.ipynb")
+    )
+
+    data = {
+        "cells": _latex_outline_cells(latex_text),
+        "metadata": {},
+        "nbformat": 4,
+        "nbformat_minor": 5,
+    }
+
+    data["cells"].extend(_improvement_cells(data, latex_text=latex_text))
+
+    output.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return output
+
+
+def _find_latex_file_for_improve(folder: Path) -> Path:
+    tex_files = sorted(folder.glob("*.tex"))
+    if not tex_files:
+        raise FileNotFoundError(f"Aucun fichier LaTeX trouvé dans {folder}")
+
+    # S'il y a plusieurs fichiers, on privilégie le plus gros : c'est
+    # généralement le fichier principal du TP.
+    return max(tex_files, key=lambda path: path.stat().st_size)
 
 
 def _find_source_notebook_for_improve(folder: Path) -> Path:
@@ -652,6 +714,387 @@ def _generated_markdown_cell(source: list[str], kind: str) -> dict:
     }
 
 
+def _latex_outline_cells(latex_text: str) -> list[dict]:
+    cells: list[dict] = []
+
+    title = _extract_latex_title(latex_text)
+    if title:
+        cells.append(_markdown_cell([f"# {title}\n"], kind="latex_outline_title"))
+
+    sections = _extract_latex_sections(latex_text)
+    if not sections:
+        cells.append(_markdown_cell([
+            "## Travail à compléter\n",
+            "\n",
+            "**Réponse :**\n",
+            "\n",
+            "Compléter cette partie à partir du texte du TP.\n",
+        ], kind="latex_outline_fallback"))
+        return cells
+
+    for section in sections:
+        cells.append(_markdown_cell([
+            f"## {section}\n",
+            "\n",
+            "### Objectif\n",
+            "\n",
+            "À préciser à partir du texte du TP.\n",
+            "\n",
+            "### Travail à réaliser\n",
+            "\n",
+            "**Réponse :**\n",
+            "\n",
+            "Compléter cette partie pendant la séance.\n",
+        ], kind="latex_outline_section"))
+
+    return cells
+
+
+def _extract_latex_title(latex_text: str) -> str:
+    match = re.search(r"\\title\{([^}]*)\}", latex_text)
+    if match:
+        return _clean_latex_text(match.group(1))
+    return ""
+
+
+def _extract_latex_sections(latex_text: str) -> list[str]:
+    pattern = re.compile(r"\\(?:section|subsection)\*?\{([^}]*)\}")
+    sections: list[str] = []
+    for match in pattern.finditer(latex_text):
+        title = _clean_latex_text(match.group(1))
+        if title:
+            sections.append(title)
+    return sections
+
+
+def _clean_latex_text(text: str) -> str:
+    cleaned = re.sub(r"\\[A-Za-z]+\*?(?:\[[^]]*\])?", "", text)
+    cleaned = cleaned.replace("{", "").replace("}", "")
+    cleaned = cleaned.replace("$", "")
+    cleaned = " ".join(cleaned.split())
+    return cleaned
+
+
+def _markdown_cell(source: list[str]) -> dict:
+    return {
+        "cell_type": "markdown",
+        "metadata": {},
+        "source": source,
+    }
+
+
+def _reposition_comparison_after_results(data: dict) -> None:
+    """Place la comparaison après les cellules Résultat qui la précèdent logiquement.
+
+    Dans certains notebooks, TPStudio insère d'abord une cellule
+    ``Comparaison des résultats obtenus`` puis ajoute ensuite un dernier bloc
+    ``Résultat — ...``. La comparaison doit venir après les résultats à
+    comparer, et avant les blocs globaux de fin.
+    """
+
+    cells = data.get("cells", [])
+    if not isinstance(cells, list):
+        return
+
+    for comparison_index, cell in enumerate(list(cells)):
+        if not _is_comparison_cell(cell):
+            continue
+
+        end_index = _next_global_end_index(cells, comparison_index + 1)
+        last_result_index = None
+
+        for index in range(comparison_index + 1, end_index):
+            candidate = cells[index]
+            if _is_result_cell(candidate):
+                last_result_index = index
+
+        if last_result_index is None:
+            continue
+
+        moved_cell = cells.pop(comparison_index)
+
+        if comparison_index < last_result_index:
+            last_result_index -= 1
+
+        cells.insert(last_result_index + 1, moved_cell)
+        return
+
+
+def _is_comparison_cell(cell: dict) -> bool:
+    if cell.get("cell_type") != "markdown":
+        return False
+
+    first_line = _first_non_empty_line(cell)
+    key = _placement_key(first_line.lstrip("#").strip())
+    return key == "comparaison resultats obtenus"
+
+
+def _is_result_cell(cell: dict) -> bool:
+    if cell.get("cell_type") != "markdown":
+        return False
+
+    first_line = _first_non_empty_line(cell)
+    return first_line.startswith("### Résultat —")
+
+
+def _next_global_end_index(cells: list[dict], start: int) -> int:
+    for index in range(start, len(cells)):
+        first_line = _first_non_empty_line(cells[index])
+        if _is_global_end_heading(first_line):
+            return index
+    return len(cells)
+
+
+def _first_non_empty_line(cell: dict) -> str:
+    for line in _cell_text(cell).splitlines():
+        stripped = line.strip()
+        if stripped:
+            return stripped
+    return ""
+
+
+def _remove_generic_comment_cells(data: dict) -> None:
+    """Supprime les anciennes cellules génériques de commentaire.
+
+    Ces cellules, du type ``🧠 Commentez :``, sont trop vagues pour être
+    conservées systématiquement dans les notebooks améliorés. TPStudio préfère
+    maintenant insérer des cellules plus contextualisées : résultat, comparaison,
+    conclusion ou bilan.
+    """
+
+    cells = data.get("cells", [])
+    if not isinstance(cells, list):
+        return
+
+    filtered_cells = []
+    for cell in cells:
+        if _is_generic_comment_cell(cell):
+            continue
+        filtered_cells.append(cell)
+
+    data["cells"] = filtered_cells
+
+
+def _is_generic_comment_cell(cell: dict) -> bool:
+    if cell.get("cell_type") != "markdown":
+        return False
+
+    text = _cell_text(cell).strip()
+    if not text:
+        return False
+
+    first_line = text.splitlines()[0].strip()
+    return first_line.startswith("🧠 Commentez")
+
+
+def _reposition_result_cells_by_matching_heading(data: dict) -> None:
+    """Replace les cellules Résultat près du sous-titre correspondant.
+
+    Si une cellule ``### Résultat — X`` correspond à un sous-titre ``### X``
+    déjà présent dans le notebook, elle est replacée à la fin de ce bloc,
+    avant le sous-titre suivant de même niveau.
+
+    La boucle est bornée pour éviter tout risque d'oscillation sur un notebook
+    atypique.
+    """
+
+    cells = data.get("cells", [])
+    if not isinstance(cells, list):
+        return
+
+    seen_states: set[tuple[str, ...]] = set()
+    max_moves = max(len(cells), 1)
+
+    for _ in range(max_moves):
+        state = tuple(_first_non_empty_line(cell) for cell in cells)
+        if state in seen_states:
+            return
+        seen_states.add(state)
+
+        changed = _apply_one_result_reposition(data)
+        if not changed:
+            return
+def _apply_one_result_reposition(data: dict) -> bool:
+    cells = data.get("cells", [])
+    if not isinstance(cells, list):
+        return False
+
+    for result_index, cell in enumerate(cells):
+        if cell.get("cell_type") != "markdown":
+            continue
+
+        source = _cell_text(cell)
+        lines = source.splitlines()
+        first_line = lines[0].strip() if lines else ""
+
+        if not first_line.startswith("### Résultat —"):
+            continue
+
+        result_title = first_line.replace("### Résultat —", "", 1).strip()
+        result_key = _placement_key(result_title)
+        if not result_key:
+            continue
+
+        heading_index = _find_matching_non_result_heading(cells, result_key)
+        if heading_index is None:
+            continue
+
+        heading_level = _matching_heading_level(cells[heading_index], result_key)
+        target_index = _end_of_heading_block_for_result(
+            cells,
+            heading_index,
+            heading_level=heading_level,
+        )
+
+        if target_index == result_index or target_index == result_index + 1:
+            continue
+
+        moved_cell = cells.pop(result_index)
+        if result_index < target_index:
+            target_index -= 1
+        cells.insert(target_index, moved_cell)
+        return True
+
+    return False
+
+
+def _matching_heading_level(cell: dict, result_key: str) -> int | None:
+    if cell.get("cell_type") != "markdown":
+        return None
+
+    for line in _cell_text(cell).splitlines():
+        stripped = line.strip()
+        match = re.match(r"^(#{1,6})\s+(.*)$", stripped)
+        if not match:
+            continue
+
+        heading_text = match.group(2).strip()
+        heading_key = _placement_key(heading_text)
+
+        if heading_key == result_key:
+            return len(match.group(1))
+
+    return None
+
+
+def _find_matching_non_result_heading(cells: list[dict], result_key: str) -> int | None:
+    for index, cell in enumerate(cells):
+        if cell.get("cell_type") != "markdown":
+            continue
+
+        for line in _cell_text(cell).splitlines():
+            stripped = line.strip()
+
+            if not stripped.startswith("#"):
+                continue
+            if "Résultat —" in stripped:
+                continue
+
+            heading_text = stripped.lstrip("#").strip()
+            heading_key = _placement_key(heading_text)
+
+            if heading_key == result_key:
+                return index
+
+    return None
+
+
+def _end_of_heading_block_for_result(
+    cells: list[dict],
+    heading_index: int,
+    heading_level: int | None = None,
+) -> int:
+    if heading_level is None:
+        heading_level = _markdown_heading_level(cells[heading_index])
+
+    index = heading_index + 1
+    last_content_index = heading_index
+
+    while index < len(cells):
+        cell = cells[index]
+        level = _markdown_heading_level(cell)
+
+        text = _cell_text(cell).strip()
+        lines = text.splitlines()
+        first_line = lines[0].strip() if lines else ""
+
+        # Certains titres ajoutés par TPStudio sont des blocs de fin globaux.
+        # Ils ne doivent jamais être considérés comme faisant partie de la
+        # dernière section expérimentale du TP, même s'ils sont écrits en ###.
+        if _is_global_end_heading(first_line):
+            break
+
+        if level is not None and heading_level is not None and level <= heading_level:
+            break
+
+        if first_line.startswith("### Résultat —"):
+            index += 1
+            continue
+
+        # On place le résultat après le contenu utile de la sous-partie,
+        # mais avant les cellules de commentaire guidé.
+        if cell.get("cell_type") == "code":
+            last_content_index = index
+        elif cell.get("cell_type") == "markdown" and text and not text.startswith("🧠"):
+            last_content_index = index
+
+        index += 1
+
+    return last_content_index + 1
+
+
+def _is_global_end_heading(first_line: str) -> bool:
+    if not first_line.startswith("#"):
+        return False
+
+    title = first_line.lstrip("#").strip()
+    key = _placement_key(title)
+
+    global_markers = {
+        "conclusion bilan",
+        "ameliorations proposees par tpstudio",
+        "evaluation par competences",
+        "checklist fin tp",
+    }
+
+    return key in global_markers
+
+
+def _markdown_heading_level(cell: dict) -> int | None:
+    if cell.get("cell_type") != "markdown":
+        return None
+
+    for line in _cell_text(cell).splitlines():
+        stripped = line.strip()
+        match = re.match(r"^(#{1,6})\s+", stripped)
+        if match:
+            return len(match.group(1))
+
+    return None
+
+
+def _placement_key(text: str) -> str:
+    normalized = unicodedata.normalize("NFKD", text)
+    without_accents = "".join(
+        char for char in normalized
+        if not unicodedata.combining(char)
+    )
+
+    lowered = without_accents.lower()
+    lowered = re.sub(r"[^a-z0-9]+", " ", lowered)
+
+    stopwords = {"de", "la", "le", "l", "d", "du", "des"}
+    tokens = [token for token in lowered.split() if token not in stopwords]
+    return " ".join(tokens)
+
+
+def _cell_text(cell: dict) -> str:
+    source = cell.get("source", "")
+    if isinstance(source, list):
+        return "".join(source)
+    return str(source)
+
+
 def _improvement_cells(data: dict, latex_text: str = "") -> list[dict]:
     existing_text = "\n".join(
         "".join(cell.get("source", [])) if isinstance(cell.get("source"), list) else str(cell.get("source", ""))
@@ -739,6 +1182,13 @@ def _has_report_instruction(latex_text: str) -> bool:
             return True
 
     return False
+
+
+def _read_text_file(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return path.read_text(encoding="latin-1")
 
 
 def _read_latex_text_near(notebook_path: Path) -> str:
@@ -948,8 +1398,15 @@ def _unique_non_empty(items: Iterable[str]) -> list[str]:
 
 
 def _slugify(text: str) -> str:
-    text = re.sub(r"[^a-zA-ZÀ-ÿ0-9]+", "-", text).strip("-")
-    return text or "notebook"
+    normalized = unicodedata.normalize("NFKD", text)
+    without_accents = "".join(
+        char for char in normalized
+        if not unicodedata.combining(char)
+    )
+
+    cleaned = re.sub(r"[^A-Za-z0-9]+", "-", without_accents)
+    cleaned = cleaned.strip("-")
+    return cleaned or "notebook"
 
 
 def _markdown_cell(source: list[str], kind: str) -> dict:
