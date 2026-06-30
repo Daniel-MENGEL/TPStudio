@@ -213,3 +213,59 @@ def test_compare_copy_student_feedback_distinguishes_code_to_complete(tmp_path: 
     report = format_copy_comparison_report(comparison)
     assert "cellules à compléter : 2" in report
     assert "certaines cellules contiennent encore du code à compléter" in report
+
+def test_export_copy_comparison_report_writes_text_file(tmp_path: Path) -> None:
+    from tpstudio.copy_comparison import export_copy_comparison_report
+
+    model = tmp_path / "modele.ipynb"
+    copy = tmp_path / "copie.ipynb"
+    output = tmp_path / "rapport.txt"
+
+    _write_notebook(
+        model,
+        [
+            {"cell_type": "markdown", "metadata": {}, "source": ["**Réponse :**\n\n"]},
+            {"cell_type": "markdown", "metadata": {}, "source": ["### Résultat — mesure\n"]},
+        ],
+    )
+    _write_notebook(
+        copy,
+        [
+            {"cell_type": "markdown", "metadata": {}, "source": ["**Réponse :** valeur\n"]},
+        ],
+    )
+
+    exported = export_copy_comparison_report(model, copy, output)
+
+    assert exported == output
+    assert output.exists()
+
+    text = output.read_text(encoding="utf-8")
+    assert "Comparaison modèle / copie" in text
+    assert "Retour possible à l'étudiant" in text
+
+
+def test_export_copy_comparison_report_uses_default_name(tmp_path: Path) -> None:
+    from tpstudio.copy_comparison import export_copy_comparison_report
+
+    model = tmp_path / "modele.ipynb"
+    copy = tmp_path / "copie-etudiant.ipynb"
+
+    _write_notebook(
+        model,
+        [
+            {"cell_type": "markdown", "metadata": {}, "source": ["**Réponse :**\n\n"]},
+        ],
+    )
+    _write_notebook(
+        copy,
+        [
+            {"cell_type": "markdown", "metadata": {}, "source": ["**Réponse :** valeur\n"]},
+        ],
+    )
+
+    exported = export_copy_comparison_report(model, copy)
+
+    assert exported.name == "copie-etudiant-rapport-tpstudio.txt"
+    assert exported.exists()
+    assert "Comparaison modèle / copie" in exported.read_text(encoding="utf-8")

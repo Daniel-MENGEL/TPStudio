@@ -302,3 +302,27 @@ def _cell_text(cell: dict) -> str:
     if isinstance(source, list):
         return "".join(str(part) for part in source)
     return str(source)
+
+def export_copy_comparison_report(
+    model_path: str | Path,
+    copy_path: str | Path,
+    output_path: str | Path | None = None,
+) -> Path:
+    """Export the compare-copy report as a UTF-8 text file."""
+
+    comparison = compare_copy_to_model(model_path, copy_path)
+    report = format_copy_comparison_report(comparison)
+
+    if output_path is None:
+        output = _default_report_output_path(copy_path)
+    else:
+        output = Path(output_path)
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(report + "\n", encoding="utf-8")
+    return output
+
+
+def _default_report_output_path(copy_path: str | Path) -> Path:
+    path = Path(copy_path)
+    return path.with_name(path.stem + "-rapport-tpstudio.txt")
