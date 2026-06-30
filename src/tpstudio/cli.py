@@ -65,6 +65,10 @@ def _looks_like_correction_notebook(path: Path) -> bool:
     name = path.stem.lower()
     correction_markers = (
         "correction",
+        "ameliore",
+        "amélioré",
+        "amelioree",
+        "améliorée",
         "corrige",
         "corrigé",
         "solution",

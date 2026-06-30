@@ -152,6 +152,8 @@ def _insert_measurement_result_cells(cells: list[dict]) -> None:
         if suggestion is None:
             continue
 
+        suggestion["source_heading"] = heading
+
         key = suggestion["title"].lower()
         if key in seen:
             continue
@@ -206,14 +208,11 @@ def _result_cell_from_suggestion(suggestion: dict) -> dict:
 
 def _measurement_result_insertion_index(cells: list[dict], suggestion: dict) -> int:
     title = suggestion.get("title", "").lower()
+    source_heading = suggestion.get("source_heading", "")
 
     if "angle au sommet" in title or ("angle" in title and "prisme" in title):
-        # Résultat de A : à la fin de la partie consacrée à l'angle,
-        # juste avant la partie consacrée à l'indice du prisme.
-        #
-        # Attention : le titre général du notebook contient parfois aussi
-        # "indice" et "prisme". On cherche donc explicitement un vrai titre
-        # de partie du type "## Mesure de l'indice ... prisme".
+        # Cas du goniomètre : le résultat sur A clôt la partie angle,
+        # juste avant la vraie partie sur l'indice.
         index = _find_specific_heading_index(
             cells,
             required=("mesure", "indice", "prisme"),
@@ -223,17 +222,17 @@ def _measurement_result_insertion_index(cells: list[dict], suggestion: dict) -> 
             return index
 
     if "indice" in title and "prisme" in title:
-        # Résultat de n : après la cellule de code qui effectue le calcul de n.
+        # Cas du goniomètre : le résultat sur n vient après le calcul de n.
         index = _find_code_index_after_marker(cells, ("#calcul de n", "calcul de n", "calcul n"))
         if index is not None:
             return index + 1
 
-    # Fallback : après le dernier code de la partie dont le titre ressemble.
-    heading_words = _important_words(title)
-    heading_index = _find_heading_index_from_words(cells, heading_words)
+    # Cas général : placer le résultat à la fin de la section qui a déclenché
+    # la suggestion, et non pas avant une section vaguement ressemblante.
+    heading_index = _find_exact_heading_index(cells, source_heading)
     if heading_index is not None:
-        next_heading = _find_next_heading_index(cells, heading_index + 1)
-        section_end = next_heading if next_heading is not None else len(cells)
+        next_same_or_higher = _find_next_heading_index_same_or_higher_level(cells, heading_index + 1, heading_index)
+        section_end = next_same_or_higher if next_same_or_higher is not None else len(cells)
         last_code = _find_last_code_index(cells, heading_index + 1, section_end)
         if last_code is not None:
             return last_code + 1
@@ -344,6 +343,60 @@ def _result_prompt_from_heading(heading: str) -> dict | None:
         }
 
     return None
+
+
+def _find_exact_heading_index(cells: list[dict], heading: str) -> int | None:
+    target = _normalize_heading_title(heading)
+    if not target:
+        return None
+
+    for index, cell in enumerate(cells):
+        if cell.get("cell_type") != "markdown":
+            continue
+        for line in _cell_text(cell).splitlines():
+            stripped = line.strip()
+            if not stripped.startswith("#"):
+                continue
+            title = stripped.lstrip("#").strip()
+            if _normalize_heading_title(title) == target:
+                return index
+
+    return None
+
+
+def _find_next_heading_index_same_or_higher_level(
+    cells: list[dict],
+    start: int,
+    reference_index: int,
+) -> int | None:
+    reference_level = _first_heading_level(cells[reference_index])
+    if reference_level is None:
+        return _find_next_heading_index(cells, start)
+
+    for index in range(start, len(cells)):
+        if cells[index].get("cell_type") != "markdown":
+            continue
+        level = _first_heading_level(cells[index])
+        if level is not None and level <= reference_level:
+            return index
+
+    return None
+
+
+def _first_heading_level(cell: dict) -> int | None:
+    for line in _cell_text(cell).splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            return len(stripped) - len(stripped.lstrip("#"))
+    return None
+
+
+def _normalize_heading_title(title: str) -> str:
+    cleaned = title.replace("<center>", "").replace("</center>", "")
+    cleaned = cleaned.replace("**", "").replace("$", "")
+    cleaned = cleaned.replace("\\", "")
+    cleaned = " ".join(cleaned.lower().split())
+    return cleaned
 
 
 def _find_specific_heading_index(
