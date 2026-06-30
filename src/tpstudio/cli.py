@@ -9,6 +9,7 @@ from pathlib import Path
 from tpstudio.parsers import LatexParser
 from tpstudio.readers import NotebookReader
 from tpstudio.reporting import format_inspection, make_inspection_report
+from tpstudio.student_inspection import format_student_notebook_report, inspect_student_notebook
 
 
 def find_tex_file(tp_dir: Path) -> Path:
@@ -91,6 +92,12 @@ def _looks_like_student_notebook(path: Path) -> bool:
     return any(marker in name for marker in student_markers)
 
 
+
+def inspect_copy_command(args):
+    diagnostic = inspect_student_notebook(Path(args.notebook))
+    print(format_student_notebook_report(diagnostic))
+    return 0
+
 def improve_command(args: argparse.Namespace) -> int:
     tp_dir = Path(args.path)
     output = improve_notebook(tp_dir)
@@ -161,6 +168,13 @@ def main() -> int:
     )
     improve_parser.add_argument("path", help="chemin du dossier de TP")
     improve_parser.set_defaults(func=improve_command)
+
+    copy_parser = subparsers.add_parser(
+        "inspect-copy",
+        help="inspecter une copie étudiante au format notebook",
+    )
+    copy_parser.add_argument("notebook")
+    copy_parser.set_defaults(func=inspect_copy_command)
 
     args = parser.parse_args()
     return args.func(args)
