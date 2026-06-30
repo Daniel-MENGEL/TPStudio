@@ -263,3 +263,33 @@ def test_comparison_is_placed_after_following_result_cell(tmp_path: Path) -> Non
     conclusion_index = text.index("Conclusion / bilan")
 
     assert result_index < comparison_index < conclusion_index
+
+
+def test_spectrum_section_gets_graph_interpretation_before_conclusion(tmp_path: Path) -> None:
+    notebook = tmp_path / "Goniometre-a-reseau.ipynb"
+    notebook.write_text(
+        json.dumps(
+            {
+                "cells": [
+                    {"cell_type": "markdown", "metadata": {}, "source": ["## Spectre de la lampe à vapeur de mercure\n"]},
+                    {"cell_type": "code", "metadata": {}, "execution_count": None, "outputs": [], "source": ["plt.plot([400, 500], [1, 2])\n"]},
+                ],
+                "metadata": {},
+                "nbformat": 4,
+                "nbformat_minor": 5,
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    tex = tmp_path / "Goniometre-a-reseau.tex"
+    tex.write_text("", encoding="utf-8")
+
+    output = improve_notebook(tmp_path)
+    text = _notebook_text(output)
+
+    interpretation_index = text.index("Interprétation du spectre obtenu")
+    conclusion_index = text.index("Conclusion / bilan")
+
+    assert interpretation_index < conclusion_index

@@ -19,6 +19,7 @@ class LatexParser:
 
     KNOWN_BLOCKS: dict[str, str] = {
         "objectifs": "Objectifs",
+        "objectif": "Objectifs",
         "materiel": "Matériel",
         "annexes": "Annexes",
         "indications": "Indications",
@@ -63,9 +64,14 @@ class LatexParser:
         boundary_positions: list[int] = []
 
         for kind in self.KNOWN_BLOCKS:
-            for match in re.finditer(rf"\\{kind}\b", text):
-                block_positions.append((match.start(), kind))
-                boundary_positions.append(match.start())
+            # Un bloc pédagogique doit commencer une ligne, éventuellement
+            # précédé d'espaces. Cela évite les faux positifs sur des commandes
+            # LaTeX internes du type ``... \\objectif 13cm ...``.
+            pattern = rf"(?m)^[ \t]*(?P<command>\\{kind}\b)"
+            for match in re.finditer(pattern, text):
+                command_start = match.start("command")
+                block_positions.append((command_start, kind))
+                boundary_positions.append(command_start)
 
         for match in re.finditer(self.SECTION_PATTERN, text):
             boundary_positions.append(match.start())
@@ -78,19 +84,33 @@ class LatexParser:
             command_match = re.match(rf"\\{kind}\b", text[start:])
             if not command_match:
                 continue
+
             content_start = start + command_match.end()
             content_end = self._next_boundary_after(boundary_positions, start)
+
+            # La forme singulière ``\objectif texte`` est une ligne courte.
+            # On ne doit pas avaler tout ce qui suit jusqu'à la section suivante.
+            if kind == "objectif":
+                line_end = text.find("\n", content_start, content_end)
+                if line_end != -1:
+                    content_end = line_end
+
             raw = text[content_start:content_end].strip()
             raw = self._trim_at_document_end(raw)
+
+            canonical_kind = "objectifs" if kind == "objectif" else kind
+
             blocks.append(
                 TPBlock(
-                    kind=kind,
+                    kind=canonical_kind,
                     title=self.KNOWN_BLOCKS[kind],
                     raw=raw,
                     items=self._extract_items(raw),
                 )
             )
+
         return blocks
+
 
     def _next_boundary_after(self, boundaries: list[int], start: int) -> int:
         for boundary in boundaries:
@@ -187,7 +207,8 @@ class LatexParser:
             return items
 
         for line in raw.splitlines():
-            cleaned = self._clean_latex_inline(line).strip()
+            cleaned = self._clean_latex_inline(line)
+            cleaned = cleaned.strip(" .\n\t")
             if cleaned:
                 items.append(cleaned)
         return items
@@ -231,6 +252,15 @@ class LatexParser:
         if end_index >= 0:
             return raw[:end_index].strip()
         return raw
+
+    def _canonical_block_kind(self, command: str) -> str:
+        """Retourne le nom interne canonique d'un bloc pédagogique."""
+
+        aliases = {
+            "objectif": "objectifs",
+        }
+        return aliases.get(command, command)
+
 
     def _clean_latex_inline(self, text: str) -> str:
         text = text.replace("~", " ")

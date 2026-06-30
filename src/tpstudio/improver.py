@@ -62,6 +62,7 @@ def improve_notebook(tp_path: Path) -> Path:
         data = json.loads(notebook_path.read_text(encoding="utf-8"))
         _improve_existing_notebook_data(data, latex_text=latex_text)
         _remove_generic_comment_cells(data)
+        _add_graph_interpretation_cells(data)
         _reposition_result_cells_by_matching_heading(data)
         _reposition_comparison_after_results(data)
 
@@ -88,6 +89,7 @@ def improve_notebook(tp_path: Path) -> Path:
 
     _improve_existing_notebook_data(data, latex_text=latex_text)
     _remove_generic_comment_cells(data)
+    _add_graph_interpretation_cells(data)
     _reposition_result_cells_by_matching_heading(data)
     _reposition_comparison_after_results(data)
 
@@ -781,6 +783,106 @@ def _markdown_cell(source: list[str]) -> dict:
         "metadata": {},
         "source": source,
     }
+
+
+def _add_graph_interpretation_cells(data: dict) -> None:
+    """Ajoute une cellule d'interprétation après certains graphes expérimentaux.
+
+    Exemple typique : un bloc ``Spectre de la lampe à vapeur de mercure`` ou
+    ``Spectre de la lampe à vapeur de sodium`` se termine par un tracé. Dans ce
+    cas, une cellule d'interprétation explicite aide l'élève à commenter les
+    raies observées et les longueurs d'onde obtenues.
+    """
+
+    cells = data.get("cells", [])
+    if not isinstance(cells, list):
+        return
+
+    if _notebook_contains_heading(data, "interpretation spectre obtenu"):
+        return
+
+    section_index = _find_spectrum_section_index(cells)
+    if section_index is None:
+        return
+
+    insert_index = _end_of_spectrum_section_for_interpretation(cells, section_index)
+    if insert_index is None:
+        return
+
+    cells.insert(insert_index, _markdown_cell([
+        "### Interprétation du spectre obtenu\n",
+        "\n",
+        "**Réponse :**\n",
+        "\n",
+        "Interprétez le graphe obtenu : identifiez les raies observées, comparez les longueurs d'onde mesurées aux valeurs attendues et commentez les écarts éventuels.\n",
+    ], kind="graph_interpretation"))
+
+
+def _find_spectrum_section_index(cells: list[dict]) -> int | None:
+    for index, cell in enumerate(cells):
+        if cell.get("cell_type") != "markdown":
+            continue
+
+        for line in _cell_text(cell).splitlines():
+            stripped = line.strip()
+            if not stripped.startswith("#"):
+                continue
+
+            title = stripped.lstrip("#").strip()
+            key = _placement_key(title)
+
+            if "spectre" in key and "lampe" in key:
+                return index
+
+    return None
+
+
+def _end_of_spectrum_section_for_interpretation(cells: list[dict], section_index: int) -> int | None:
+    section_level = _markdown_heading_level(cells[section_index])
+    index = section_index + 1
+    last_code_index = None
+
+    while index < len(cells):
+        cell = cells[index]
+        level = _markdown_heading_level(cell)
+
+        first_line = _first_non_empty_line(cell)
+        if _is_global_end_heading(first_line):
+            break
+
+        if level is not None and section_level is not None and level <= section_level:
+            break
+
+        if cell.get("cell_type") == "code":
+            last_code_index = index
+
+        index += 1
+
+    if last_code_index is None:
+        return None
+
+    return last_code_index + 1
+
+
+def _notebook_contains_heading(data: dict, expected_key: str) -> bool:
+    cells = data.get("cells", [])
+    if not isinstance(cells, list):
+        return False
+
+    for cell in cells:
+        if cell.get("cell_type") != "markdown":
+            continue
+
+        for line in _cell_text(cell).splitlines():
+            stripped = line.strip()
+            if not stripped.startswith("#"):
+                continue
+
+            key = _placement_key(stripped.lstrip("#").strip())
+            if key == expected_key:
+                return True
+
+    return False
 
 
 def _reposition_comparison_after_results(data: dict) -> None:

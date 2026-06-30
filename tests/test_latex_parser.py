@@ -41,3 +41,34 @@ def test_latex_parser_extracts_basic_blocks(tmp_path: Path):
     first_section = document.sections[0]
     assert first_section.level == 1
     assert first_section.items == ["Mesurer l'angle limite"]
+
+def test_latex_parser_accepts_singular_objectif_without_braces(tmp_path) -> None:
+    tex = tmp_path / "tp.tex"
+    tex.write_text(
+        "\\title{TP test}\n"
+        "\\objectif savoir régler et utiliser un goniomètre à réseau\n"
+        "\\materiel\n"
+        "\\item Un goniomètre\n",
+        encoding="utf-8",
+    )
+
+    tp = LatexParser(tex).parse()
+
+    assert "savoir régler et utiliser un goniomètre à réseau" in tp.objectives
+
+
+def test_latex_parser_ignores_inline_objectif_false_positive(tmp_path) -> None:
+    tex = tmp_path / "tp.tex"
+    tex.write_text(
+        "\\title{TP test}\n"
+        "\\objectif savoir régler et utiliser un goniomètre à réseau.\n"
+        "Un schéma contient une commande interne \\objectif 13cm qui n'est pas un objectif pédagogique.\n"
+        "\\materiel\n"
+        "\\item Un goniomètre\n",
+        encoding="utf-8",
+    )
+
+    tp = LatexParser(tex).parse()
+
+    assert tp.objectives == ["savoir régler et utiliser un goniomètre à réseau"]
+
