@@ -3,7 +3,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from tpstudio.copy_feedback import create_feedback_notebook
+from tpstudio.copy_comparison import compare_copy_to_model
+from tpstudio.copy_feedback import (
+    create_feedback_notebook,
+    structured_feedback_markdown,
+)
 
 
 def _write_notebook(path: Path, cells: list[dict]) -> None:
@@ -60,6 +64,7 @@ def test_create_feedback_notebook_inserts_feedback_cell(tmp_path: Path) -> None:
 
     assert first_cell["cell_type"] == "markdown"
     assert "Retour TPStudio" in first_source
+    assert "À corriger avant de rendre" in first_source
     assert "complétez cette cellule puis exécutez-la" in first_source
     assert "Tracé expérimental" in first_source
 
@@ -91,7 +96,9 @@ def test_create_feedback_notebook_is_non_destructive(tmp_path: Path) -> None:
 
     data = _read_notebook(created)
     assert data["cells"][0]["metadata"]["tpstudio"]["cell_role"] == "student_feedback"
+    assert data["cells"][0]["metadata"]["tpstudio"]["format"] == "structured_v1"
     assert data["metadata"]["tpstudio"]["feedback_inserted"] is True
+    assert data["metadata"]["tpstudio"]["feedback_format"] == "structured_v1"
 
 
 def test_create_feedback_notebook_uses_numbered_name_if_needed(tmp_path: Path) -> None:
@@ -118,3 +125,84 @@ def test_create_feedback_notebook_uses_numbered_name_if_needed(tmp_path: Path) -
     assert created.name == "copie-retour-tpstudio-2.ipynb"
     assert created.exists()
     assert existing.read_text(encoding="utf-8") == "déjà là"
+
+
+def test_structured_feedback_markdown_has_readable_sections(tmp_path: Path) -> None:
+    model = tmp_path / "modele.ipynb"
+    copy = tmp_path / "copie.ipynb"
+
+    _write_notebook(
+        model,
+        [
+            {"cell_type": "markdown", "metadata": {}, "source": ["**Réponse :**\n\n"]},
+            {"cell_type": "markdown", "metadata": {}, "source": ["### Résultat — mesure\n"]},
+            {"cell_type": "markdown", "metadata": {}, "source": ["### Interprétation\n"]},
+            {"cell_type": "markdown", "metadata": {}, "source": ["### Checklist finale\n"]},
+        ],
+    )
+    _write_notebook(
+        copy,
+        [
+            {"cell_type": "markdown", "metadata": {}, "source": ["## Mesure\n"]},
+            {
+                "cell_type": "code",
+                "metadata": {},
+                "execution_count": None,
+                "outputs": [],
+                "source": ["x = ?\n"],
+            },
+            {
+                "cell_type": "code",
+                "metadata": {},
+                "execution_count": None,
+                "outputs": [],
+                "source": ["import numpy as np\n"],
+            },
+        ],
+    )
+
+    comparison = compare_copy_to_model(model, copy)
+    markdown = structured_feedback_markdown(comparison)
+
+    assert "### Bilan rapide" in markdown
+    assert "### À corriger avant de rendre" in markdown
+    assert "### À vérifier" in markdown
+    assert "### Conseil avant nouveau rendu" in markdown
+    assert "Niveau de corrigeabilité" in markdown
+    assert "Cellule 2 — partie « Mesure »" in markdown
+    assert "complétez cette cellule puis exécutez-la" in markdown
+    assert "Cellule 3 — partie « Mesure »" in markdown
+    assert "cellule de code à exécuter" in markdown
+    assert "Certains résultats attendus" in markdown
+    assert "Certaines interprétations attendues" in markdown
+
+
+def test_structured_feedback_markdown_mentions_no_blocking_issue_when_clean(tmp_path: Path) -> None:
+    model = tmp_path / "modele.ipynb"
+    copy = tmp_path / "copie.ipynb"
+
+    _write_notebook(
+        model,
+        [
+            {"cell_type": "markdown", "metadata": {}, "source": ["**Réponse :**\n\n"]},
+        ],
+    )
+    _write_notebook(
+        copy,
+        [
+            {"cell_type": "markdown", "metadata": {}, "source": ["**Réponse :** réponse rédigée\n"]},
+            {
+                "cell_type": "code",
+                "metadata": {},
+                "execution_count": 1,
+                "outputs": [{"output_type": "stream", "text": ["ok\n"]}],
+                "source": ["print('ok')\n"],
+            },
+        ],
+    )
+
+    comparison = compare_copy_to_model(model, copy)
+    markdown = structured_feedback_markdown(comparison)
+
+    assert "Aucun point bloquant évident détecté" in markdown
+    assert "Le notebook semble techniquement exploitable" in markdown
