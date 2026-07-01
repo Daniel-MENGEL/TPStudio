@@ -15,6 +15,7 @@ from tpstudio.copy_comparison import (
     format_copy_comparison_report,
     export_copy_comparison_report,
 )
+from tpstudio.copy_feedback import create_feedback_notebook
 
 
 def find_tex_file(tp_dir: Path) -> Path:
@@ -109,6 +110,15 @@ def compare_copy_command(args):
     if getattr(args, "output", None):
         exported = export_copy_comparison_report(model_path, copy_path, Path(args.output))
         print(f"\n💾 rapport exporté : {exported}")
+
+def feedback_copy_command(args):
+    output = create_feedback_notebook(
+        Path(args.model),
+        Path(args.copy),
+        Path(args.output) if getattr(args, "output", None) else None,
+    )
+    print(f"💬 notebook avec retour créé : {output}")
+
     return 0
 
 def inspect_copy_command(args):
@@ -206,6 +216,19 @@ def main() -> int:
         help="écrit aussi le rapport dans un fichier texte",
     )
     compare_parser.set_defaults(func=compare_copy_command)
+
+    feedback_parser = subparsers.add_parser(
+        "feedback-copy",
+        help="créer une copie notebook avec le retour TPStudio inséré",
+    )
+    feedback_parser.add_argument("model")
+    feedback_parser.add_argument("copy")
+    feedback_parser.add_argument(
+        "--output",
+        "-o",
+        help="chemin du notebook à créer",
+    )
+    feedback_parser.set_defaults(func=feedback_copy_command)
 
     args = parser.parse_args()
     return args.func(args)
