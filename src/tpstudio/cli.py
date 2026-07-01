@@ -10,7 +10,11 @@ from tpstudio.parsers import LatexParser
 from tpstudio.readers import NotebookReader
 from tpstudio.reporting import format_inspection, make_inspection_report
 from tpstudio.student_inspection import format_student_notebook_report, inspect_student_notebook
-from tpstudio.copy_comparison import compare_copy_to_model, format_copy_comparison_report
+from tpstudio.copy_comparison import (
+    compare_copy_to_model,
+    format_copy_comparison_report,
+    export_copy_comparison_report,
+)
 
 
 def find_tex_file(tp_dir: Path) -> Path:
@@ -95,8 +99,16 @@ def _looks_like_student_notebook(path: Path) -> bool:
 
 
 def compare_copy_command(args):
-    comparison = compare_copy_to_model(Path(args.model), Path(args.copy))
-    print(format_copy_comparison_report(comparison))
+    model_path = Path(args.model)
+    copy_path = Path(args.copy)
+
+    comparison = compare_copy_to_model(model_path, copy_path)
+    report = format_copy_comparison_report(comparison)
+    print(report)
+
+    if getattr(args, "output", None):
+        exported = export_copy_comparison_report(model_path, copy_path, Path(args.output))
+        print(f"\n💾 rapport exporté : {exported}")
     return 0
 
 def inspect_copy_command(args):
@@ -188,6 +200,11 @@ def main() -> int:
     )
     compare_parser.add_argument("model")
     compare_parser.add_argument("copy")
+    compare_parser.add_argument(
+        "--output",
+        "-o",
+        help="écrit aussi le rapport dans un fichier texte",
+    )
     compare_parser.set_defaults(func=compare_copy_command)
 
     args = parser.parse_args()
