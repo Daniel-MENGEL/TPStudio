@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 from pathlib import Path
 
 from tpstudio.copy_comparison import (
@@ -17,9 +18,9 @@ def create_feedback_notebook(
 ) -> Path:
     """Create a non-destructive notebook copy with TPStudio feedback inserted.
 
-    The original student notebook is never modified. A Markdown cell is inserted
-    at the beginning of the copied notebook so that the student sees a readable
-    technical summary immediately when opening the file.
+    The original student notebook is never modified. The generated copy contains:
+    - a structured summary cell at the beginning;
+    - local Markdown comments after cells that need attention.
     """
 
     model = Path(model_path)
@@ -35,12 +36,11 @@ def create_feedback_notebook(
     data = json.loads(source.read_text(encoding="utf-8"))
     updated = copy.deepcopy(data)
 
-    cells = updated.setdefault("cells", [])
-    if not isinstance(cells, list):
-        cells = []
-        updated["cells"] = cells
+    original_cells = updated.setdefault("cells", [])
+    if not isinstance(original_cells, list):
+        original_cells = []
 
-    cells.insert(0, _feedback_markdown_cell(comparison))
+    updated["cells"] = _cells_with_feedback(original_cells, comparison)
 
     metadata = updated.setdefault("metadata", {})
     if isinstance(metadata, dict):
@@ -49,11 +49,26 @@ def create_feedback_notebook(
             tpstudio_metadata["feedback_inserted"] = True
             tpstudio_metadata["feedback_source_model"] = model.name
             tpstudio_metadata["feedback_source_copy"] = source.name
-            tpstudio_metadata["feedback_format"] = "structured_v1"
+            tpstudio_metadata["feedback_format"] = "structured_v3"
 
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(updated, ensure_ascii=False, indent=1), encoding="utf-8")
     return output
+
+
+def _cells_with_feedback(cells: list[dict], comparison: CopyComparison) -> list[dict]:
+    local_comments = local_feedback_by_cell(comparison)
+
+    new_cells: list[dict] = [_feedback_markdown_cell(comparison)]
+
+    for index, cell in enumerate(cells, start=1):
+        new_cells.append(cell)
+
+        comments = local_comments.get(index, [])
+        if comments:
+            new_cells.append(_local_feedback_markdown_cell(index, comments))
+
+    return new_cells
 
 
 def _feedback_markdown_cell(comparison: CopyComparison) -> dict:
@@ -61,7 +76,32 @@ def _feedback_markdown_cell(comparison: CopyComparison) -> dict:
 
     return {
         "cell_type": "markdown",
-        "metadata": {"tpstudio": {"cell_role": "student_feedback", "format": "structured_v1"}},
+        "metadata": {"tpstudio": {"cell_role": "student_feedback", "format": "structured_v3"}},
+        "source": source.splitlines(keepends=True),
+    }
+
+
+def _local_feedback_markdown_cell(cell_number: int, comments: list[str]) -> dict:
+    bullet_lines = "\n".join(f"> - {comment}" for comment in comments)
+
+    source = (
+        "> 💬 **TPStudio — commentaire local**\n"
+        ">\n"
+        f"> Cellule concernée dans la copie originale : **{cell_number}**.\n"
+        ">\n"
+        f"{bullet_lines}\n"
+    )
+
+    return {
+        "cell_type": "markdown",
+        "metadata": {
+            "tpstudio": {
+                "cell_role": "local_feedback",
+                "target_cell_number": cell_number,
+                "position": "after_target_cell",
+                "format": "structured_v2",
+            }
+        },
         "source": source.splitlines(keepends=True),
     }
 
@@ -69,7 +109,8 @@ def _feedback_markdown_cell(comparison: CopyComparison) -> dict:
 def structured_feedback_markdown(comparison: CopyComparison) -> str:
     urgent_items = _urgent_feedback_items(comparison)
     check_items = _check_feedback_items(comparison)
-    summary_items = _summary_items(comparison, urgent_items, check_items)
+    local_comments = local_feedback_by_cell(comparison)
+    summary_items = _summary_items(comparison, urgent_items, check_items, local_comments)
     advice_items = _advice_items(comparison, urgent_items, check_items)
 
     sections = [
@@ -86,6 +127,9 @@ def structured_feedback_markdown(comparison: CopyComparison) -> str:
         "### À vérifier",
         *_bullet_lines(check_items, empty="Aucun point de vérification supplémentaire évident."),
         "",
+        "### Commentaires dans le notebook",
+        *_bullet_lines(_local_comment_summary_items(local_comments)),
+        "",
         "### Conseil avant nouveau rendu",
         *_bullet_lines(advice_items),
         "",
@@ -94,10 +138,149 @@ def structured_feedback_markdown(comparison: CopyComparison) -> str:
     return "\n".join(sections)
 
 
+def local_feedback_by_cell(comparison: CopyComparison) -> dict[int, list[str]]:
+    comments: dict[int, list[str]] = {}
+    sources = _cell_sources_by_number(comparison.copy_path)
+
+    for issue in comparison.copy.issues:
+        source = sources.get(issue.cell_number, issue.preview)
+
+        if _should_skip_local_comment(issue.kind, source):
+            continue
+
+        comment = _local_comment_for_issue(issue.kind)
+        if not comment:
+            continue
+
+        comments.setdefault(issue.cell_number, []).append(comment)
+
+    return {
+        cell_number: _deduplicate(cell_comments)
+        for cell_number, cell_comments in comments.items()
+    }
+
+
+def _should_skip_local_comment(kind: str, source: str) -> bool:
+    if kind in {"not_executed", "missing_output"} and _is_setup_only_code(source):
+        return True
+
+    return False
+
+
+def _is_setup_only_code(source: str) -> bool:
+    meaningful_lines = _meaningful_code_lines(source)
+    if not meaningful_lines:
+        return True
+
+    in_rcparams_block = False
+
+    for line in meaningful_lines:
+        stripped = line.strip()
+
+        if "rcParams.update" in stripped:
+            in_rcparams_block = True
+            continue
+
+        if in_rcparams_block:
+            if stripped in {"}", "})", ")"} or stripped.endswith("})"):
+                in_rcparams_block = False
+                continue
+            if _looks_like_dict_item(stripped):
+                continue
+
+        if _is_setup_line(stripped):
+            continue
+
+        return False
+
+    return True
+
+
+def _meaningful_code_lines(source: str) -> list[str]:
+    lines: list[str] = []
+
+    for line in source.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("#"):
+            continue
+        lines.append(stripped)
+
+    return lines
+
+
+def _is_setup_line(line: str) -> bool:
+    setup_prefixes = (
+        "import ",
+        "from ",
+        "%matplotlib",
+        "plt.rcParams",
+        "matplotlib.rcParams",
+        "rcParams",
+        "np.set_printoptions",
+        "pd.set_option",
+        "warnings.filterwarnings",
+    )
+
+    return line.startswith(setup_prefixes)
+
+
+def _looks_like_dict_item(line: str) -> bool:
+    if line in {"{", "}", "},", "})", ")"}:
+        return True
+
+    return re.match(r"^[\"'].*[\"']\s*:\s*.+,?$", line) is not None
+
+
+def _local_comment_for_issue(kind: str) -> str:
+    if kind == "code_to_complete_not_executed":
+        return "Cette cellule contient encore du code à compléter (`?`) et n'a pas été exécutée."
+    if kind == "code_to_complete":
+        return "Cette cellule contient encore du code à compléter (`?`) : complétez puis relancez."
+    if kind == "execution_error":
+        return "Cette cellule produit une erreur d'exécution : corrigez l'erreur puis relancez le notebook."
+    if kind == "not_executed":
+        return "Cette cellule de code n'a pas été exécutée."
+    if kind == "missing_output":
+        return "Cette cellule a été exécutée sans sortie visible : vérifiez que c'est bien attendu."
+    if kind == "empty_response":
+        return "Cette réponse est vide ou à compléter."
+    if kind == "short_response":
+        return "Cette réponse est très courte : vérifiez qu'elle est suffisamment justifiée."
+
+    return ""
+
+
+def _cell_sources_by_number(notebook_path: str | Path) -> dict[int, str]:
+    try:
+        data = json.loads(Path(notebook_path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+    cells = data.get("cells", [])
+    if not isinstance(cells, list):
+        return {}
+
+    return {
+        index: _cell_text(cell)
+        for index, cell in enumerate(cells, start=1)
+        if isinstance(cell, dict)
+    }
+
+
+def _cell_text(cell: dict) -> str:
+    source = cell.get("source", "")
+    if isinstance(source, list):
+        return "".join(str(part) for part in source)
+    return str(source)
+
+
 def _summary_items(
     comparison: CopyComparison,
     urgent_items: list[str],
     check_items: list[str],
+    local_comments: dict[int, list[str]],
 ) -> list[str]:
     copy = comparison.copy
 
@@ -105,6 +288,7 @@ def _summary_items(
         f"Niveau de corrigeabilité : **{comparison.readiness_level}**.",
         f"Points à corriger avant rendu : **{len(urgent_items)}**.",
         f"Points à vérifier : **{len(check_items)}**.",
+        f"Commentaires locaux insérés : **{len(local_comments)}**.",
     ]
 
     if getattr(copy, "code_cells_to_complete", 0):
@@ -151,7 +335,13 @@ def _urgent_feedback_items(comparison: CopyComparison) -> list[str]:
 def _check_feedback_items(comparison: CopyComparison) -> list[str]:
     items: list[str] = []
 
+    sources = _cell_sources_by_number(comparison.copy_path)
+
     for issue in comparison.copy.issues:
+        source = sources.get(issue.cell_number, issue.preview)
+        if _should_skip_local_comment(issue.kind, source):
+            continue
+
         label = _student_cell_label(comparison, issue.cell_number)
 
         if issue.kind == "not_executed":
@@ -168,6 +358,14 @@ def _check_feedback_items(comparison: CopyComparison) -> list[str]:
         items.append("La checklist ou grille finale attendue n'est pas identifiable.")
 
     return _deduplicate(items)
+
+
+def _local_comment_summary_items(local_comments: dict[int, list[str]]) -> list[str]:
+    if not local_comments:
+        return ["Aucun commentaire local nécessaire."]
+    if len(local_comments) == 1:
+        return ["Un commentaire local a été inséré après la cellule concernée."]
+    return [f"{len(local_comments)} commentaires locaux ont été insérés après les cellules concernées."]
 
 
 def _advice_items(
