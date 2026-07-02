@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from tpstudio.response_extraction import format_response_extraction_report
 from tpstudio.improver import improve_notebook
 import json
 from pathlib import Path
@@ -182,6 +183,10 @@ def inspect_command(args: argparse.Namespace) -> int:
     return 0
 
 
+
+def extract_responses_command(args):
+    print(format_response_extraction_report(Path(args.notebook)))
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="tpstudio")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -229,6 +234,14 @@ def main() -> int:
         help="chemin du notebook à créer",
     )
     feedback_parser.set_defaults(func=feedback_copy_command)
+
+    
+    extract_responses_parser = subparsers.add_parser(
+        "extract-responses",
+        help="extraire les zones Réponse d'un notebook étudiant",
+    )
+    extract_responses_parser.add_argument("notebook")
+    extract_responses_parser.set_defaults(func=extract_responses_command)
 
     args = parser.parse_args()
     return args.func(args)
