@@ -1,20 +1,44 @@
 from __future__ import annotations
 
 import csv
+import json
 import subprocess
 import sys
 from pathlib import Path
 
 
-def _write_notebook(path: Path) -> None:
+def _write_notebook(path: Path, cells: list[dict]) -> None:
     path.write_text(
-        '{"cells": [], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}',
+        json.dumps(
+            {
+                "cells": cells,
+                "metadata": {},
+                "nbformat": 4,
+                "nbformat_minor": 5,
+            },
+            ensure_ascii=False,
+        ),
         encoding="utf-8",
     )
 
 
 def test_cli_export_gradebook_creates_csv(tmp_path: Path) -> None:
-    _write_notebook(tmp_path / "Durand-Alice.ipynb")
+    _write_notebook(
+        tmp_path / "Durand-Alice.ipynb",
+        [
+            {
+                "cell_type": "markdown",
+                "metadata": {},
+                "source": [
+                    "## Identification du compte rendu\n",
+                    "\n",
+                    "**Noms :** Durand Alice\n",
+                    "**Groupe :** PCSI2\n",
+                    "**Date de la séance :** 2026-07-02\n",
+                ],
+            }
+        ],
+    )
     output = tmp_path / "suivi.csv"
 
     result = subprocess.run(
@@ -29,7 +53,7 @@ def test_cli_export_gradebook_creates_csv(tmp_path: Path) -> None:
             "--tp-name",
             "Lois de Snell Descartes",
             "--date",
-            "2026-07-02",
+            "2026-07-01",
             "--output",
             str(output),
         ],
@@ -46,3 +70,5 @@ def test_cli_export_gradebook_creates_csv(tmp_path: Path) -> None:
 
     assert rows[0]["Nom"] == "DURAND"
     assert rows[0]["Prénom"] == "Alice"
+    assert rows[0]["Groupe"] == "PCSI2"
+    assert rows[0]["Date"] == "2026-07-02"
