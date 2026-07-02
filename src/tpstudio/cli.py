@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from tpstudio.feedback_report import export_feedback_report
 from tpstudio.graph_comparison import format_graph_comparison_report
 from tpstudio.response_diagnostics import format_response_diagnostic_report
 from tpstudio.response_extraction import format_response_extraction_report
@@ -197,6 +198,14 @@ def diagnose_responses_command(args):
 def compare_graphs_command(args):
     print(format_graph_comparison_report(Path(args.model), Path(args.copy)))
 
+def feedback_report_command(args):
+    output = export_feedback_report(
+        Path(args.model),
+        Path(args.copy),
+        Path(args.output) if args.output else None,
+    )
+    print(f"Rapport TPStudio créé : {output}")
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="tpstudio")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -267,6 +276,16 @@ def main() -> int:
     compare_graphs_parser.set_defaults(func=compare_graphs_command)
 
 
+
+
+    feedback_report_parser = subparsers.add_parser(
+        "feedback-report",
+        help="exporter un rapport Markdown TPStudio pour une copie",
+    )
+    feedback_report_parser.add_argument("model")
+    feedback_report_parser.add_argument("copy")
+    feedback_report_parser.add_argument("--output", "-o")
+    feedback_report_parser.set_defaults(func=feedback_report_command)
 
     args = parser.parse_args()
     return args.func(args)
