@@ -9,6 +9,10 @@ from tpstudio.copy_comparison import (
     CopyComparison,
     compare_copy_to_model,
 )
+from tpstudio.response_diagnostics import (
+    ResponseDiagnosis,
+    diagnose_responses_from_notebook,
+)
 
 
 def create_feedback_notebook(
@@ -19,8 +23,9 @@ def create_feedback_notebook(
     """Create a non-destructive notebook copy with TPStudio feedback inserted.
 
     The original student notebook is never modified. The generated copy contains:
-    - a structured summary cell at the beginning;
-    - local Markdown comments after cells that need attention.
+    - a compact structured summary cell at the beginning;
+    - local Markdown comments after cells that need attention;
+    - readable diagnostics for every student response.
     """
 
     model = Path(model_path)
@@ -40,7 +45,8 @@ def create_feedback_notebook(
     if not isinstance(original_cells, list):
         original_cells = []
 
-    updated["cells"] = _cells_with_feedback(original_cells, comparison)
+    colored_cells = _color_response_cells(original_cells, comparison)
+    updated["cells"] = _cells_with_feedback(colored_cells, comparison)
 
     metadata = updated.setdefault("metadata", {})
     if isinstance(metadata, dict):
@@ -49,11 +55,94 @@ def create_feedback_notebook(
             tpstudio_metadata["feedback_inserted"] = True
             tpstudio_metadata["feedback_source_model"] = model.name
             tpstudio_metadata["feedback_source_copy"] = source.name
-            tpstudio_metadata["feedback_format"] = "structured_v3"
+            tpstudio_metadata["feedback_format"] = "structured_v5"
+            tpstudio_metadata["response_diagnostics_inserted"] = True
+            tpstudio_metadata["response_cells_colored"] = True
 
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(updated, ensure_ascii=False, indent=1), encoding="utf-8")
     return output
+
+
+def _color_response_cells(cells: list[dict], comparison: CopyComparison) -> list[dict]:
+    diagnostics = diagnose_responses_from_notebook(comparison.copy_path)
+    diagnostics_by_cell = {
+        diagnosis.response.cell_number: diagnosis
+        for diagnosis in diagnostics
+    }
+
+    colored_cells: list[dict] = []
+
+    for index, cell in enumerate(cells, start=1):
+        diagnosis = diagnostics_by_cell.get(index)
+        if diagnosis and isinstance(cell, dict) and cell.get("cell_type") == "markdown":
+            colored_cells.append(_colored_response_cell(cell, diagnosis))
+        else:
+            colored_cells.append(cell)
+
+    return colored_cells
+
+
+def _colored_response_cell(cell: dict, diagnosis: ResponseDiagnosis) -> dict:
+    colored = copy.deepcopy(cell)
+    display_level = _display_response_level(diagnosis)
+    style = _response_level_style(display_level)
+    label = _response_level_label(display_level)
+    source = _cell_text(cell)
+    escaped = _escape_html(source).replace("\n", "<br>\n")
+
+    html = (
+        f"<div style=\"{style}\">\n"
+        f"<div style=\"font-weight: 700; margin-bottom: 0.35em;\">"
+        f"TPStudio — réponse {label}</div>\n"
+        f"{escaped}\n"
+        "</div>\n"
+    )
+
+    colored["source"] = [html]
+
+    metadata = colored.setdefault("metadata", {})
+    if isinstance(metadata, dict):
+        tpstudio = metadata.setdefault("tpstudio", {})
+        if isinstance(tpstudio, dict):
+            tpstudio["response_level"] = display_level
+            tpstudio["response_colored"] = True
+
+    return colored
+
+
+def _response_level_style(level: str) -> str:
+    base = (
+        "padding: 0.85em 1em; "
+        "border-radius: 8px; "
+        "margin: 0.35em 0; "
+        "border-left: 5px solid {border}; "
+        "background-color: {background};"
+    )
+
+    if level == "solide":
+        return base.format(background="#e8f5e9", border="#2e7d32")
+    if level == "acceptable":
+        return base.format(background="#fff3e0", border="#ef6c00")
+    return base.format(background="#ffebee", border="#c62828")
+
+
+def _response_level_label(level: str) -> str:
+    if level == "solide":
+        return "solide"
+    if level == "acceptable":
+        return "acceptable"
+    if level == "fragile":
+        return "fragile"
+    return "à compléter"
+
+
+def _escape_html(text: str) -> str:
+    return (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
 
 
 def _cells_with_feedback(cells: list[dict], comparison: CopyComparison) -> list[dict]:
@@ -76,7 +165,7 @@ def _feedback_markdown_cell(comparison: CopyComparison) -> dict:
 
     return {
         "cell_type": "markdown",
-        "metadata": {"tpstudio": {"cell_role": "student_feedback", "format": "structured_v3"}},
+        "metadata": {"tpstudio": {"cell_role": "student_feedback", "format": "structured_v5"}},
         "source": source.splitlines(keepends=True),
     }
 
@@ -99,7 +188,7 @@ def _local_feedback_markdown_cell(cell_number: int, comments: list[str]) -> dict
                 "cell_role": "local_feedback",
                 "target_cell_number": cell_number,
                 "position": "after_target_cell",
-                "format": "structured_v2",
+                "format": "structured_v4",
             }
         },
         "source": source.splitlines(keepends=True),
@@ -109,28 +198,28 @@ def _local_feedback_markdown_cell(cell_number: int, comments: list[str]) -> dict
 def structured_feedback_markdown(comparison: CopyComparison) -> str:
     urgent_items = _urgent_feedback_items(comparison)
     check_items = _check_feedback_items(comparison)
+    response_diagnostics = diagnose_responses_from_notebook(comparison.copy_path)
+    response_items = _response_feedback_items(response_diagnostics)
     local_comments = local_feedback_by_cell(comparison)
-    summary_items = _summary_items(comparison, urgent_items, check_items, local_comments)
-    advice_items = _advice_items(comparison, urgent_items, check_items)
+    summary_items = _summary_items(comparison, urgent_items, check_items, local_comments, response_diagnostics)
+    priority_items = _priority_items(urgent_items, check_items, response_diagnostics)
+    advice_items = _advice_items(comparison, urgent_items, check_items, response_diagnostics)
 
     sections = [
         "## Retour TPStudio",
         "",
-        "Ce retour automatique signale les points techniques à vérifier avant une correction détaillée.",
+        "Ce retour automatique signale les points techniques et rédactionnels à vérifier avant une correction détaillée.",
         "",
-        "### Bilan rapide",
+        "### Synthèse rapide",
         *_bullet_lines(summary_items),
         "",
-        "### À corriger avant de rendre",
-        *_bullet_lines(urgent_items, empty="Aucun point bloquant évident détecté."),
+        "### Priorités avant nouveau rendu",
+        *_bullet_lines(priority_items, empty="Aucune priorité évidente détectée."),        
         "",
-        "### À vérifier",
-        *_bullet_lines(check_items, empty="Aucun point de vérification supplémentaire évident."),
+        "### Diagnostic des réponses",
+        *_bullet_lines(response_items, empty="Aucune zone `Réponse :` détectée."),        
         "",
-        "### Commentaires dans le notebook",
-        *_bullet_lines(_local_comment_summary_items(local_comments)),
-        "",
-        "### Conseil avant nouveau rendu",
+        "### Conseils ciblés",
         *_bullet_lines(advice_items),
         "",
     ]
@@ -154,10 +243,146 @@ def local_feedback_by_cell(comparison: CopyComparison) -> dict[int, list[str]]:
 
         comments.setdefault(issue.cell_number, []).append(comment)
 
+    for diagnosis in diagnose_responses_from_notebook(comparison.copy_path):
+        response_comment = _local_comment_for_response_diagnosis(diagnosis)
+        if not response_comment:
+            continue
+
+        comments.setdefault(diagnosis.response.cell_number, []).append(response_comment)
+
     return {
         cell_number: _deduplicate(cell_comments)
         for cell_number, cell_comments in comments.items()
     }
+
+
+def _local_comment_for_response_diagnosis(diagnosis: ResponseDiagnosis) -> str:
+    if diagnosis.level not in {"fragile", "à compléter"}:
+        return ""
+
+    if diagnosis.level == "fragile":
+        main = "Cette réponse semble fragile"
+    else:
+        main = "Cette réponse est à compléter"
+
+    signals = "; ".join(diagnosis.signals)
+    if signals:
+        return f"{main} : {signals}."
+
+    return main + "."
+
+
+def _response_feedback_items(diagnostics: list[ResponseDiagnosis]) -> list[str]:
+    if not diagnostics:
+        return []
+
+    counts = _display_response_level_counts(diagnostics)
+    items = [
+        f"Réponses analysées : **{len(diagnostics)}** — solides : **{counts.get('solide', 0)}**, acceptables : **{counts.get('acceptable', 0)}**, fragiles : **{counts.get('fragile', 0)}**, à compléter : **{counts.get('à compléter', 0)}**.",
+    ]
+
+    for diagnosis in diagnostics:
+        display_level = _display_response_level(diagnosis)
+        label = _response_cell_label(diagnosis)
+        signal_text = _readable_response_signal_text(diagnosis)
+        items.append(f"{_level_icon(display_level)} {label} : **{display_level}** — {signal_text}.")
+
+    return items
+
+
+def _display_response_level(diagnosis: ResponseDiagnosis) -> str:
+    if diagnosis.response.is_empty:
+        return "à compléter"
+
+    # Une réponse courte peut contenir un mot vague comme "proche" tout en étant
+    # pédagogiquement correcte si elle donne une valeur, une comparaison et le
+    # vocabulaire physique attendu.
+    if (
+        diagnosis.has_numeric_value
+        and diagnosis.has_comparison
+        and diagnosis.has_physical_vocabulary
+    ):
+        return "solide"
+
+    return diagnosis.level
+def _display_response_level_counts(diagnostics: list[ResponseDiagnosis]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+
+    for diagnosis in diagnostics:
+        level = _display_response_level(diagnosis)
+        counts[level] = counts.get(level, 0) + 1
+
+    return counts
+
+
+def _readable_response_signal_text(diagnosis: ResponseDiagnosis) -> str:
+    if _display_response_level(diagnosis) == "solide":
+        positive_signals: list[str] = []
+
+        if diagnosis.has_numeric_value:
+            positive_signals.append("valeur numérique détectée")
+        if diagnosis.has_comparison:
+            positive_signals.append("comparaison explicite détectée")
+        if diagnosis.has_physical_vocabulary:
+            positive_signals.append("vocabulaire physique présent")
+
+        if positive_signals:
+            return "; ".join(positive_signals)
+
+        return "réponse structurée sur le plan textuel"
+
+    return "; ".join(diagnosis.signals)
+def _level_icon(level: str) -> str:
+    if level == "solide":
+        return "✅"
+    if level == "acceptable":
+        return "🟡"
+    if level == "fragile":
+        return "⚠️"
+    return "❌"
+
+
+def _response_level_counts(diagnostics: list[ResponseDiagnosis]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+
+    for diagnosis in diagnostics:
+        counts[diagnosis.level] = counts.get(diagnosis.level, 0) + 1
+
+    return counts
+
+
+def _response_cell_label(diagnosis: ResponseDiagnosis) -> str:
+    response = diagnosis.response
+    if response.context:
+        return f"Cellule {response.cell_number} — partie « {response.context} »"
+    return f"Cellule {response.cell_number}"
+
+
+def _priority_items(
+    urgent_items: list[str],
+    check_items: list[str],
+    response_diagnostics: list[ResponseDiagnosis],
+) -> list[str]:
+    items: list[str] = []
+
+    items.extend(urgent_items)
+
+    weak_responses = [
+        diagnosis
+        for diagnosis in response_diagnostics
+        if diagnosis.level in {"fragile", "à compléter"}
+    ]
+
+    for diagnosis in weak_responses:
+        label = _response_cell_label(diagnosis)
+        signal_text = "; ".join(diagnosis.signals)
+        items.append(f"{label} : réponse **{diagnosis.level}** — {signal_text}.")
+
+    # Keep the priority section readable, but do not hide the exact diagnostics.
+    for check_item in check_items:
+        items.append(f"Point technique à vérifier : {check_item}")
+
+    return _deduplicate(items)
 
 
 def _should_skip_local_comment(kind: str, source: str) -> bool:
@@ -281,27 +506,24 @@ def _summary_items(
     urgent_items: list[str],
     check_items: list[str],
     local_comments: dict[int, list[str]],
+    response_diagnostics: list[ResponseDiagnosis],
 ) -> list[str]:
     copy = comparison.copy
+    response_counts = _display_response_level_counts(response_diagnostics)
+    weak_responses = response_counts.get("fragile", 0) + response_counts.get("à compléter", 0)
 
     items = [
-        f"Niveau de corrigeabilité : **{comparison.readiness_level}**.",
-        f"Points à corriger avant rendu : **{len(urgent_items)}**.",
-        f"Points à vérifier : **{len(check_items)}**.",
+        f"Corrigeabilité technique : **{comparison.readiness_level}**.",
+        f"Code à reprendre : **{len(urgent_items)}** point(s).",        
+        f"Réponses fragiles ou à compléter : **{weak_responses}**.",
         f"Commentaires locaux insérés : **{len(local_comments)}**.",
     ]
 
     if getattr(copy, "code_cells_to_complete", 0):
         items.append(f"Cellules contenant encore du code à compléter : **{copy.code_cells_to_complete}**.")
 
-    if copy.code_cells_with_errors:
-        items.append(f"Cellules avec erreur d'exécution : **{copy.code_cells_with_errors}**.")
-
     if copy.code_cells_not_executed:
         items.append(f"Cellules de code non exécutées : **{copy.code_cells_not_executed}**.")
-
-    if copy.empty_response_cells:
-        items.append(f"Réponses vides ou à compléter : **{copy.empty_response_cells}**.")
 
     return items
 
@@ -360,31 +582,32 @@ def _check_feedback_items(comparison: CopyComparison) -> list[str]:
     return _deduplicate(items)
 
 
-def _local_comment_summary_items(local_comments: dict[int, list[str]]) -> list[str]:
-    if not local_comments:
-        return ["Aucun commentaire local nécessaire."]
-    if len(local_comments) == 1:
-        return ["Un commentaire local a été inséré après la cellule concernée."]
-    return [f"{len(local_comments)} commentaires locaux ont été insérés après les cellules concernées."]
-
-
 def _advice_items(
     comparison: CopyComparison,
     urgent_items: list[str],
     check_items: list[str],
+    response_diagnostics: list[ResponseDiagnosis],
 ) -> list[str]:
     items = [
         "Relancez le notebook depuis le début avant de le rendre.",
         "Vérifiez qu'il ne reste plus de cellule avec `?` dans le code.",
-        "Vérifiez que les sorties attendues apparaissent bien sous les cellules de calcul.",
     ]
 
+    weak_responses = [
+        diagnosis
+        for diagnosis in response_diagnostics
+        if diagnosis.level in {"fragile", "à compléter"}
+    ]
+
+    if weak_responses:
+        items.append("Reprenez les réponses signalées comme fragiles ou à compléter.")
+
     if urgent_items:
-        items.append("Après correction, relisez le bloc `Retour TPStudio` pour vérifier que chaque point a été traité.")
-    elif check_items:
-        items.append("Le notebook semble techniquement exploitable, mais vérifiez les points listés.")
+        items.append("Après correction, relisez les priorités du bloc `Retour TPStudio`.")
+    elif check_items or weak_responses:
+        items.append("Le notebook semble exploitable, mais vérifiez les points listés.")
     else:
-        items.append("Le notebook semble techniquement exploitable pour une correction détaillée.")
+        items.append("Le notebook semble exploitable pour une correction détaillée.")
 
     return items
 
