@@ -9,6 +9,10 @@ from tpstudio.copy_comparison import (
     CopyComparison,
     compare_copy_to_model,
 )
+from tpstudio.graph_comparison import (
+    GraphComparison,
+    compare_graphs,
+)
 from tpstudio.response_diagnostics import (
     ResponseDiagnosis,
     diagnose_responses_from_notebook,
@@ -25,7 +29,8 @@ def create_feedback_notebook(
     The original student notebook is never modified. The generated copy contains:
     - a compact structured summary cell at the beginning;
     - local Markdown comments after cells that need attention;
-    - readable diagnostics for every student response.
+    - readable diagnostics for every student response;
+    - graph diagnostics when matplotlib graphs differ from the model.
     """
 
     model = Path(model_path)
@@ -58,6 +63,7 @@ def create_feedback_notebook(
             tpstudio_metadata["feedback_format"] = "structured_v5"
             tpstudio_metadata["response_diagnostics_inserted"] = True
             tpstudio_metadata["response_cells_colored"] = True
+            tpstudio_metadata["graph_diagnostics_inserted"] = True
 
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(updated, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -199,25 +205,48 @@ def structured_feedback_markdown(comparison: CopyComparison) -> str:
     urgent_items = _urgent_feedback_items(comparison)
     check_items = _check_feedback_items(comparison)
     response_diagnostics = diagnose_responses_from_notebook(comparison.copy_path)
+    graph_comparisons = compare_graphs(comparison.model_path, comparison.copy_path)
     response_items = _response_feedback_items(response_diagnostics)
+    graph_items = _graph_feedback_items(graph_comparisons)
     local_comments = local_feedback_by_cell(comparison)
-    summary_items = _summary_items(comparison, urgent_items, check_items, local_comments, response_diagnostics)
-    priority_items = _priority_items(urgent_items, check_items, response_diagnostics)
-    advice_items = _advice_items(comparison, urgent_items, check_items, response_diagnostics)
+    summary_items = _summary_items(
+        comparison,
+        urgent_items,
+        check_items,
+        local_comments,
+        response_diagnostics,
+        graph_comparisons,
+    )
+    priority_items = _priority_items(
+        urgent_items,
+        check_items,
+        response_diagnostics,
+        graph_comparisons,
+    )
+    advice_items = _advice_items(
+        comparison,
+        urgent_items,
+        check_items,
+        response_diagnostics,
+        graph_comparisons,
+    )
 
     sections = [
         "## Retour TPStudio",
         "",
-        "Ce retour automatique signale les points techniques et rédactionnels à vérifier avant une correction détaillée.",
+        "Ce retour automatique signale les points techniques, rédactionnels et graphiques à vérifier avant une correction détaillée.",
         "",
         "### Synthèse rapide",
         *_bullet_lines(summary_items),
         "",
         "### Priorités avant nouveau rendu",
-        *_bullet_lines(priority_items, empty="Aucune priorité évidente détectée."),        
+        *_bullet_lines(priority_items, empty="Aucune priorité évidente détectée."),
         "",
         "### Diagnostic des réponses",
-        *_bullet_lines(response_items, empty="Aucune zone `Réponse :` détectée."),        
+        *_bullet_lines(response_items, empty="Aucune zone `Réponse :` détectée."),
+        "",
+        "### Diagnostic des graphes",
+        *_bullet_lines(graph_items, empty="Aucun graphe matplotlib détecté."),
         "",
         "### Conseils ciblés",
         *_bullet_lines(advice_items),
@@ -250,6 +279,17 @@ def local_feedback_by_cell(comparison: CopyComparison) -> dict[int, list[str]]:
 
         comments.setdefault(diagnosis.response.cell_number, []).append(response_comment)
 
+    for graph_comparison in compare_graphs(comparison.model_path, comparison.copy_path):
+        graph_comment = _local_comment_for_graph_comparison(graph_comparison)
+        if not graph_comment:
+            continue
+
+        copy_graph = graph_comparison.copy_graph
+        if copy_graph is None:
+            continue
+
+        comments.setdefault(copy_graph.cell_number, []).append(graph_comment)
+
     return {
         cell_number: _deduplicate(cell_comments)
         for cell_number, cell_comments in comments.items()
@@ -257,10 +297,12 @@ def local_feedback_by_cell(comparison: CopyComparison) -> dict[int, list[str]]:
 
 
 def _local_comment_for_response_diagnosis(diagnosis: ResponseDiagnosis) -> str:
-    if diagnosis.level not in {"fragile", "à compléter"}:
+    display_level = _display_response_level(diagnosis)
+
+    if display_level not in {"fragile", "à compléter"}:
         return ""
 
-    if diagnosis.level == "fragile":
+    if display_level == "fragile":
         main = "Cette réponse semble fragile"
     else:
         main = "Cette réponse est à compléter"
@@ -270,6 +312,17 @@ def _local_comment_for_response_diagnosis(diagnosis: ResponseDiagnosis) -> str:
         return f"{main} : {signals}."
 
     return main + "."
+
+
+def _local_comment_for_graph_comparison(comparison: GraphComparison) -> str:
+    if not _graph_needs_attention(comparison):
+        return ""
+
+    findings = _important_graph_findings(comparison)
+    if not findings:
+        return ""
+
+    return "Ce graphe est à vérifier : " + "; ".join(findings) + "."
 
 
 def _response_feedback_items(diagnostics: list[ResponseDiagnosis]) -> list[str]:
@@ -305,6 +358,8 @@ def _display_response_level(diagnosis: ResponseDiagnosis) -> str:
         return "solide"
 
     return diagnosis.level
+
+
 def _display_response_level_counts(diagnostics: list[ResponseDiagnosis]) -> dict[str, int]:
     counts: dict[str, int] = {}
 
@@ -332,6 +387,8 @@ def _readable_response_signal_text(diagnosis: ResponseDiagnosis) -> str:
         return "réponse structurée sur le plan textuel"
 
     return "; ".join(diagnosis.signals)
+
+
 def _level_icon(level: str) -> str:
     if level == "solide":
         return "✅"
@@ -358,10 +415,54 @@ def _response_cell_label(diagnosis: ResponseDiagnosis) -> str:
     return f"Cellule {response.cell_number}"
 
 
+def _graph_feedback_items(comparisons: list[GraphComparison]) -> list[str]:
+    if not comparisons:
+        return []
+
+    graph_count = len(comparisons)
+    graph_to_check = sum(1 for comparison in comparisons if _graph_needs_attention(comparison))
+
+    items = [
+        f"Graphes analysés : **{graph_count}** — graphes à vérifier : **{graph_to_check}**.",
+    ]
+
+    for comparison in comparisons:
+        icon = "⚠️" if _graph_needs_attention(comparison) else "✅"
+        label = _graph_label(comparison)
+        findings = "; ".join(_important_graph_findings(comparison))
+        items.append(f"{icon} {label} : **{comparison.level}** — {findings}.")
+
+    return items
+
+
+def _graph_needs_attention(comparison: GraphComparison) -> bool:
+    return comparison.level != "cohérent"
+
+
+def _graph_label(comparison: GraphComparison) -> str:
+    graph = comparison.copy_graph or comparison.model_graph
+
+    if graph is None:
+        return f"Graphe {comparison.index}"
+
+    label = f"Graphe {comparison.index} — cellule {graph.cell_number}"
+    if graph.context:
+        label += f" — partie « {graph.context} »"
+    return label
+
+
+def _important_graph_findings(comparison: GraphComparison) -> list[str]:
+    if not comparison.findings:
+        return ["aucun indice disponible"]
+
+    return comparison.findings
+
+
 def _priority_items(
     urgent_items: list[str],
     check_items: list[str],
     response_diagnostics: list[ResponseDiagnosis],
+    graph_comparisons: list[GraphComparison],
 ) -> list[str]:
     items: list[str] = []
 
@@ -370,13 +471,21 @@ def _priority_items(
     weak_responses = [
         diagnosis
         for diagnosis in response_diagnostics
-        if diagnosis.level in {"fragile", "à compléter"}
+        if _display_response_level(diagnosis) in {"fragile", "à compléter"}
     ]
 
     for diagnosis in weak_responses:
         label = _response_cell_label(diagnosis)
         signal_text = "; ".join(diagnosis.signals)
-        items.append(f"{label} : réponse **{diagnosis.level}** — {signal_text}.")
+        items.append(f"{label} : réponse **{_display_response_level(diagnosis)}** — {signal_text}.")
+
+    for graph_comparison in graph_comparisons:
+        if not _graph_needs_attention(graph_comparison):
+            continue
+
+        label = _graph_label(graph_comparison)
+        findings = "; ".join(_important_graph_findings(graph_comparison))
+        items.append(f"{label} : graphe **à vérifier** — {findings}.")
 
     # Keep the priority section readable, but do not hide the exact diagnostics.
     for check_item in check_items:
@@ -507,23 +616,26 @@ def _summary_items(
     check_items: list[str],
     local_comments: dict[int, list[str]],
     response_diagnostics: list[ResponseDiagnosis],
+    graph_comparisons: list[GraphComparison],
 ) -> list[str]:
-    copy = comparison.copy
+    copy_diagnostic = comparison.copy
     response_counts = _display_response_level_counts(response_diagnostics)
     weak_responses = response_counts.get("fragile", 0) + response_counts.get("à compléter", 0)
+    graphs_to_check = sum(1 for graph_comparison in graph_comparisons if _graph_needs_attention(graph_comparison))
 
     items = [
         f"Corrigeabilité technique : **{comparison.readiness_level}**.",
-        f"Code à reprendre : **{len(urgent_items)}** point(s).",        
+        f"Code à reprendre : **{len(urgent_items)}** point(s).",
         f"Réponses fragiles ou à compléter : **{weak_responses}**.",
+        f"Graphes à vérifier : **{graphs_to_check}**.",
         f"Commentaires locaux insérés : **{len(local_comments)}**.",
     ]
 
-    if getattr(copy, "code_cells_to_complete", 0):
-        items.append(f"Cellules contenant encore du code à compléter : **{copy.code_cells_to_complete}**.")
+    if getattr(copy_diagnostic, "code_cells_to_complete", 0):
+        items.append(f"Cellules contenant encore du code à compléter : **{copy_diagnostic.code_cells_to_complete}**.")
 
-    if copy.code_cells_not_executed:
-        items.append(f"Cellules de code non exécutées : **{copy.code_cells_not_executed}**.")
+    if copy_diagnostic.code_cells_not_executed:
+        items.append(f"Cellules de code non exécutées : **{copy_diagnostic.code_cells_not_executed}**.")
 
     return items
 
@@ -587,6 +699,7 @@ def _advice_items(
     urgent_items: list[str],
     check_items: list[str],
     response_diagnostics: list[ResponseDiagnosis],
+    graph_comparisons: list[GraphComparison],
 ) -> list[str]:
     items = [
         "Relancez le notebook depuis le début avant de le rendre.",
@@ -596,15 +709,23 @@ def _advice_items(
     weak_responses = [
         diagnosis
         for diagnosis in response_diagnostics
-        if diagnosis.level in {"fragile", "à compléter"}
+        if _display_response_level(diagnosis) in {"fragile", "à compléter"}
+    ]
+    graph_issues = [
+        graph_comparison
+        for graph_comparison in graph_comparisons
+        if _graph_needs_attention(graph_comparison)
     ]
 
     if weak_responses:
         items.append("Reprenez les réponses signalées comme fragiles ou à compléter.")
 
+    if graph_issues:
+        items.append("Vérifiez les graphes signalés comme à vérifier, en particulier les axes, les labels et les variables de régression.")
+
     if urgent_items:
         items.append("Après correction, relisez les priorités du bloc `Retour TPStudio`.")
-    elif check_items or weak_responses:
+    elif check_items or weak_responses or graph_issues:
         items.append("Le notebook semble exploitable, mais vérifiez les points listés.")
     else:
         items.append("Le notebook semble exploitable pour une correction détaillée.")
