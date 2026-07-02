@@ -240,9 +240,12 @@ def export_gradebook_command(args):
         Path(args.output),
         session=args.session,
         tp_name=args.tp_name,
+        week_value=args.week,
         date_value=args.date,
         pattern=args.pattern,
         students_file=args.students_file,
+        unmatched_output_path=args.unmatched_output,
+        missing_output_path=args.missing_output,
     )
     print(f"Fichier de suivi TPStudio créé : {output}")
 
@@ -375,7 +378,10 @@ def main() -> int:
     export_gradebook_parser.add_argument("--session", required=True)
     export_gradebook_parser.add_argument("--tp-name", required=True)
     export_gradebook_parser.add_argument("--date")
+    export_gradebook_parser.add_argument("--week", "--kholle-week", dest="week")
     export_gradebook_parser.add_argument("--students-file")
+    export_gradebook_parser.add_argument("--unmatched-output")
+    export_gradebook_parser.add_argument("--missing-output")
     export_gradebook_parser.add_argument("--output", "-o", required=True)
     export_gradebook_parser.add_argument("--pattern", default="*.ipynb")
     export_gradebook_parser.set_defaults(func=export_gradebook_command)

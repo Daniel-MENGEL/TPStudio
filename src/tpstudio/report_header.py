@@ -24,7 +24,7 @@ def report_identity_markdown() -> str:
         "\n"
         "**Noms :**  \n"
         "**Groupe :**  \n"
-        "**Date de la séance :**  \n"
+        "**Semaine de kholle n° :**  \n"
         "\n"
         "Ce notebook fait office de rapport de TP. Il doit répondre aux attentes "
         "précisées dans l'annexe "
@@ -165,9 +165,13 @@ def has_report_identity_cell(cells: list[dict]) -> bool:
 
         has_name = "noms" in normalized or "nom" in normalized
         has_group = "groupe" in normalized
-        has_date = "date de la seance" in normalized or "date seance" in normalized
+        has_time_marker = (
+            "semaine de kholle" in normalized or "semaine" in normalized
+            or "date de la seance" in normalized
+            or "date seance" in normalized
+        )
 
-        if has_name and has_group and has_date:
+        if has_name and has_group and has_time_marker:
             return True
 
     return False

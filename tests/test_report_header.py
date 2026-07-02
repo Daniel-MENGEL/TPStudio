@@ -71,7 +71,8 @@ def test_postprocess_inserts_identity_after_pdf_link_and_removes_duplicates(tmp_
     identity_source = "".join(cells[1]["source"])
     assert "Noms :" in identity_source
     assert "Groupe :" in identity_source
-    assert "Date de la séance :" in identity_source
+    assert "Semaine de kholle n° :" in identity_source
+    assert "Date de la séance" not in identity_source
     assert CONSIGNES_RAPPORT_URL in identity_source
 
     all_sources = ["".join(cell.get("source", [])) for cell in cells]
@@ -125,6 +126,7 @@ def test_postprocess_target_processes_generated_notebook_even_without_ameliore_n
     sources = ["".join(cell.get("source", [])) for cell in data["cells"]]
 
     assert any("Noms :" in source for source in sources)
+    assert any("Semaine de kholle n° :" in source for source in sources)
     assert sum("Évaluation par compétences" in source for source in sources) == 1
 
 
@@ -152,7 +154,7 @@ def test_has_report_identity_cell_detects_markdown_labels_without_metadata() -> 
                 "\n",
                 "**Noms :**  \n",
                 "**Groupe :**  \n",
-                "**Date de la séance :**  \n",
+                "**Semaine :**  \n",
             ],
         }
     ]
@@ -160,4 +162,19 @@ def test_has_report_identity_cell_detects_markdown_labels_without_metadata() -> 
     assert has_report_identity_cell(cells) is True
 
 
+def test_has_report_identity_cell_still_detects_legacy_date_label() -> None:
+    cells = [
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## Identification du compte rendu\n",
+                "\n",
+                "**Noms :**  \n",
+                "**Groupe :**  \n",
+                "**Date de la séance :**  \n",
+            ],
+        }
+    ]
 
+    assert has_report_identity_cell(cells) is True
