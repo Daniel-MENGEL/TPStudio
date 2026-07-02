@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from tpstudio.graph_comparison import format_graph_comparison_report
 from tpstudio.response_diagnostics import format_response_diagnostic_report
 from tpstudio.response_extraction import format_response_extraction_report
 from tpstudio.improver import improve_notebook
@@ -192,6 +193,10 @@ def extract_responses_command(args):
 def diagnose_responses_command(args):
     print(format_response_diagnostic_report(Path(args.notebook)))
 
+
+def compare_graphs_command(args):
+    print(format_graph_comparison_report(Path(args.model), Path(args.copy)))
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="tpstudio")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -253,6 +258,14 @@ def main() -> int:
     )
     diagnose_responses_parser.add_argument("notebook")
     diagnose_responses_parser.set_defaults(func=diagnose_responses_command)
+    compare_graphs_parser = subparsers.add_parser(
+        "compare-graphs",
+        help="comparer les graphes matplotlib d'un modèle et d'une copie",
+    )
+    compare_graphs_parser.add_argument("model")
+    compare_graphs_parser.add_argument("copy")
+    compare_graphs_parser.set_defaults(func=compare_graphs_command)
+
 
 
     args = parser.parse_args()
