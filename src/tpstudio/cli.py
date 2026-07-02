@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from tpstudio.report_header import postprocess_improved_notebooks_in_target
+from tpstudio.gradebook_export import export_gradebook_csv
+from tpstudio.copies_summary import export_copies_summary_csv
 from tpstudio.feedback_report import export_feedback_report
 from tpstudio.graph_comparison import format_graph_comparison_report
 from tpstudio.response_diagnostics import format_response_diagnostic_report
@@ -130,7 +133,7 @@ def inspect_copy_command(args):
     print(format_student_notebook_report(diagnostic))
     return 0
 
-def improve_command(args: argparse.Namespace) -> int:
+def _tpstudio_original_improve_command(args: argparse.Namespace) -> int:
     tp_dir = Path(args.path)
     output = improve_notebook(tp_dir)
     print("TPStudio - Improve")
@@ -140,6 +143,22 @@ def improve_command(args: argparse.Namespace) -> int:
     print("")
     print("Le fichier original n'a pas été modifié.")
     return 0
+
+
+
+def improve_command(args):
+    result = _tpstudio_original_improve_command(args)
+
+    changed = 0
+    for target in _improve_targets_from_args(args):
+        for postprocess_result in postprocess_improved_notebooks_in_target(target):
+            if postprocess_result.changed:
+                changed += 1
+
+    if changed:
+        print(f"Post-traitement improve TPStudio : {changed} notebook(s) nettoyé(s).")
+
+    return result
 
 
 def inspect_command(args: argparse.Namespace) -> int:
@@ -205,6 +224,54 @@ def feedback_report_command(args):
         Path(args.output) if args.output else None,
     )
     print(f"Rapport TPStudio créé : {output}")
+
+def summarize_copies_command(args):
+    output = export_copies_summary_csv(
+        Path(args.model),
+        Path(args.copies_dir),
+        Path(args.output),
+        pattern=args.pattern,
+    )
+    print(f"Synthèse TPStudio créée : {output}")
+
+def export_gradebook_command(args):
+    output = export_gradebook_csv(
+        Path(args.copies_dir),
+        Path(args.output),
+        session=args.session,
+        tp_name=args.tp_name,
+        date_value=args.date,
+        pattern=args.pattern,
+    )
+    print(f"Fichier de suivi TPStudio créé : {output}")
+
+def _improve_targets_from_args(args):
+    targets = []
+    seen = set()
+
+    for value in vars(args).values():
+        if isinstance(value, Path):
+            path = value.expanduser()
+        elif isinstance(value, str):
+            path = Path(value).expanduser()
+        else:
+            continue
+
+        try:
+            resolved = path.resolve()
+        except OSError:
+            resolved = path
+
+        if resolved in seen:
+            continue
+
+        if path.exists():
+            seen.add(resolved)
+            targets.append(path)
+
+    return targets
+
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(prog="tpstudio")
@@ -286,6 +353,30 @@ def main() -> int:
     feedback_report_parser.add_argument("copy")
     feedback_report_parser.add_argument("--output", "-o")
     feedback_report_parser.set_defaults(func=feedback_report_command)
+
+
+    summarize_copies_parser = subparsers.add_parser(
+        "summarize-copies",
+        help="résumer plusieurs copies dans un fichier CSV",
+    )
+    summarize_copies_parser.add_argument("model")
+    summarize_copies_parser.add_argument("copies_dir")
+    summarize_copies_parser.add_argument("--output", "-o", required=True)
+    summarize_copies_parser.add_argument("--pattern", default="*.ipynb")
+    summarize_copies_parser.set_defaults(func=summarize_copies_command)
+
+
+    export_gradebook_parser = subparsers.add_parser(
+        "export-gradebook",
+        help="exporter un CSV de suivi pédagogique pour une séance de TP",
+    )
+    export_gradebook_parser.add_argument("copies_dir")
+    export_gradebook_parser.add_argument("--session", required=True)
+    export_gradebook_parser.add_argument("--tp-name", required=True)
+    export_gradebook_parser.add_argument("--date")
+    export_gradebook_parser.add_argument("--output", "-o", required=True)
+    export_gradebook_parser.add_argument("--pattern", default="*.ipynb")
+    export_gradebook_parser.set_defaults(func=export_gradebook_command)
 
     args = parser.parse_args()
     return args.func(args)
