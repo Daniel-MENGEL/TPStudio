@@ -610,6 +610,65 @@ def _cell_text(cell: dict) -> str:
     return str(source)
 
 
+def _global_readiness_level(
+    comparison: CopyComparison,
+    response_diagnostics: list[ResponseDiagnosis],
+    graph_comparisons: list[GraphComparison],
+) -> str:
+    technical_level = comparison.readiness_level
+
+    if technical_level in {"à reprendre", "non corrigeable"}:
+        return technical_level
+
+    weak_responses = [
+        diagnosis
+        for diagnosis in response_diagnostics
+        if _display_response_level(diagnosis) in {"fragile", "à compléter"}
+    ]
+    graph_issues = [
+        graph_comparison
+        for graph_comparison in graph_comparisons
+        if _graph_needs_attention(graph_comparison)
+    ]
+
+    if graph_issues:
+        return "à vérifier"
+
+    if weak_responses and technical_level == "exploitable":
+        return "à vérifier"
+
+    return technical_level
+
+
+def _global_readiness_reason(
+    comparison: CopyComparison,
+    response_diagnostics: list[ResponseDiagnosis],
+    graph_comparisons: list[GraphComparison],
+) -> str:
+    technical_level = comparison.readiness_level
+
+    if technical_level in {"à reprendre", "non corrigeable"}:
+        return "blocages techniques prioritaires"
+
+    graph_issues = [
+        graph_comparison
+        for graph_comparison in graph_comparisons
+        if _graph_needs_attention(graph_comparison)
+    ]
+    if graph_issues:
+        return "au moins un graphe important est à vérifier"
+
+    weak_responses = [
+        diagnosis
+        for diagnosis in response_diagnostics
+        if _display_response_level(diagnosis) in {"fragile", "à compléter"}
+    ]
+    if weak_responses and technical_level == "exploitable":
+        return "certaines réponses doivent être renforcées"
+
+    return "aucun blocage majeur détecté"
+
+
 def _summary_items(
     comparison: CopyComparison,
     urgent_items: list[str],
@@ -623,13 +682,42 @@ def _summary_items(
     weak_responses = response_counts.get("fragile", 0) + response_counts.get("à compléter", 0)
     graphs_to_check = sum(1 for graph_comparison in graph_comparisons if _graph_needs_attention(graph_comparison))
 
+    global_readiness = _global_readiness_level(
+        comparison,
+        response_diagnostics,
+        graph_comparisons,
+    )
+    global_reason = _global_readiness_reason(
+        comparison,
+        response_diagnostics,
+        graph_comparisons,
+    )
+    pedagogical_findings = _pedagogical_findings_summary(
+        weak_responses,
+        graphs_to_check,
+    )
+
     items = [
+        f"Corrigeabilité globale : **{global_readiness}**.",
+        f"Raison principale : **{global_reason}**.",
         f"Corrigeabilité technique : **{comparison.readiness_level}**.",
         f"Code à reprendre : **{len(urgent_items)}** point(s).",
-        f"Réponses fragiles ou à compléter : **{weak_responses}**.",
-        f"Graphes à vérifier : **{graphs_to_check}**.",
-        f"Commentaires locaux insérés : **{len(local_comments)}**.",
     ]
+
+    if pedagogical_findings:
+        items.append(
+            "Points pédagogiques déjà détectés : "
+            + "; ".join(pedagogical_findings)
+            + "."
+        )
+
+    items.extend(
+        [
+            f"Réponses fragiles ou à compléter : **{weak_responses}**.",
+            f"Graphes à vérifier : **{graphs_to_check}**.",
+            f"Commentaires locaux insérés : **{len(local_comments)}**.",
+        ]
+    )
 
     if getattr(copy_diagnostic, "code_cells_to_complete", 0):
         items.append(f"Cellules contenant encore du code à compléter : **{copy_diagnostic.code_cells_to_complete}**.")
@@ -638,6 +726,25 @@ def _summary_items(
         items.append(f"Cellules de code non exécutées : **{copy_diagnostic.code_cells_not_executed}**.")
 
     return items
+
+
+def _pedagogical_findings_summary(
+    weak_responses: int,
+    graphs_to_check: int,
+) -> list[str]:
+    findings: list[str] = []
+
+    if weak_responses == 1:
+        findings.append("1 réponse fragile ou à compléter")
+    elif weak_responses > 1:
+        findings.append(f"{weak_responses} réponses fragiles ou à compléter")
+
+    if graphs_to_check == 1:
+        findings.append("1 graphe à vérifier")
+    elif graphs_to_check > 1:
+        findings.append(f"{graphs_to_check} graphes à vérifier")
+
+    return findings
 
 
 def _urgent_feedback_items(comparison: CopyComparison) -> list[str]:
@@ -723,8 +830,12 @@ def _advice_items(
     if graph_issues:
         items.append("Vérifiez les graphes signalés comme à vérifier, en particulier les axes, les labels et les variables de régression.")
 
+    global_readiness = _global_readiness_level(comparison, response_diagnostics, graph_comparisons)
+
     if urgent_items:
         items.append("Après correction, relisez les priorités du bloc `Retour TPStudio`.")
+    elif global_readiness == "à vérifier":
+        items.append("Le notebook est techniquement exploitable, mais il doit être vérifié avant correction détaillée.")
     elif check_items or weak_responses or graph_issues:
         items.append("Le notebook semble exploitable, mais vérifiez les points listés.")
     else:
