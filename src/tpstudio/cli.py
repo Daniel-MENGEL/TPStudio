@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 from tpstudio.report_header import postprocess_improved_notebooks_in_target
 from tpstudio.gradebook_export import export_gradebook_csv
+from tpstudio.gradebook_check import build_gradebook_check_summary, format_gradebook_check_summary
 from tpstudio.copies_summary import export_copies_summary_csv
 from tpstudio.feedback_report import export_feedback_report
 from tpstudio.graph_comparison import format_graph_comparison_report
@@ -386,9 +387,30 @@ def main() -> int:
     export_gradebook_parser.add_argument("--pattern", default="*.ipynb")
     export_gradebook_parser.set_defaults(func=export_gradebook_command)
 
+    check_gradebook_parser = subparsers.add_parser("check-gradebook")
+    check_gradebook_parser.add_argument("copies_dir")
+    check_gradebook_parser.add_argument("--session", required=True)
+    check_gradebook_parser.add_argument("--tp-name", required=True)
+    check_gradebook_parser.add_argument("--week", "--kholle-week", dest="week")
+    check_gradebook_parser.add_argument("--pattern", default="*.ipynb")
+    check_gradebook_parser.add_argument("--students-file")
+    check_gradebook_parser.set_defaults(func=check_gradebook_command)
+
+
     args = parser.parse_args()
     return args.func(args)
 
+
+def check_gradebook_command(args) -> None:
+    summary = build_gradebook_check_summary(
+        Path(args.copies_dir),
+        session=args.session,
+        tp_name=args.tp_name,
+        kholle_week=args.week,
+        pattern=args.pattern,
+        students_file=args.students_file,
+    )
+    print(format_gradebook_check_summary(summary))
 
 if __name__ == "__main__":
     raise SystemExit(main())
