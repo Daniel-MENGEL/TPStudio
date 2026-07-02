@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from tpstudio.response_diagnostics import format_response_diagnostic_report
 from tpstudio.response_extraction import format_response_extraction_report
 from tpstudio.improver import improve_notebook
 import json
@@ -187,6 +188,10 @@ def inspect_command(args: argparse.Namespace) -> int:
 def extract_responses_command(args):
     print(format_response_extraction_report(Path(args.notebook)))
 
+
+def diagnose_responses_command(args):
+    print(format_response_diagnostic_report(Path(args.notebook)))
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="tpstudio")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -242,6 +247,13 @@ def main() -> int:
     )
     extract_responses_parser.add_argument("notebook")
     extract_responses_parser.set_defaults(func=extract_responses_command)
+    diagnose_responses_parser = subparsers.add_parser(
+        "diagnose-responses",
+        help="diagnostiquer les réponses extraites d'un notebook étudiant",
+    )
+    diagnose_responses_parser.add_argument("notebook")
+    diagnose_responses_parser.set_defaults(func=diagnose_responses_command)
+
 
     args = parser.parse_args()
     return args.func(args)
