@@ -30,6 +30,7 @@ from tpstudio.copy_comparison import (
     export_copy_comparison_report,
 )
 from tpstudio.copy_feedback import create_feedback_notebook
+from tpstudio.correction_bundle import correct_copy
 
 
 def find_tex_file(tp_dir: Path) -> Path:
@@ -469,6 +470,29 @@ def main() -> int:
 
 
 
+    correct_copy_parser = subparsers.add_parser(
+        "correct-copy",
+        help="corriger une copie et produire un notebook annoté avec son rapport",
+        description=(
+            "Assemble les diagnostics TPStudio existants dans une correction individuelle "
+            "sans modifier la copie originale."
+        ),
+    )
+    correct_copy_parser.add_argument("model")
+    correct_copy_parser.add_argument("copy")
+    correct_copy_parser.add_argument(
+        "--output-dir",
+        required=True,
+        help="dossier dans lequel créer les fichiers -correction",
+    )
+    correct_copy_parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="remplacer explicitement des sorties -correction déjà présentes",
+    )
+    correct_copy_parser.set_defaults(func=correct_copy_command)
+
+
     args = parser.parse_args()
     return args.func(args)
 
@@ -636,6 +660,21 @@ def export_gradebook_bundle_command(args) -> None:
         folder_to_open = paths.followup_csv.parent
         open_path(folder_to_open)
         print(f"Ouverture du dossier : {folder_to_open}")
+
+def correct_copy_command(args) -> None:
+    try:
+        paths = correct_copy(
+            Path(args.model),
+            Path(args.copy),
+            output_dir=Path(args.output_dir),
+            overwrite=getattr(args, "overwrite", False),
+        )
+    except (FileNotFoundError, FileExistsError, ValueError) as error:
+        raise SystemExit(str(error)) from error
+
+    print("Correction TPStudio créée :")
+    print(f"- Notebook : {paths.notebook}")
+    print(f"- Rapport Markdown : {paths.markdown_report}")
 
 if __name__ == "__main__":
     main()
