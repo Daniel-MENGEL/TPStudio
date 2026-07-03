@@ -466,7 +466,11 @@ def main() -> int:
     export_gradebook_parser.add_argument("--allow-issues", action="store_true")
     export_gradebook_parser.set_defaults(func=export_gradebook_command)
 
-    export_gradebook_bundle_parser = subparsers.add_parser("export-gradebook-bundle")
+    export_gradebook_bundle_parser = subparsers.add_parser(
+        "export-gradebook-bundle",
+        help="exporter le suivi complet avec noms de fichiers automatiques",
+        description="Génère les CSV de suivi, anomalies et rapports non rendus pour une séance de TP.",
+    )
     export_gradebook_bundle_parser.add_argument("copies_dir")
     export_gradebook_bundle_parser.add_argument("--session", required=True)
     export_gradebook_bundle_parser.add_argument("--tp-name", required=True)
@@ -482,7 +486,11 @@ def main() -> int:
     export_gradebook_bundle_parser.set_defaults(func=export_gradebook_bundle_command)
 
 
-    check_gradebook_parser = subparsers.add_parser("check-gradebook")
+    check_gradebook_parser = subparsers.add_parser(
+        "check-gradebook",
+        help="contrôler rapidement un dossier de copies sans exporter",
+        description="Affiche un résumé des copies, anomalies, identités absentes et rapports non rendus.",
+    )
     check_gradebook_parser.add_argument("copies_dir")
     check_gradebook_parser.add_argument("--session", required=True)
     check_gradebook_parser.add_argument("--tp-name", required=True)
