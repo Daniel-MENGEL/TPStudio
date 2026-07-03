@@ -5,6 +5,7 @@ from pathlib import Path
 from tpstudio.report_header import postprocess_improved_notebooks_in_target
 from tpstudio.gradebook_export import export_gradebook_csv
 from tpstudio.gradebook_check import build_gradebook_check_summary, format_gradebook_check_summary
+from tpstudio.gradebook_bundle import export_gradebook_bundle
 from tpstudio.gradebook_export_guard import format_gradebook_export_blocked_message, gradebook_check_has_blocking_issues
 from tpstudio.copies_summary import export_copies_summary_csv
 from tpstudio.feedback_report import export_feedback_report
@@ -408,6 +409,21 @@ def main() -> int:
     export_gradebook_parser.add_argument("--allow-issues", action="store_true")
     export_gradebook_parser.set_defaults(func=export_gradebook_command)
 
+    export_gradebook_bundle_parser = subparsers.add_parser("export-gradebook-bundle")
+    export_gradebook_bundle_parser.add_argument("copies_dir")
+    export_gradebook_bundle_parser.add_argument("--session", required=True)
+    export_gradebook_bundle_parser.add_argument("--tp-name", required=True)
+    export_gradebook_bundle_parser.add_argument("--week", "--kholle-week", dest="week")
+    export_gradebook_bundle_parser.add_argument("--date")
+    export_gradebook_bundle_parser.add_argument("--pattern", default="*.ipynb")
+    export_gradebook_bundle_parser.add_argument("--students-file")
+    export_gradebook_bundle_parser.add_argument("--output-dir")
+    export_gradebook_bundle_parser.add_argument("--prefix")
+    export_gradebook_bundle_parser.add_argument("--check-first", action="store_true")
+    export_gradebook_bundle_parser.add_argument("--allow-issues", action="store_true")
+    export_gradebook_bundle_parser.set_defaults(func=export_gradebook_bundle_command)
+
+
     check_gradebook_parser = subparsers.add_parser("check-gradebook")
     check_gradebook_parser.add_argument("copies_dir")
     check_gradebook_parser.add_argument("--session", required=True)
@@ -432,6 +448,41 @@ def check_gradebook_command(args) -> None:
         students_file=args.students_file,
     )
     print(format_gradebook_check_summary(summary))
+
+def export_gradebook_bundle_command(args) -> None:
+    if getattr(args, "check_first", False):
+        summary = build_gradebook_check_summary(
+            Path(args.copies_dir),
+            session=args.session,
+            tp_name=args.tp_name,
+            kholle_week=getattr(args, "week", None),
+            pattern=args.pattern,
+            students_file=args.students_file,
+        )
+
+        if gradebook_check_has_blocking_issues(summary) and not getattr(args, "allow_issues", False):
+            print(format_gradebook_export_blocked_message(summary))
+            raise SystemExit(2)
+
+        print(format_gradebook_check_summary(summary))
+        print("")
+
+    paths = export_gradebook_bundle(
+        Path(args.copies_dir),
+        session=args.session,
+        tp_name=args.tp_name,
+        kholle_week=getattr(args, "week", None),
+        date_value=getattr(args, "date", None),
+        pattern=args.pattern,
+        students_file=args.students_file,
+        output_dir=args.output_dir,
+        prefix=args.prefix,
+    )
+
+    print("Bundle de suivi TPStudio créé :")
+    print(f"- Suivi : {paths.followup_csv}")
+    print(f"- Anomalies : {paths.unmatched_csv}")
+    print(f"- Rapports non rendus : {paths.missing_csv}")
 
 if __name__ == "__main__":
     raise SystemExit(main())
