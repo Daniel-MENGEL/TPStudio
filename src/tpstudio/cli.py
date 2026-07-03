@@ -7,6 +7,7 @@ from tpstudio.gradebook_export import export_gradebook_csv
 from tpstudio.gradebook_check import build_gradebook_check_summary, format_gradebook_check_summary
 from tpstudio.gradebook_bundle import export_gradebook_bundle
 from tpstudio.gradebook_summary import write_gradebook_summary_html, write_gradebook_summary_markdown
+from tpstudio.opening import choose_summary_to_open, open_path
 from tpstudio.gradebook_export_guard import format_gradebook_export_blocked_message, gradebook_check_has_blocking_issues
 from tpstudio.copies_summary import export_copies_summary_csv
 from tpstudio.feedback_report import export_feedback_report
@@ -429,6 +430,8 @@ def main() -> int:
     export_gradebook_bundle_parser.add_argument("--allow-issues", action="store_true")
     export_gradebook_bundle_parser.add_argument("--summary-md", action="store_true")
     export_gradebook_bundle_parser.add_argument("--summary-html", action="store_true")
+    export_gradebook_bundle_parser.add_argument("--open-summary", action="store_true")
+    export_gradebook_bundle_parser.add_argument("--open-folder", action="store_true")
     export_gradebook_bundle_parser.set_defaults(func=export_gradebook_bundle_command)
 
 
@@ -503,12 +506,15 @@ def export_gradebook_bundle_command(args) -> None:
     print(f"- Anomalies : {paths.unmatched_csv}")
     print(f"- Rapports non rendus : {paths.missing_csv}")
 
+    markdown_summary_path = None
+    html_summary_path = None
+
     if getattr(args, "summary_md", False):
-        summary_path = paths.followup_csv.with_name(
+        markdown_summary_path = paths.followup_csv.with_name(
             paths.followup_csv.name.removesuffix("-suivi.csv") + "-bilan.md"
         )
         written = write_gradebook_summary_markdown(
-            summary_path,
+            markdown_summary_path,
             copies_dir=Path(args.copies_dir),
             session=args.session,
             tp_name=args.tp_name,
@@ -518,14 +524,15 @@ def export_gradebook_bundle_command(args) -> None:
             bundle_paths=paths,
             check_summary=summary,
         )
+        markdown_summary_path = written.path
         print(f"- Bilan Markdown : {written.path}")
 
     if getattr(args, "summary_html", False):
-        summary_path = paths.followup_csv.with_name(
+        html_summary_path = paths.followup_csv.with_name(
             paths.followup_csv.name.removesuffix("-suivi.csv") + "-bilan.html"
         )
         written = write_gradebook_summary_html(
-            summary_path,
+            html_summary_path,
             copies_dir=Path(args.copies_dir),
             session=args.session,
             tp_name=args.tp_name,
@@ -535,7 +542,25 @@ def export_gradebook_bundle_command(args) -> None:
             bundle_paths=paths,
             check_summary=summary,
         )
+        html_summary_path = written.path
         print(f"- Bilan HTML : {written.path}")
+
+    if getattr(args, "open_summary", False):
+        summary_to_open = choose_summary_to_open(
+            html_path=html_summary_path,
+            markdown_path=markdown_summary_path,
+        )
+
+        if summary_to_open is None:
+            print("Aucun bilan à ouvrir. Ajoute --summary-html ou --summary-md.")
+        else:
+            open_path(summary_to_open)
+            print(f"Ouverture du bilan : {summary_to_open}")
+
+    if getattr(args, "open_folder", False):
+        folder_to_open = paths.followup_csv.parent
+        open_path(folder_to_open)
+        print(f"Ouverture du dossier : {folder_to_open}")
 
 if __name__ == "__main__":
     main()

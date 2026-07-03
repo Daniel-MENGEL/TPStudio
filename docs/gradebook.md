@@ -63,3 +63,20 @@ tpstudio check-gradebook "$DOSSIER" \
   --kholle-week "25" \
   --students-file data_private/liste_etudiants_pcsi2.csv
 ```
+
+
+## Ouverture automatique
+
+Pour ouvrir automatiquement le bilan généré :
+
+```bash
+--open-summary
+```
+
+TPStudio ouvre en priorité le bilan HTML s'il a été généré, sinon le bilan Markdown.
+
+Pour ouvrir le dossier contenant les exports :
+
+```bash
+--open-folder
+```

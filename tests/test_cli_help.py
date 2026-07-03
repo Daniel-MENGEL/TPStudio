@@ -35,6 +35,8 @@ def test_export_gradebook_bundle_help_lists_important_options() -> None:
         "--check-first",
         "--summary-md",
         "--summary-html",
+        "--open-summary",
+        "--open-folder",
         "--prefix",
         "--output-dir",
         "--allow-issues",
