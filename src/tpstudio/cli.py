@@ -6,6 +6,7 @@ from tpstudio.report_header import postprocess_improved_notebooks_in_target
 from tpstudio.gradebook_export import export_gradebook_csv
 from tpstudio.gradebook_check import build_gradebook_check_summary, format_gradebook_check_summary
 from tpstudio.gradebook_bundle import export_gradebook_bundle
+from tpstudio.gradebook_summary import write_gradebook_summary_markdown
 from tpstudio.gradebook_export_guard import format_gradebook_export_blocked_message, gradebook_check_has_blocking_issues
 from tpstudio.copies_summary import export_copies_summary_csv
 from tpstudio.feedback_report import export_feedback_report
@@ -298,6 +299,62 @@ def _improve_targets_from_args(args):
 
 
 
+
+def export_gradebook_bundle_command(args) -> None:
+    summary = None
+
+    if getattr(args, "check_first", False) or getattr(args, "summary_md", False):
+        summary = build_gradebook_check_summary(
+            Path(args.copies_dir),
+            session=args.session,
+            tp_name=args.tp_name,
+            kholle_week=getattr(args, "week", None),
+            pattern=args.pattern,
+            students_file=args.students_file,
+        )
+
+    if getattr(args, "check_first", False):
+        if gradebook_check_has_blocking_issues(summary) and not getattr(args, "allow_issues", False):
+            print(format_gradebook_export_blocked_message(summary))
+            raise SystemExit(2)
+
+        print(format_gradebook_check_summary(summary))
+        print("")
+
+    paths = export_gradebook_bundle(
+        Path(args.copies_dir),
+        session=args.session,
+        tp_name=args.tp_name,
+        kholle_week=getattr(args, "week", None),
+        date_value=getattr(args, "date", None),
+        pattern=args.pattern,
+        students_file=args.students_file,
+        output_dir=args.output_dir,
+        prefix=args.prefix,
+    )
+
+    print("Bundle de suivi TPStudio créé :")
+    print(f"- Suivi : {paths.followup_csv}")
+    print(f"- Anomalies : {paths.unmatched_csv}")
+    print(f"- Rapports non rendus : {paths.missing_csv}")
+
+    if getattr(args, "summary_md", False):
+        summary_path = paths.followup_csv.with_name(
+            paths.followup_csv.name.removesuffix("-suivi.csv") + "-bilan.md"
+        )
+        written = write_gradebook_summary_markdown(
+            summary_path,
+            copies_dir=Path(args.copies_dir),
+            session=args.session,
+            tp_name=args.tp_name,
+            kholle_week=getattr(args, "week", None),
+            pattern=args.pattern,
+            students_file=args.students_file,
+            bundle_paths=paths,
+            check_summary=summary,
+        )
+        print(f"- Bilan Markdown : {written.path}")
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="tpstudio")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -421,6 +478,7 @@ def main() -> int:
     export_gradebook_bundle_parser.add_argument("--prefix")
     export_gradebook_bundle_parser.add_argument("--check-first", action="store_true")
     export_gradebook_bundle_parser.add_argument("--allow-issues", action="store_true")
+    export_gradebook_bundle_parser.add_argument("--summary-md", action="store_true")
     export_gradebook_bundle_parser.set_defaults(func=export_gradebook_bundle_command)
 
 
@@ -449,40 +507,5 @@ def check_gradebook_command(args) -> None:
     )
     print(format_gradebook_check_summary(summary))
 
-def export_gradebook_bundle_command(args) -> None:
-    if getattr(args, "check_first", False):
-        summary = build_gradebook_check_summary(
-            Path(args.copies_dir),
-            session=args.session,
-            tp_name=args.tp_name,
-            kholle_week=getattr(args, "week", None),
-            pattern=args.pattern,
-            students_file=args.students_file,
-        )
-
-        if gradebook_check_has_blocking_issues(summary) and not getattr(args, "allow_issues", False):
-            print(format_gradebook_export_blocked_message(summary))
-            raise SystemExit(2)
-
-        print(format_gradebook_check_summary(summary))
-        print("")
-
-    paths = export_gradebook_bundle(
-        Path(args.copies_dir),
-        session=args.session,
-        tp_name=args.tp_name,
-        kholle_week=getattr(args, "week", None),
-        date_value=getattr(args, "date", None),
-        pattern=args.pattern,
-        students_file=args.students_file,
-        output_dir=args.output_dir,
-        prefix=args.prefix,
-    )
-
-    print("Bundle de suivi TPStudio créé :")
-    print(f"- Suivi : {paths.followup_csv}")
-    print(f"- Anomalies : {paths.unmatched_csv}")
-    print(f"- Rapports non rendus : {paths.missing_csv}")
-
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()
