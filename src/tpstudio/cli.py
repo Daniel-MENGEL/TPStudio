@@ -7,6 +7,7 @@ from tpstudio.gradebook_export import export_gradebook_csv
 from tpstudio.gradebook_check import build_gradebook_check_summary, format_gradebook_check_summary
 from tpstudio.gradebook_bundle import export_gradebook_bundle
 from tpstudio.gradebook_duplicates import build_duplicate_submissions, export_duplicate_submissions_csv, format_duplicate_submissions_report
+from tpstudio.gradebook_duplicate_summary import append_duplicate_submissions_to_html, append_duplicate_submissions_to_markdown, duplicate_submissions_output_path
 from tpstudio.gradebook_summary import write_gradebook_summary_html, write_gradebook_summary_markdown
 from tpstudio.opening import choose_summary_to_open, open_path
 from tpstudio.gradebook_export_guard import format_gradebook_export_blocked_message, gradebook_check_has_blocking_issues
@@ -433,6 +434,8 @@ def main() -> int:
     export_gradebook_bundle_parser.add_argument("--summary-html", action="store_true")
     export_gradebook_bundle_parser.add_argument("--open-summary", action="store_true")
     export_gradebook_bundle_parser.add_argument("--open-folder", action="store_true")
+    export_gradebook_bundle_parser.add_argument("--check-duplicates", action="store_true")
+    export_gradebook_bundle_parser.add_argument("--duplicates-output")
     export_gradebook_bundle_parser.set_defaults(func=export_gradebook_bundle_command)
 
 
@@ -481,6 +484,30 @@ def check_gradebook_command(args) -> None:
     )
     print(format_gradebook_check_summary(summary))
 
+def check_duplicates_command(args) -> None:
+    duplicates = build_duplicate_submissions(
+        Path(args.copies_dir),
+        session=args.session,
+        tp_name=args.tp_name,
+        week_value=getattr(args, "week", None),
+        date_value=getattr(args, "date", None),
+        pattern=args.pattern,
+        students_file=args.students_file,
+    )
+
+    print(
+        format_duplicate_submissions_report(
+            duplicates,
+            session=args.session,
+            tp_name=args.tp_name,
+            week_value=getattr(args, "week", None),
+        )
+    )
+
+    if args.output:
+        output = export_duplicate_submissions_csv(duplicates, Path(args.output))
+        print(f"Fichier de doublons suspects créé : {output}")
+
 def export_gradebook_bundle_command(args) -> None:
     summary = None
 
@@ -523,6 +550,29 @@ def export_gradebook_bundle_command(args) -> None:
     print(f"- Anomalies : {paths.unmatched_csv}")
     print(f"- Rapports non rendus : {paths.missing_csv}")
 
+    duplicates = None
+
+    if getattr(args, "check_duplicates", False) or getattr(args, "duplicates_output", None):
+        duplicates = build_duplicate_submissions(
+            Path(args.copies_dir),
+            session=args.session,
+            tp_name=args.tp_name,
+            week_value=getattr(args, "week", None),
+            date_value=getattr(args, "date", None),
+            pattern=args.pattern,
+            students_file=args.students_file,
+        )
+
+        duplicates_output = (
+            Path(args.duplicates_output)
+            if getattr(args, "duplicates_output", None)
+            else duplicate_submissions_output_path(paths.followup_csv)
+        )
+
+        export_duplicate_submissions_csv(duplicates, duplicates_output)
+        print(f"- Doublons suspects : {duplicates_output}")
+        print(f"  Nombre de doublons suspects : {len(duplicates)}")
+
     markdown_summary_path = None
     html_summary_path = None
 
@@ -542,7 +592,11 @@ def export_gradebook_bundle_command(args) -> None:
             check_summary=summary,
         )
         markdown_summary_path = written.path
-        print(f"- Bilan Markdown : {written.path}")
+
+        if duplicates is not None:
+            append_duplicate_submissions_to_markdown(markdown_summary_path, duplicates)
+
+        print(f"- Bilan Markdown : {markdown_summary_path}")
 
     if getattr(args, "summary_html", False):
         html_summary_path = paths.followup_csv.with_name(
@@ -560,7 +614,11 @@ def export_gradebook_bundle_command(args) -> None:
             check_summary=summary,
         )
         html_summary_path = written.path
-        print(f"- Bilan HTML : {written.path}")
+
+        if duplicates is not None:
+            append_duplicate_submissions_to_html(html_summary_path, duplicates)
+
+        print(f"- Bilan HTML : {html_summary_path}")
 
     if getattr(args, "open_summary", False):
         summary_to_open = choose_summary_to_open(
@@ -578,30 +636,6 @@ def export_gradebook_bundle_command(args) -> None:
         folder_to_open = paths.followup_csv.parent
         open_path(folder_to_open)
         print(f"Ouverture du dossier : {folder_to_open}")
-
-def check_duplicates_command(args) -> None:
-    duplicates = build_duplicate_submissions(
-        Path(args.copies_dir),
-        session=args.session,
-        tp_name=args.tp_name,
-        week_value=getattr(args, "week", None),
-        date_value=getattr(args, "date", None),
-        pattern=args.pattern,
-        students_file=args.students_file,
-    )
-
-    print(
-        format_duplicate_submissions_report(
-            duplicates,
-            session=args.session,
-            tp_name=args.tp_name,
-            week_value=getattr(args, "week", None),
-        )
-    )
-
-    if args.output:
-        output = export_duplicate_submissions_csv(duplicates, Path(args.output))
-        print(f"Fichier de doublons suspects créé : {output}")
 
 if __name__ == "__main__":
     main()

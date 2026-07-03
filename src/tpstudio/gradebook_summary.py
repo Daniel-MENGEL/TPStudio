@@ -247,15 +247,15 @@ def format_gradebook_summary_html(
             <section class="card">
               <h2>Fichiers générés</h2>
               <ul>
-                <li><strong>Suivi :</strong> <code>{followup}</code></li>
-                <li><strong>Anomalies :</strong> <code>{unmatched}</code></li>
-                <li><strong>Rapports non rendus :</strong> <code>{missing}</code></li>
+                <li><strong>Suivi :</strong> {followup}</li>
+                <li><strong>Anomalies :</strong> {unmatched}</li>
+                <li><strong>Rapports non rendus :</strong> {missing}</li>
               </ul>
             </section>
             """.format(
-                followup=esc(bundle_paths.followup_csv.name),
-                unmatched=esc(bundle_paths.unmatched_csv.name),
-                missing=esc(bundle_paths.missing_csv.name),
+                followup=_html_file_link(bundle_paths.followup_csv),
+                unmatched=_html_file_link(bundle_paths.unmatched_csv),
+                missing=_html_file_link(bundle_paths.missing_csv),
             )
         )
 
@@ -485,3 +485,11 @@ def _html_missing_students_section(missing_students: list | tuple) -> str:
       </ul>
     </section>
     """
+
+def _html_file_link(path: Path) -> str:
+    import html
+
+    filename = path.name
+    escaped = html.escape(filename, quote=True)
+    return f'<a href="{escaped}">{escaped}</a>'
+

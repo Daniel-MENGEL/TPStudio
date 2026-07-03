@@ -38,6 +38,8 @@ def test_export_gradebook_bundle_help_lists_important_options() -> None:
         "--summary-html",
         "--open-summary",
         "--open-folder",
+        "--check-duplicates",
+        "--duplicates-output",
         "--prefix",
         "--output-dir",
         "--allow-issues",

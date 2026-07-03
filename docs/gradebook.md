@@ -95,3 +95,31 @@ Pour exporter le résultat :
 ```bash
 --output doublons-suspects.csv
 ```
+
+
+## Doublons suspects dans l'export groupé
+
+Pour intégrer la détection des doublons suspects à l'export groupé :
+
+```bash
+--check-duplicates
+```
+
+TPStudio génère alors un fichier :
+
+```text
+<tp>-semaine-<n>-doublons-suspects.csv
+```
+
+et ajoute une section `Doublons suspects` aux bilans Markdown et HTML lorsqu'ils sont générés.
+
+Pour choisir le chemin du CSV :
+
+```bash
+--duplicates-output doublons-suspects.csv
+```
+
+
+## Liens dans le bilan HTML
+
+Le bilan HTML contient des liens vers les fichiers CSV générés lorsque ceux-ci sont dans le même dossier que le fichier HTML.
