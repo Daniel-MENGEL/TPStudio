@@ -5,6 +5,7 @@ from pathlib import Path
 from tpstudio.report_header import postprocess_improved_notebooks_in_target
 from tpstudio.gradebook_export import export_gradebook_csv
 from tpstudio.gradebook_check import build_gradebook_check_summary, format_gradebook_check_summary
+from tpstudio.gradebook_export_guard import format_gradebook_export_blocked_message, gradebook_check_has_blocking_issues
 from tpstudio.copies_summary import export_copies_summary_csv
 from tpstudio.feedback_report import export_feedback_report
 from tpstudio.graph_comparison import format_graph_comparison_report
@@ -235,20 +236,38 @@ def summarize_copies_command(args):
     )
     print(f"Synthèse TPStudio créée : {output}")
 
-def export_gradebook_command(args):
+def export_gradebook_command(args) -> None:
+    if getattr(args, "check_first", False):
+        summary = build_gradebook_check_summary(
+            Path(args.copies_dir),
+            session=args.session,
+            tp_name=args.tp_name,
+            kholle_week=getattr(args, "week", None),
+            pattern=args.pattern,
+            students_file=args.students_file,
+        )
+
+        if gradebook_check_has_blocking_issues(summary) and not getattr(args, "allow_issues", False):
+            print(format_gradebook_export_blocked_message(summary))
+            raise SystemExit(2)
+
+        print(format_gradebook_check_summary(summary))
+        print("")
+
     output = export_gradebook_csv(
         Path(args.copies_dir),
         Path(args.output),
         session=args.session,
         tp_name=args.tp_name,
-        week_value=args.week,
-        date_value=args.date,
+        week_value=getattr(args, "week", None),
+        date_value=getattr(args, "date", None),
         pattern=args.pattern,
         students_file=args.students_file,
-        unmatched_output_path=args.unmatched_output,
-        missing_output_path=args.missing_output,
+        unmatched_output_path=getattr(args, "unmatched_output", None),
+        missing_output_path=getattr(args, "missing_output", None),
     )
     print(f"Fichier de suivi TPStudio créé : {output}")
+
 
 def _improve_targets_from_args(args):
     targets = []
@@ -385,6 +404,8 @@ def main() -> int:
     export_gradebook_parser.add_argument("--missing-output")
     export_gradebook_parser.add_argument("--output", "-o", required=True)
     export_gradebook_parser.add_argument("--pattern", default="*.ipynb")
+    export_gradebook_parser.add_argument("--check-first", action="store_true")
+    export_gradebook_parser.add_argument("--allow-issues", action="store_true")
     export_gradebook_parser.set_defaults(func=export_gradebook_command)
 
     check_gradebook_parser = subparsers.add_parser("check-gradebook")

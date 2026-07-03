@@ -385,7 +385,7 @@ def missing_student_to_csv_row(missing: MissingStudent) -> dict[str, str]:
         "Nom": missing.last_name,
         "Prénom": missing.first_name,
         "Email": missing.email,
-        "Raison": "aucune copie détectée pour cet étudiant",
+        "Raison": "rapport non rendu",
     }
 
 
@@ -422,7 +422,7 @@ def missing_student_to_csv_row(missing: MissingStudent) -> dict[str, str]:
         "Nom": missing.last_name,
         "Prénom": missing.first_name,
         "Email": missing.email,
-        "Raison": "aucune copie détectée pour cet étudiant",
+        "Raison": "rapport non rendu",
     }
 
 

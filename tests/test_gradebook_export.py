@@ -462,13 +462,13 @@ def test_export_missing_students_csv(tmp_path: Path) -> None:
             "Nom": "MARTIN",
             "Prénom": "Bob",
             "Email": "bob.martin@example.test",
-            "Raison": "aucune copie détectée pour cet étudiant",
+            "Raison": "rapport non rendu",
         },
         {
             "Nom": "DUPONT",
             "Prénom": "Claire",
             "Email": "claire.dupont@example.test",
-            "Raison": "aucune copie détectée pour cet étudiant",
+            "Raison": "rapport non rendu",
         },
     ]
 

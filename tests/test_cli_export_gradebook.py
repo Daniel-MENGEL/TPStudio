@@ -244,6 +244,6 @@ def test_cli_export_gradebook_creates_missing_report(tmp_path: Path) -> None:
             "Nom": "MARTIN",
             "Prénom": "Bob",
             "Email": "bob.martin@example.test",
-            "Raison": "aucune copie détectée pour cet étudiant",
+            "Raison": "rapport non rendu",
         }
     ]
