@@ -11,7 +11,8 @@ tpstudio export-gradebook-bundle "$DOSSIER" \
   --kholle-week "25" \
   --students-file data_private/liste_etudiants_pcsi2.csv \
   --check-first \
-  --summary-md
+  --summary-md \
+  --summary-html
 ```
 
 ## Fichiers générés
@@ -23,6 +24,7 @@ La commande crée automatiquement quatre fichiers dans le dossier de copies :
 <tp>-semaine-<n>-anomalies.csv
 <tp>-semaine-<n>-rapports-non-rendus.csv
 <tp>-semaine-<n>-bilan.md
+<tp>-semaine-<n>-bilan.html
 ```
 
 ## Rôle des fichiers
@@ -30,7 +32,8 @@ La commande crée automatiquement quatre fichiers dans le dossier de copies :
 - `*-suivi.csv` : fichier principal pour saisir les notes.
 - `*-anomalies.csv` : noms présents dans les notebooks mais non reconnus dans la liste officielle.
 - `*-rapports-non-rendus.csv` : étudiants de la liste officielle sans copie détectée.
-- `*-bilan.md` : synthèse lisible de la séance.
+- `*-bilan.md` : synthèse lisible de la séance au format Markdown.
+- `*-bilan.html` : synthèse lisible de la séance au format HTML.
 
 ## Contrôle préalable
 
