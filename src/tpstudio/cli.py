@@ -6,6 +6,7 @@ from tpstudio.report_header import postprocess_improved_notebooks_in_target
 from tpstudio.gradebook_export import export_gradebook_csv
 from tpstudio.gradebook_check import build_gradebook_check_summary, format_gradebook_check_summary
 from tpstudio.gradebook_bundle import export_gradebook_bundle
+from tpstudio.gradebook_duplicates import build_duplicate_submissions, export_duplicate_submissions_csv, format_duplicate_submissions_report
 from tpstudio.gradebook_summary import write_gradebook_summary_html, write_gradebook_summary_markdown
 from tpstudio.opening import choose_summary_to_open, open_path
 from tpstudio.gradebook_export_guard import format_gradebook_export_blocked_message, gradebook_check_has_blocking_issues
@@ -448,6 +449,22 @@ def main() -> int:
     check_gradebook_parser.add_argument("--students-file")
     check_gradebook_parser.set_defaults(func=check_gradebook_command)
 
+    check_duplicates_parser = subparsers.add_parser(
+        "check-duplicates",
+        help="détecter les copies en doublon pour un même étudiant",
+        description="Signale les cas où un même étudiant apparaît dans plusieurs notebooks pour le même TP et la même semaine.",
+    )
+    check_duplicates_parser.add_argument("copies_dir")
+    check_duplicates_parser.add_argument("--session", required=True)
+    check_duplicates_parser.add_argument("--tp-name", required=True)
+    check_duplicates_parser.add_argument("--week", "--kholle-week", dest="week")
+    check_duplicates_parser.add_argument("--date")
+    check_duplicates_parser.add_argument("--pattern", default="*.ipynb")
+    check_duplicates_parser.add_argument("--students-file")
+    check_duplicates_parser.add_argument("--output")
+    check_duplicates_parser.set_defaults(func=check_duplicates_command)
+
+
 
     args = parser.parse_args()
     return args.func(args)
@@ -561,6 +578,30 @@ def export_gradebook_bundle_command(args) -> None:
         folder_to_open = paths.followup_csv.parent
         open_path(folder_to_open)
         print(f"Ouverture du dossier : {folder_to_open}")
+
+def check_duplicates_command(args) -> None:
+    duplicates = build_duplicate_submissions(
+        Path(args.copies_dir),
+        session=args.session,
+        tp_name=args.tp_name,
+        week_value=getattr(args, "week", None),
+        date_value=getattr(args, "date", None),
+        pattern=args.pattern,
+        students_file=args.students_file,
+    )
+
+    print(
+        format_duplicate_submissions_report(
+            duplicates,
+            session=args.session,
+            tp_name=args.tp_name,
+            week_value=getattr(args, "week", None),
+        )
+    )
+
+    if args.output:
+        output = export_duplicate_submissions_csv(duplicates, Path(args.output))
+        print(f"Fichier de doublons suspects créé : {output}")
 
 if __name__ == "__main__":
     main()

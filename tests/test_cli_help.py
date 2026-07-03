@@ -14,6 +14,7 @@ def test_python_module_cli_help_lists_main_commands() -> None:
 
     assert "usage: tpstudio" in result.stdout
     assert "check-gradebook" in result.stdout
+    assert "check-duplicates" in result.stdout
     assert "export-gradebook" in result.stdout
     assert "export-gradebook-bundle" in result.stdout
 

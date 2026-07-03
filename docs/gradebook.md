@@ -80,3 +80,18 @@ Pour ouvrir le dossier contenant les exports :
 ```bash
 --open-folder
 ```
+
+
+## Détection des doublons suspects
+
+Pour vérifier qu'un même étudiant n'a pas plusieurs notebooks pour le même TP :
+
+```bash
+tpstudio check-duplicates "$DOSSIER"   --session "Séance n°2"   --tp-name "Lois de Snell Descartes"   --kholle-week "25"   --students-file data_private/liste_etudiants_pcsi2.csv
+```
+
+Pour exporter le résultat :
+
+```bash
+--output doublons-suspects.csv
+```
