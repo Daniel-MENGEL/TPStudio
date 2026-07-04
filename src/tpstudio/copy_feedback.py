@@ -1,4 +1,5 @@
 from __future__ import annotations
+from tpstudio.numerical_consistency import add_numerical_consistency_feedback_to_notebook
 from tpstudio.code_semantics import add_code_semantic_feedback_to_notebook
 from tpstudio.pedagogical_sections import add_pedagogical_section_feedback_to_notebook
 
@@ -911,6 +912,11 @@ def create_feedback_notebook(
         corrected_path,
     )
     add_code_semantic_feedback_to_notebook(
+        model_path,
+        copy_path,
+        corrected_path,
+    )
+    add_numerical_consistency_feedback_to_notebook(
         model_path,
         copy_path,
         corrected_path,

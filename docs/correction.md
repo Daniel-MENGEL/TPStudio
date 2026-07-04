@@ -87,3 +87,9 @@ A61b-bis ne dépend plus du découpage identique des cellules. Les affectations 
 
 Cela permet notamment de comparer un corrigé contenant une grosse cellule de code avec une copie où le même calcul a été réparti sur plusieurs petites cellules.
 
+## Cohérence numérique des résultats
+
+A61c-a compare les résultats scalaires réellement produits par le code avec les valeurs annoncées dans les réponses écrites et, lorsqu'elles sont disponibles, avec les sorties numériques du corrigé.
+
+Pour limiter les faux positifs, seuls les écarts relatifs supérieurs à 15 % sont signalés.
+
