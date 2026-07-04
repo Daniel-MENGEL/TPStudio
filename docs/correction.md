@@ -93,3 +93,11 @@ A61c-a compare les résultats scalaires réellement produits par le code avec le
 
 Pour limiter les faux positifs, seuls les écarts relatifs supérieurs à 15 % sont signalés.
 
+## Cohérence de la synthèse globale
+
+A61c-b réconcilie la synthèse rapide avec les diagnostics scientifiques ajoutés après la génération initiale du rapport.
+
+Dès qu'un écart sémantique de formule ou une incohérence numérique est détecté, la corrigeabilité globale passe à `à reprendre`.
+
+La corrigeabilité technique reste indépendante : un notebook peut s'exécuter correctement tout en contenant une erreur scientifique.
+

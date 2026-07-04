@@ -1,4 +1,5 @@
 from __future__ import annotations
+from tpstudio.report_consistency import reconcile_global_readiness
 from tpstudio.numerical_consistency import add_numerical_consistency_feedback_to_report
 from tpstudio.code_semantics import add_code_semantic_feedback_to_report
 from tpstudio.pedagogical_sections import add_pedagogical_section_feedback_to_report
@@ -100,5 +101,6 @@ def export_feedback_report(
         copy_path,
         report_path,
     )
+    reconcile_global_readiness(report_path)
     return result
 
