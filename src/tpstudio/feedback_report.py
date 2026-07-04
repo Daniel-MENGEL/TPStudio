@@ -1,4 +1,5 @@
 from __future__ import annotations
+from tpstudio.pedagogical_sections import add_pedagogical_section_feedback_to_report
 
 from pathlib import Path
 
@@ -6,7 +7,7 @@ from tpstudio.copy_comparison import compare_copy_to_model
 from tpstudio.copy_feedback import structured_feedback_markdown
 
 
-def export_feedback_report(
+def _tpstudio_original_export_feedback_report_a61a(
     model_path: str | Path,
     copy_path: str | Path,
     output_path: str | Path | None = None,
@@ -63,3 +64,29 @@ def _next_available_report_path(copy_path: Path) -> Path:
         if not candidate.exists():
             return candidate
         counter += 1
+
+def export_feedback_report(
+    model_path,
+    copy_path,
+    output_path=None,
+):
+    if output_path is None:
+        result = _tpstudio_original_export_feedback_report_a61a(
+            model_path,
+            copy_path,
+        )
+        report_path = result
+    else:
+        result = _tpstudio_original_export_feedback_report_a61a(
+            model_path,
+            copy_path,
+            output_path,
+        )
+        report_path = result if result is not None else output_path
+
+    add_pedagogical_section_feedback_to_report(
+        copy_path,
+        report_path,
+    )
+    return result
+

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from tpstudio.pedagogical_sections import add_pedagogical_section_feedback_to_notebook
 
 import copy
 import json
@@ -19,7 +20,7 @@ from tpstudio.response_diagnostics import (
 )
 
 
-def create_feedback_notebook(
+def _tpstudio_original_create_feedback_notebook_a61a(
     model_path: str | Path,
     copy_path: str | Path,
     output_path: str | Path | None = None,
@@ -884,3 +885,29 @@ def _next_available_feedback_path(copy_path: Path) -> Path:
         if not candidate.exists():
             return candidate
         counter += 1
+
+def create_feedback_notebook(
+    model_path,
+    copy_path,
+    output_path=None,
+):
+    if output_path is None:
+        result = _tpstudio_original_create_feedback_notebook_a61a(
+            model_path,
+            copy_path,
+        )
+        corrected_path = result
+    else:
+        result = _tpstudio_original_create_feedback_notebook_a61a(
+            model_path,
+            copy_path,
+            output_path,
+        )
+        corrected_path = result if result is not None else output_path
+
+    add_pedagogical_section_feedback_to_notebook(
+        copy_path,
+        corrected_path,
+    )
+    return result
+

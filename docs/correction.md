@@ -59,3 +59,15 @@ Le rapport indique le kernel déclaré, le kernel utilisé et l'éventuel fallba
 
 Un `--kernel-name` fourni explicitement reste prioritaire et n'est jamais remplacé silencieusement.
 
+## Sections pédagogiques hors « Réponse : »
+
+TPStudio analyse aussi certaines sections Markdown importantes même lorsqu'elles ne contiennent pas le marqueur `Réponse :`.
+
+A61a couvre d'abord :
+
+- Protocole ;
+- Objectifs ;
+- Problématique.
+
+Une section fragile ou vide produit un commentaire local et apparaît dans le rapport Markdown.
+
