@@ -1,4 +1,5 @@
 from __future__ import annotations
+from tpstudio.code_semantics import add_code_semantic_feedback_to_notebook
 from tpstudio.pedagogical_sections import add_pedagogical_section_feedback_to_notebook
 
 import copy
@@ -906,6 +907,11 @@ def create_feedback_notebook(
         corrected_path = result if result is not None else output_path
 
     add_pedagogical_section_feedback_to_notebook(
+        copy_path,
+        corrected_path,
+    )
+    add_code_semantic_feedback_to_notebook(
+        model_path,
         copy_path,
         corrected_path,
     )

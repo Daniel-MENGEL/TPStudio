@@ -71,3 +71,19 @@ A61a couvre d'abord :
 
 Une section fragile ou vide produit un commentaire local et apparaît dans le rapport Markdown.
 
+## Comparaison sémantique du code
+
+A61b compare les cellules de code de la copie au corrigé et ne signale que des écarts à forte confiance :
+
+- constante numérique modifiée dans une formule de même structure ;
+- numérateur et dénominateur inversés ;
+- opérateur binaire modifié avec les mêmes opérandes.
+
+Les tableaux de mesures et autres conteneurs de données peuvent différer du corrigé sans être signalés.
+
+### Alignement des formules entre notebooks
+
+A61b-bis ne dépend plus du découpage identique des cellules. Les affectations d'une même variable sont rapprochées selon la structure de leur expression.
+
+Cela permet notamment de comparer un corrigé contenant une grosse cellule de code avec une copie où le même calcul a été réparti sur plusieurs petites cellules.
+

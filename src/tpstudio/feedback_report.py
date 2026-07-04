@@ -1,4 +1,5 @@
 from __future__ import annotations
+from tpstudio.code_semantics import add_code_semantic_feedback_to_report
 from tpstudio.pedagogical_sections import add_pedagogical_section_feedback_to_report
 
 from pathlib import Path
@@ -85,6 +86,11 @@ def export_feedback_report(
         report_path = result if result is not None else output_path
 
     add_pedagogical_section_feedback_to_report(
+        copy_path,
+        report_path,
+    )
+    add_code_semantic_feedback_to_report(
+        model_path,
         copy_path,
         report_path,
     )
