@@ -16,6 +16,7 @@ def test_python_module_cli_help_lists_main_commands() -> None:
     assert "check-gradebook" in result.stdout
     assert "check-duplicates" in result.stdout
     assert "correct-copy" in result.stdout
+    assert "execute-copy" in result.stdout
     assert "export-gradebook" in result.stdout
     assert "export-gradebook-bundle" in result.stdout
 

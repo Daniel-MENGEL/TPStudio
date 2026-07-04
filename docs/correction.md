@@ -21,3 +21,41 @@ Par sécurité, TPStudio refuse d'écraser une correction existante. Le remplace
 ```bash
 --overwrite
 ```
+
+## Exécution sécurisée
+
+Pour exécuter une copie sans modifier l'original :
+
+```bash
+tpstudio execute-copy copie-etudiant.ipynb   --output-dir executions/
+```
+
+Options utiles :
+
+```bash
+--cell-timeout 60
+--kernel-name python3
+--continue-on-error
+--overwrite
+```
+
+Pour exécuter la copie temporaire avant sa correction :
+
+```bash
+tpstudio correct-copy modele.ipynb copie-etudiant.ipynb   --output-dir corrections/   --execute-first
+```
+
+Le rapport Markdown indique alors le statut de l'exécution, le nombre de cellules tentées et la première erreur détectée.
+
+### Sélection automatique du kernel
+
+Sans `--kernel-name`, TPStudio :
+
+1. utilise le kernel déclaré dans le notebook s'il est disponible ;
+2. sinon utilise automatiquement `python3` s'il est disponible ;
+3. sinon s'arrête avec la liste des kernels disponibles.
+
+Le rapport indique le kernel déclaré, le kernel utilisé et l'éventuel fallback automatique.
+
+Un `--kernel-name` fourni explicitement reste prioritaire et n'est jamais remplacé silencieusement.
+

@@ -31,6 +31,7 @@ from tpstudio.copy_comparison import (
 )
 from tpstudio.copy_feedback import create_feedback_notebook
 from tpstudio.correction_bundle import correct_copy
+from tpstudio.notebook_execution import execute_notebook_copy, format_execution_result
 
 
 def find_tex_file(tp_dir: Path) -> Path:
@@ -490,7 +491,64 @@ def main() -> int:
         action="store_true",
         help="remplacer explicitement des sorties -correction déjà présentes",
     )
+    correct_copy_parser.add_argument(
+        "--execute-first",
+        action="store_true",
+        help="exécuter une copie temporaire du notebook avant la correction",
+    )
+    correct_copy_parser.add_argument(
+        "--cell-timeout",
+        type=int,
+        default=60,
+        help="timeout maximal en secondes pour chaque cellule si --execute-first est utilisé",
+    )
+    correct_copy_parser.add_argument(
+        "--kernel-name",
+        help="kernel Jupyter à utiliser pour --execute-first",
+    )
+    correct_copy_parser.add_argument(
+        "--continue-on-error",
+        action="store_true",
+        help="continuer après les erreurs de cellule pendant --execute-first",
+    )
     correct_copy_parser.set_defaults(func=correct_copy_command)
+
+
+    execute_copy_parser = subparsers.add_parser(
+        "execute-copy",
+        help="exécuter une copie de notebook sans modifier l'original",
+        description=(
+            "Exécute une copie de travail avec timeout par cellule et conserve "
+            "les sorties ou l'erreur dans un notebook -executed.ipynb."
+        ),
+    )
+    execute_copy_parser.add_argument("copy")
+    execute_copy_parser.add_argument(
+        "--output-dir",
+        required=True,
+        help="dossier dans lequel créer le notebook -executed.ipynb",
+    )
+    execute_copy_parser.add_argument(
+        "--cell-timeout",
+        type=int,
+        default=60,
+        help="timeout maximal en secondes pour chaque cellule de code (défaut : 60)",
+    )
+    execute_copy_parser.add_argument(
+        "--kernel-name",
+        help="nom du kernel Jupyter à utiliser ; par défaut, celui du notebook",
+    )
+    execute_copy_parser.add_argument(
+        "--continue-on-error",
+        action="store_true",
+        help="continuer l'exécution après une cellule en erreur",
+    )
+    execute_copy_parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="remplacer explicitement un notebook -executed déjà présent",
+    )
+    execute_copy_parser.set_defaults(func=execute_copy_command)
 
 
     args = parser.parse_args()
@@ -661,6 +719,31 @@ def export_gradebook_bundle_command(args) -> None:
         open_path(folder_to_open)
         print(f"Ouverture du dossier : {folder_to_open}")
 
+def execute_copy_command(args) -> None:
+    source = Path(args.copy)
+    output_dir = Path(args.output_dir)
+    output = output_dir / f"{source.stem}-executed.ipynb"
+
+    try:
+        result = execute_notebook_copy(
+            source,
+            output,
+            cell_timeout=args.cell_timeout,
+            kernel_name=args.kernel_name,
+            continue_on_error=args.continue_on_error,
+            overwrite=args.overwrite,
+        )
+    except (
+        FileNotFoundError,
+        FileExistsError,
+        RuntimeError,
+        ValueError,
+    ) as error:
+        raise SystemExit(str(error)) from error
+
+    print(format_execution_result(result))
+
+
 def correct_copy_command(args) -> None:
     try:
         paths = correct_copy(
@@ -668,13 +751,26 @@ def correct_copy_command(args) -> None:
             Path(args.copy),
             output_dir=Path(args.output_dir),
             overwrite=getattr(args, "overwrite", False),
+            execute_first=getattr(args, "execute_first", False),
+            cell_timeout=getattr(args, "cell_timeout", 60),
+            kernel_name=getattr(args, "kernel_name", None),
+            continue_on_error=getattr(args, "continue_on_error", False),
         )
-    except (FileNotFoundError, FileExistsError, ValueError) as error:
+    except (
+        FileNotFoundError,
+        FileExistsError,
+        RuntimeError,
+        ValueError,
+    ) as error:
         raise SystemExit(str(error)) from error
 
     print("Correction TPStudio créée :")
     print(f"- Notebook : {paths.notebook}")
     print(f"- Rapport Markdown : {paths.markdown_report}")
+
+    if paths.execution is not None:
+        print("")
+        print(format_execution_result(paths.execution))
 
 if __name__ == "__main__":
     main()
