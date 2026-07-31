@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .conditions import Condition
+from .diagnostics import Diagnostic
 from .facts import Fact
 from .rules import Rule
 
@@ -22,10 +23,3 @@ Operator=str
 class Location:
     cell_index:int
     section:str|None=None
-
-@dataclass(slots=True)
-class Diagnostic:
-    code:DiagnosticCode
-    message:str
-    rule_id:RuleId
-    location:Location|None=None

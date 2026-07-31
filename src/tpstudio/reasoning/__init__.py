@@ -15,6 +15,16 @@ from .conditions import (
     SubjectExists,
 )
 from .enums import FactKind
+from .diagnostic_builder import DiagnosticBuilder
+from .diagnostics import (
+    Diagnostic,
+    DiagnosticCategory,
+    DiagnosticDefinition,
+    DiagnosticRegistry,
+    DiagnosticSet,
+    DiagnosticSeverity,
+    UnknownDiagnosticDefinitionError,
+)
 from .evidence import Evidence
 from .extractor import (
     ConceptExtractor,
@@ -25,7 +35,7 @@ from .extractor import (
 from .fact_set import FactSet
 from .facts import Fact
 from .inference import InferenceEngine, InferenceResult
-from .models import Diagnostic, Location
+from .models import Location
 from .rule_set import RuleSet
 from .rules import Rule, RuleConclusion, RuleEvaluation
 
@@ -37,6 +47,12 @@ __all__ = [
     "Condition",
     "ConditionResult",
     "Diagnostic",
+    "DiagnosticBuilder",
+    "DiagnosticCategory",
+    "DiagnosticDefinition",
+    "DiagnosticRegistry",
+    "DiagnosticSet",
+    "DiagnosticSeverity",
     "Evidence",
     "Fact",
     "FactAbsent",
@@ -56,6 +72,7 @@ __all__ = [
     "RuleEvaluation",
     "RuleSet",
     "SubjectExists",
+    "UnknownDiagnosticDefinitionError",
     "extract_concepts",
     "extract_facts",
 ]
