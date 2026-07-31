@@ -24,6 +24,7 @@ from .extractor import (
 )
 from .fact_set import FactSet
 from .facts import Fact
+from .inference import InferenceEngine, InferenceResult
 from .models import Diagnostic, Location
 from .rule_set import RuleSet
 from .rules import Rule, RuleConclusion, RuleEvaluation
@@ -44,6 +45,8 @@ __all__ = [
     "FactKind",
     "FactKindExists",
     "FactSet",
+    "InferenceEngine",
+    "InferenceResult",
     "Location",
     "Not",
     "Or",
