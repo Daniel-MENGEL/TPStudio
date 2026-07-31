@@ -4,6 +4,7 @@ from pathlib import Path
 
 import nbformat
 
+from tpstudio.glossary import Glossary, ScientificTerm
 from tpstudio.pedagogical_sections import (
     add_pedagogical_section_feedback_to_notebook,
     add_pedagogical_section_feedback_to_report,
@@ -137,3 +138,71 @@ def test_conjugated_protocol_actions_are_recognized() -> None:
     assert len(findings) == 1
     assert findings[0].status in {"solide", "acceptable"}
 
+
+def test_protocol_uses_a_custom_glossary_for_scientific_context() -> None:
+    notebook = _notebook(
+        "## Protocole\n\n"
+        "Nous plaçons les électrodes, nous relevons plusieurs tensions et nous "
+        "reportons les mesures avant de calculer la conductivité."
+    )
+    glossary = Glossary(
+        "electricity",
+        "Électricité",
+        (
+            ScientificTerm("electrode", "électrode", "instrument"),
+            ScientificTerm("tension", "tension", "quantity"),
+            ScientificTerm("conductivite", "conductivité", "quantity"),
+        ),
+    )
+
+    findings = analyze_pedagogical_sections_in_notebook(notebook, glossary=glossary)
+
+    assert findings[0].status in {"solide", "acceptable"}
+
+
+def test_protocol_preserves_legacy_measurement_family_threshold() -> None:
+    notebook = _notebook(
+        "## Protocole\n\n"
+        "Nous plaçons le montage puis nous mesurons plusieurs valeurs et nous "
+        "estimons les incertitudes avant de noter les résultats avec soin."
+    )
+
+    findings = analyze_pedagogical_sections_in_notebook(notebook)
+
+    assert len(findings) == 1
+    assert findings[0].status == "acceptable"
+
+
+def test_protocol_counts_distinct_legacy_scientific_families() -> None:
+    notebook = _notebook(
+        "## Protocole\n\n"
+        "Nous plaçons le disque devant le laser et nous alignons le rayon. "
+        "Nous choisissons plusieurs angles d'incidence puis nous mesurons "
+        "l'angle de réfraction dans le plexiglas et reportons les mesures."
+    )
+
+    findings = analyze_pedagogical_sections_in_notebook(notebook)
+
+    assert len(findings) == 1
+    assert findings[0].status == "solide"
+
+
+def test_custom_glossary_without_groups_preserves_legacy_heuristic() -> None:
+    notebook = _notebook(
+        "## Protocole\n\n"
+        "Nous plaçons les électrodes, relevons plusieurs tensions et reportons "
+        "les mesures avant de calculer soigneusement la conductivité obtenue."
+    )
+    glossary = Glossary(
+        "electricity-fallback",
+        "Électricité",
+        (
+            ScientificTerm("electrode", "électrode", "instrument"),
+            ScientificTerm("tension", "tension", "quantity"),
+        ),
+    )
+
+    findings = analyze_pedagogical_sections_in_notebook(notebook, glossary=glossary)
+
+    assert len(findings) == 1
+    assert findings[0].status == "acceptable"

@@ -4,9 +4,12 @@ import json
 from pathlib import Path
 
 from tpstudio.response_diagnostics import (
+    diagnose_response,
     diagnose_responses_from_notebook,
     format_response_diagnostic_report,
 )
+from tpstudio.glossary import Glossary, ScientificTerm
+from tpstudio.response_extraction import NotebookResponse
 
 
 def _write_notebook(path: Path, cells: list[dict]) -> None:
@@ -52,6 +55,8 @@ def test_diagnose_solid_response(tmp_path: Path) -> None:
     assert diagnosis.has_comparison is True
     assert diagnosis.has_physical_vocabulary is True
     assert diagnosis.is_vague is False
+    assert {"pente", "indice", "plexiglas"} <= set(diagnosis.matched_scientific_terms)
+    assert {"quantity", "instrument"} <= set(diagnosis.matched_scientific_categories)
     assert "réponse structurée sur le plan textuel" in diagnosis.signals
 
 
@@ -162,3 +167,24 @@ def test_format_response_diagnostic_report_when_no_response(tmp_path: Path) -> N
 
     assert "Réponses analysées : 0" in report
     assert "Aucune zone `Réponse :` détectée." in report
+
+
+def test_diagnose_response_accepts_a_custom_glossary() -> None:
+    response = NotebookResponse(
+        cell_number=1,
+        context="",
+        text="La conductivité mesurée est compatible avec 2,5 S/m.",
+        word_count=9,
+        is_empty=False,
+    )
+    glossary = Glossary(
+        "electricity",
+        "Électricité",
+        (ScientificTerm("conductivite", "conductivité", "quantity"),),
+    )
+
+    diagnosis = diagnose_response(response, glossary=glossary)
+
+    assert diagnosis.has_physical_vocabulary is True
+    assert diagnosis.matched_scientific_terms == ("conductivite",)
+    assert diagnosis.matched_scientific_categories == ("quantity",)

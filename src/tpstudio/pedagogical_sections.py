@@ -7,6 +7,11 @@ import unicodedata
 
 import nbformat
 
+from tpstudio.glossary import (
+    Glossary,
+    default_scientific_glossary,
+    match_terms,
+)
 
 TARGET_SECTION_KINDS = {
     "protocole": "Protocole",
@@ -35,15 +40,18 @@ class PedagogicalSectionFinding:
 
 def analyze_pedagogical_sections(
     notebook_path: str | Path,
+    glossary: Glossary | None = None,
 ) -> list[PedagogicalSectionFinding]:
     notebook = nbformat.read(Path(notebook_path), as_version=4)
-    return analyze_pedagogical_sections_in_notebook(notebook)
+    return analyze_pedagogical_sections_in_notebook(notebook, glossary=glossary)
 
 
 def analyze_pedagogical_sections_in_notebook(
     notebook,
+    glossary: Glossary | None = None,
 ) -> list[PedagogicalSectionFinding]:
     findings: list[PedagogicalSectionFinding] = []
+    glossary = glossary or default_scientific_glossary()
 
     for cell_index, cell in enumerate(notebook.cells):
         if getattr(cell, "cell_type", "") != "markdown":
@@ -67,7 +75,7 @@ def analyze_pedagogical_sections_in_notebook(
         body = _clean_student_text(body)
 
         if section_kind == "protocole":
-            status, reasons, suggestion = _diagnose_protocol(body)
+            status, reasons, suggestion = _diagnose_protocol(body, glossary=glossary)
         else:
             status, reasons, suggestion = _diagnose_short_written_section(
                 body,
@@ -179,6 +187,8 @@ def add_pedagogical_section_feedback_to_report(
 
 def _diagnose_protocol(
     text: str,
+    *,
+    glossary: Glossary,
 ) -> tuple[str, list[str], str]:
     if _is_placeholder_or_empty(text):
         return (
@@ -206,15 +216,29 @@ def _diagnose_protocol(
         ],
     )
 
-    physical_hits = _count_keyword_families(
-        normalized,
-        [
-            ("angle", "incidence", "refraction"),
-            ("disque", "rapporteur", "laser", "rayon"),
-            ("plexiglas", "dioptre"),
-            ("mesure", "incertitude", "tableau"),
-        ],
-    )
+    scientific_matches = match_terms(text, glossary)
+    diagnostic_groups = {
+        group
+        for match in scientific_matches
+        for group in match.term.diagnostic_groups
+    }
+
+    if diagnostic_groups:
+        physical_hits = len(diagnostic_groups)
+    else:
+        # Un glossaire personnalisé dépourvu de groupes pédagogiques ne doit
+        # pas modifier implicitement la sémantique historique du diagnostic.
+        # Les catégories scientifiques (quantity, instrument, etc.) ne sont
+        # pas équivalentes aux familles utilisées pour évaluer un protocole.
+        physical_hits = _count_keyword_families(
+            normalized,
+            [
+                ("angle", "incidence", "refraction"),
+                ("disque", "rapporteur", "laser", "rayon"),
+                ("plexiglas", "dioptre"),
+                ("mesure", "incertitude", "tableau"),
+            ],
+        )
 
     vague = any(
         phrase in normalized

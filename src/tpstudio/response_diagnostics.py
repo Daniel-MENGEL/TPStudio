@@ -4,6 +4,12 @@ from dataclasses import dataclass
 import re
 from pathlib import Path
 
+from tpstudio.glossary import (
+    Glossary,
+    TermCategory,
+    default_scientific_glossary,
+    match_terms,
+)
 from tpstudio.response_extraction import (
     NotebookResponse,
     extract_responses_from_notebook,
@@ -20,9 +26,14 @@ class ResponseDiagnosis:
     has_comparison: bool
     has_physical_vocabulary: bool
     is_vague: bool
+    matched_scientific_terms: tuple[str, ...] = ()
+    matched_scientific_categories: tuple[TermCategory, ...] = ()
 
 
-def diagnose_responses_from_notebook(notebook_path: str | Path) -> list[ResponseDiagnosis]:
+def diagnose_responses_from_notebook(
+    notebook_path: str | Path,
+    glossary: Glossary | None = None,
+) -> list[ResponseDiagnosis]:
     """Return lightweight diagnostics for extracted student answers.
 
     This is intentionally heuristic. It does not try to grade the scientific
@@ -31,18 +42,23 @@ def diagnose_responses_from_notebook(notebook_path: str | Path) -> list[Response
     """
 
     return [
-        diagnose_response(response)
+        diagnose_response(response, glossary=glossary)
         for response in extract_responses_from_notebook(notebook_path)
     ]
 
 
-def diagnose_response(response: NotebookResponse) -> ResponseDiagnosis:
+def diagnose_response(
+    response: NotebookResponse,
+    glossary: Glossary | None = None,
+) -> ResponseDiagnosis:
     text = response.text
     lower = _normalize(text)
 
     has_numeric_value = _has_numeric_value(text)
     has_comparison = _has_comparison(lower)
-    has_physical_vocabulary = _has_physical_vocabulary(lower)
+    glossary = glossary or default_scientific_glossary()
+    scientific_matches = match_terms(text, glossary)
+    has_physical_vocabulary = bool(scientific_matches)
     is_vague = _is_vague(lower, response.word_count)
 
     signals: list[str] = []
@@ -85,11 +101,20 @@ def diagnose_response(response: NotebookResponse) -> ResponseDiagnosis:
         has_comparison=has_comparison,
         has_physical_vocabulary=has_physical_vocabulary,
         is_vague=is_vague,
+        matched_scientific_terms=tuple(
+            match.term.id for match in scientific_matches
+        ),
+        matched_scientific_categories=tuple(
+            dict.fromkeys(match.term.category for match in scientific_matches)
+        ),
     )
 
 
-def format_response_diagnostic_report(notebook_path: str | Path) -> str:
-    diagnoses = diagnose_responses_from_notebook(notebook_path)
+def format_response_diagnostic_report(
+    notebook_path: str | Path,
+    glossary: Glossary | None = None,
+) -> str:
+    diagnoses = diagnose_responses_from_notebook(notebook_path, glossary=glossary)
 
     lines = [
         "TPStudio - Diagnostic des réponses étudiantes",
@@ -193,32 +218,6 @@ def _has_comparison(lower: str) -> bool:
     ]
 
     return any(re.search(pattern, lower) for pattern in comparison_patterns)
-
-
-def _has_physical_vocabulary(lower: str) -> bool:
-    physical_terms = [
-        "indice",
-        "plexiglas",
-        "réfraction",
-        "refraction",
-        "snell",
-        "descartes",
-        "angle",
-        "pente",
-        "incertitude",
-        "écart normalisé",
-        "ecart normalise",
-        "sin",
-        "mesure",
-        "expérimental",
-        "experimental",
-        "loi",
-        "droite",
-        "alignés",
-        "alignes",
-    ]
-
-    return any(term in lower for term in physical_terms)
 
 
 def _is_vague(lower: str, word_count: int) -> bool:
