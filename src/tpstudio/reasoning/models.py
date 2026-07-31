@@ -8,9 +8,10 @@ contracts.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
+from .conditions import Condition
 from .facts import Fact
+from .rules import Rule
 
 FactName=str
 RuleId=str
@@ -21,18 +22,6 @@ Operator=str
 class Location:
     cell_index:int
     section:str|None=None
-
-@dataclass(slots=True)
-class Condition:
-    fact:FactName
-    operator:Operator
-    expected_value:Any
-
-@dataclass(slots=True)
-class Rule:
-    id:RuleId
-    description:str
-    conditions:list[Condition]
 
 @dataclass(slots=True)
 class Diagnostic:
