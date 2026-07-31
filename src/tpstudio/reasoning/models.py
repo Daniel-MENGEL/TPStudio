@@ -1,6 +1,16 @@
+"""Compatibility models predating the A63 fact infrastructure.
+
+New code should import :class:`Fact` from :mod:`tpstudio.reasoning.facts`.
+The remaining classes stay here until the rules milestone defines their final
+contracts.
+"""
+
 from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Any
+
+from .facts import Fact
 
 FactName=str
 RuleId=str
@@ -11,13 +21,6 @@ Operator=str
 class Location:
     cell_index:int
     section:str|None=None
-
-@dataclass(slots=True)
-class Fact:
-    name:FactName
-    value:Any
-    source:str|None=None
-    location:Location|None=None
 
 @dataclass(slots=True)
 class Condition:
