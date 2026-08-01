@@ -118,3 +118,6 @@ ajouter de valeur numérique au plan.
 A68d fournit le premier évaluateur du niveau 4 :
 [l'évaluation structurelle des grandeurs](quantity_structural_evaluation.md)
 consomme les observations A68c sans valider leur contenu scientifique.
+A68e complète ce niveau avec une
+[évaluation intrinsèque de l'incertitude](quantity_uncertainty_evaluation.md),
+fondée sur une politique explicite du professeur et sans vérifier son calcul.

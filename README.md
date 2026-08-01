@@ -27,3 +27,4 @@ Le parseur est spécialisé pour la structure habituelle des TP : `\objectifs`, 
 - [Attendus de grandeurs numériques](docs/quantity_expectations.md) : symboles, unités et exigences structurelles déclarés sans valeur imposée.
 - [Observations textuelles de quantités](docs/quantity_observations.md) : extraction littérale de valeurs, incertitudes et unités déclarées.
 - [Évaluation structurelle des quantités](docs/quantity_structural_evaluation.md) : contrôle interne de présence, sans jugement scientifique ni diagnostic.
+- [Évaluation intrinsèque des incertitudes](docs/quantity_uncertainty_evaluation.md) : positivité et présentation d'une incertitude observée.

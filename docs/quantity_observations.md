@@ -14,6 +14,9 @@ scientifiques pour les quantités textuelles simples :
 A68c implémente uniquement le niveau 3. Une observation n'est pas une
 validation. [A68d évalue désormais leur structure](quantity_structural_evaluation.md)
 sans juger la valeur, l'unité ou l'incertitude sur le fond.
+Lorsqu'une incertitude est présente, A68e peut ensuite
+[évaluer certaines propriétés de sa présentation](quantity_uncertainty_evaluation.md)
+en conservant exactement le `Decimal` observé.
 
 ## Utilisation
 

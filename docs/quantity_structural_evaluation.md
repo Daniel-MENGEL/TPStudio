@@ -82,3 +82,7 @@ La justification reste différée lorsqu'elle doit être contrôlée.
 A68d ne compare aucune référence ou méthode, ne recalcule rien depuis les
 données et ne produit ni `Fact`, ni règle, ni diagnostic, ni feedback, ni
 score.
+
+A68d vérifie seulement la présence de l'incertitude. Lorsqu'elle est présente,
+[A68e examine certaines propriétés intrinsèques de sa présentation](quantity_uncertainty_evaluation.md)
+en réutilisant exactement l'observation sélectionnée ici.

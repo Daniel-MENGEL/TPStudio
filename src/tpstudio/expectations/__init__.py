@@ -9,6 +9,10 @@ from .scientific_productions import (
     ScientificProductionPlan,
     ScientificProductionSpec,
 )
+from .uncertainties import (
+    UncertaintyQualityExpectationSet,
+    UncertaintyQualitySpec,
+)
 
 __all__ = [
     "ExpectedConclusion",
@@ -22,4 +26,6 @@ __all__ = [
     "ScientificProductionKind",
     "ScientificProductionPlan",
     "ScientificProductionSpec",
+    "UncertaintyQualityExpectationSet",
+    "UncertaintyQualitySpec",
 ]

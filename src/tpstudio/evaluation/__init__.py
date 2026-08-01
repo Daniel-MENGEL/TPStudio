@@ -8,6 +8,13 @@ from .quantity_structure import (
     QuantityStructuralEvaluator,
     evaluate_quantity_structure,
 )
+from .quantity_uncertainty import (
+    QuantityUncertaintyEvaluation,
+    QuantityUncertaintyEvaluator,
+    UncertaintyCriterionEvaluation,
+    UncertaintyQualityCriterion,
+    evaluate_quantity_uncertainty,
+)
 
 __all__ = [
     "EvaluationStatus",
@@ -15,5 +22,10 @@ __all__ = [
     "QuantityStructuralCriterion",
     "QuantityStructuralEvaluation",
     "QuantityStructuralEvaluator",
+    "QuantityUncertaintyEvaluation",
+    "QuantityUncertaintyEvaluator",
+    "UncertaintyCriterionEvaluation",
+    "UncertaintyQualityCriterion",
     "evaluate_quantity_structure",
+    "evaluate_quantity_uncertainty",
 ]

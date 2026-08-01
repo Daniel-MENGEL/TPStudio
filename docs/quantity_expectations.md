@@ -80,3 +80,6 @@ validation scientifique.
 Ces observations peuvent ensuite alimenter
 [l'évaluation structurelle A68d](quantity_structural_evaluation.md), qui
 applique les exigences de présence sans valider la valeur scientifique.
+A68e permet en complément de déclarer une
+[politique de présentation de l'incertitude](quantity_uncertainty_evaluation.md)
+sans ajouter de valeur de référence ni de formule de propagation.
