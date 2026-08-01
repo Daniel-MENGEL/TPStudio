@@ -25,6 +25,12 @@ from .diagnostics import (
     DiagnosticSeverity,
     UnknownDiagnosticDefinitionError,
 )
+from .demo import (
+    EndToEndCase,
+    EndToEndReport,
+    format_end_to_end_report,
+    run_end_to_end_case,
+)
 from .evidence import Evidence
 from .extractor import (
     ConceptExtractor,
@@ -54,6 +60,8 @@ __all__ = [
     "DiagnosticSet",
     "DiagnosticSeverity",
     "Evidence",
+    "EndToEndCase",
+    "EndToEndReport",
     "Fact",
     "FactAbsent",
     "FactExists",
@@ -75,4 +83,6 @@ __all__ = [
     "UnknownDiagnosticDefinitionError",
     "extract_concepts",
     "extract_facts",
+    "format_end_to_end_report",
+    "run_end_to_end_case",
 ]
