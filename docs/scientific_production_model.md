@@ -121,3 +121,6 @@ consomme les observations A68c sans valider leur contenu scientifique.
 A68e complète ce niveau avec une
 [évaluation intrinsèque de l'incertitude](quantity_uncertainty_evaluation.md),
 fondée sur une politique explicite du professeur et sans vérifier son calcul.
+A68f fournit la première traduction du niveau 4 vers le niveau 5 avec des
+[diagnostics structurés de grandeurs](quantity_diagnostics.md), encore sans
+texte étudiant, sévérité, feedback ou score.

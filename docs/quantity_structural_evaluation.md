@@ -86,3 +86,7 @@ score.
 A68d vérifie seulement la présence de l'incertitude. Lorsqu'elle est présente,
 [A68e examine certaines propriétés intrinsèques de sa présentation](quantity_uncertainty_evaluation.md)
 en réutilisant exactement l'observation sélectionnée ici.
+
+Les échecs structurels et les contrôles obligatoires différés peuvent désormais
+être traduits en [diagnostics structurés A68f](quantity_diagnostics.md), sans
+devenir encore des messages destinés à l'étudiant.

@@ -77,3 +77,7 @@ compare aucune référence ou méthode et n'interprète aucune unité.
 
 Les résultats restent internes : aucun `Fact`, diagnostic, feedback ou score
 n'est produit.
+
+A68f peut désormais traduire les échecs de cette évaluation en
+[diagnostics structurés](quantity_diagnostics.md). Une incertitude absente
+reste toutefois traitée uniquement par A68d et n'est pas sanctionnée deux fois.
