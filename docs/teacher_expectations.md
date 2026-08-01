@@ -67,3 +67,8 @@ détaillées spécialisées. A68a ajoute un
 pour décrire la nature de ce que l'étudiant doit produire et les bases de ses
 futures évaluations. Aucun adaptateur automatique ne relie encore ces deux
 niveaux de contrats.
+
+A68b fournit la première spécification détaillée rattachée explicitement à ce
+plan : les [attendus de grandeurs numériques](quantity_expectations.md)
+décrivent les symboles, unités et exigences de présence sans imposer la valeur
+obtenue par l'étudiant.

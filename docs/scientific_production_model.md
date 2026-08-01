@@ -13,7 +13,9 @@ d'évaluation.
    uniquement ce niveau générique.
 2. **Spécification détaillée** : propriétés ou critères fournis par le
    professeur. `ExpectedRelation` et `ExpectedConclusion` en sont les premiers
-   exemples spécialisés, sans adaptateur automatique vers le nouveau modèle.
+   exemples spécialisés. A68b ajoute `ExpectedQuantity`, première
+   spécification détaillée explicitement rattachée au plan général par
+   `QuantityExpectationSet`.
 3. **Preuve ou observation** : information réellement extraite de la copie,
    du code, des variables ou des figures. A68a n'en extrait aucune.
 4. **Évaluation** : comparaison future des preuves avec les critères.
@@ -107,3 +109,8 @@ plan = ScientificProductionPlan(
 Le plan valide les dépendances, rejette les cycles et fournit un ordre
 topologique stable. Il n'extrait cependant aucune valeur ou incertitude,
 n'inspecte aucune courbe et n'exécute aucune comparaison scientifique.
+
+Les critères structurels des deux productions `QUANTITY` peuvent désormais
+être décrits séparément avec le
+[modèle d'attendus de grandeurs numériques](quantity_expectations.md), sans
+ajouter de valeur numérique au plan.
