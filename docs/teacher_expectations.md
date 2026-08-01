@@ -50,3 +50,11 @@ normalisation mathématique, équivalence algébrique ou équivalence sémantiqu
 n'est calculée. Une égalité inversée n'est acceptée que si le professeur l'a
 déclarée comme variante. Aucun parseur LaTeX, fichier YAML ou JSON, moteur
 d'IA, fait, règle ou diagnostic n'est créé par cette couche.
+
+## Recherche littérale disponible
+
+Depuis A67b, le moteur de raisonnement peut rechercher littéralement les
+expressions d'une `ExpectedRelation` dans une réponse, sans modifier les
+attendus ni analyser les conclusions. Cette correspondance exacte et ses
+limites sont détaillées dans la
+[documentation de la détection littérale](literal_relation_matching.md).

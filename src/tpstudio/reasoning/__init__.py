@@ -42,6 +42,13 @@ from .fact_set import FactSet
 from .facts import Fact
 from .inference import InferenceEngine, InferenceResult
 from .models import Location
+from .relation_matching import (
+    LiteralRelationMatcher,
+    RelationDetection,
+    RelationDetectionSet,
+    RelationMatch,
+    match_declared_relations,
+)
 from .rule_set import RuleSet
 from .rules import Rule, RuleConclusion, RuleEvaluation
 
@@ -72,6 +79,7 @@ __all__ = [
     "InferenceEngine",
     "InferenceResult",
     "Location",
+    "LiteralRelationMatcher",
     "Not",
     "Or",
     "PredicateExists",
@@ -79,10 +87,14 @@ __all__ = [
     "RuleConclusion",
     "RuleEvaluation",
     "RuleSet",
+    "RelationDetection",
+    "RelationDetectionSet",
+    "RelationMatch",
     "SubjectExists",
     "UnknownDiagnosticDefinitionError",
     "extract_concepts",
     "extract_facts",
     "format_end_to_end_report",
+    "match_declared_relations",
     "run_end_to_end_case",
 ]

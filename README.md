@@ -22,3 +22,4 @@ Le parseur est spécialisé pour la structure habituelle des TP : `\objectifs`, 
 - [Commande `improve`](docs/improve.md) : génération non destructive de notebooks améliorés.
 - [Glossaire scientifique](docs/glossary.md) : vocabulaire et détection déterministe utilisés par les diagnostics.
 - [Attendus scientifiques du professeur](docs/teacher_expectations.md) : relations et conclusions de référence déclarées en Python.
+- [Détection littérale des relations](docs/literal_relation_matching.md) : recherche exacte des expressions déclarées par le professeur.
