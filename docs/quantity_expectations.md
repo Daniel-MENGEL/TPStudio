@@ -72,3 +72,8 @@ quantités).
 Une copie pourrait produire, à titre illustratif,
 `g = (9,7 ± 0,4) m·s⁻²`. Cette valeur ne figure pas dans `ExpectedQuantity` :
 elle devra provenir de la copie et de ses mesures.
+
+A68c fournit désormais une
+[observation textuelle limitée de ces quantités](quantity_observations.md).
+Cette extraction ne modifie pas les attentes et ne constitue encore aucune
+validation scientifique.

@@ -42,6 +42,12 @@ from .fact_set import FactSet
 from .facts import Fact
 from .inference import InferenceEngine, InferenceResult
 from .models import Location
+from .quantity_extraction import (
+    LiteralQuantityExtractor,
+    QuantityDetection,
+    QuantityObservation,
+    extract_expected_quantity,
+)
 from .relation_matching import (
     LiteralRelationMatcher,
     RelationDetection,
@@ -80,9 +86,12 @@ __all__ = [
     "InferenceResult",
     "Location",
     "LiteralRelationMatcher",
+    "LiteralQuantityExtractor",
     "Not",
     "Or",
     "PredicateExists",
+    "QuantityDetection",
+    "QuantityObservation",
     "Rule",
     "RuleConclusion",
     "RuleEvaluation",
@@ -94,6 +103,7 @@ __all__ = [
     "UnknownDiagnosticDefinitionError",
     "extract_concepts",
     "extract_facts",
+    "extract_expected_quantity",
     "format_end_to_end_report",
     "match_declared_relations",
     "run_end_to_end_case",

@@ -17,7 +17,8 @@ d'évaluation.
    spécification détaillée explicitement rattachée au plan général par
    `QuantityExpectationSet`.
 3. **Preuve ou observation** : information réellement extraite de la copie,
-   du code, des variables ou des figures. A68a n'en extrait aucune.
+   du code, des variables ou des figures. A68c implémente ce niveau pour une
+   grammaire limitée de quantités écrites dans du texte.
 4. **Évaluation** : comparaison future des preuves avec les critères.
 5. **Diagnostic et feedback** : interprétation pédagogique puis formulation
    destinée à l'étudiant.
