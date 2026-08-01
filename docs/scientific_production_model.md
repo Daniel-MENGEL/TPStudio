@@ -124,3 +124,6 @@ fondée sur une politique explicite du professeur et sans vérifier son calcul.
 A68f fournit la première traduction du niveau 4 vers le niveau 5 avec des
 [diagnostics structurés de grandeurs](quantity_diagnostics.md), encore sans
 texte étudiant, sévérité, feedback ou score.
+Avec A68g, le niveau 5 distingue désormais explicitement le diagnostic
+structuré, le [feedback formulé par catalogue](quantity_feedback.md) et la
+future notation, qui reste hors périmètre.

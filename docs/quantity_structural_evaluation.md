@@ -90,3 +90,5 @@ en réutilisant exactement l'observation sélectionnée ici.
 Les échecs structurels et les contrôles obligatoires différés peuvent désormais
 être traduits en [diagnostics structurés A68f](quantity_diagnostics.md), sans
 devenir encore des messages destinés à l'étudiant.
+Un [catalogue A68g](quantity_feedback.md) peut ensuite choisir lesquels de ces
+diagnostics deviennent des formulations présentables.

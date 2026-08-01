@@ -81,3 +81,6 @@ n'est produit.
 A68f peut désormais traduire les échecs de cette évaluation en
 [diagnostics structurés](quantity_diagnostics.md). Une incertitude absente
 reste toutefois traitée uniquement par A68d et n'est pas sanctionnée deux fois.
+Ces diagnostics peuvent à leur tour recevoir un
+[feedback statique configurable](quantity_feedback.md), sans modifier
+l'évaluation ni introduire de notation.

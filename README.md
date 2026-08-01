@@ -29,3 +29,4 @@ Le parseur est spécialisé pour la structure habituelle des TP : `\objectifs`, 
 - [Évaluation structurelle des quantités](docs/quantity_structural_evaluation.md) : contrôle interne de présence, sans jugement scientifique ni diagnostic.
 - [Évaluation intrinsèque des incertitudes](docs/quantity_uncertainty_evaluation.md) : positivité et présentation d'une incertitude observée.
 - [Diagnostics structurés des quantités](docs/quantity_diagnostics.md) : traduction stable des évaluations, sans message étudiant ni sévérité.
+- [Feedback configurable des quantités](docs/quantity_feedback.md) : formulations statiques, audiences et priorités fournies par catalogue.

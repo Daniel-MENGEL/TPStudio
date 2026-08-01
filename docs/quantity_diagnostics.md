@@ -94,3 +94,7 @@ présentée peut être scientifiquement fausse. A68f ne vérifie aucun calcul,
 n'analyse aucune justification et n'interprète aucune unité. Il ne produit ni
 message étudiant, ni recommandation, ni correction, ni sévérité, ni feedback,
 ni score.
+
+Avec A68g, un diagnostic ne devient visible que si un catalogue contient une
+[formulation de feedback pour son code](quantity_feedback.md). L'absence d'une
+entrée supprime volontairement le message, sans fallback implicite.
