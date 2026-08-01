@@ -77,3 +77,6 @@ A68c fournit désormais une
 [observation textuelle limitée de ces quantités](quantity_observations.md).
 Cette extraction ne modifie pas les attentes et ne constitue encore aucune
 validation scientifique.
+Ces observations peuvent ensuite alimenter
+[l'évaluation structurelle A68d](quantity_structural_evaluation.md), qui
+applique les exigences de présence sans valider la valeur scientifique.

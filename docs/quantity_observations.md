@@ -12,7 +12,8 @@ scientifiques pour les quantités textuelles simples :
 5. le **diagnostic et le feedback** traduiront ensuite cette décision.
 
 A68c implémente uniquement le niveau 3. Une observation n'est pas une
-validation.
+validation. [A68d évalue désormais leur structure](quantity_structural_evaluation.md)
+sans juger la valeur, l'unité ou l'incertitude sur le fond.
 
 ## Utilisation
 

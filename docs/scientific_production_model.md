@@ -115,3 +115,6 @@ Les critères structurels des deux productions `QUANTITY` peuvent désormais
 être décrits séparément avec le
 [modèle d'attendus de grandeurs numériques](quantity_expectations.md), sans
 ajouter de valeur numérique au plan.
+A68d fournit le premier évaluateur du niveau 4 :
+[l'évaluation structurelle des grandeurs](quantity_structural_evaluation.md)
+consomme les observations A68c sans valider leur contenu scientifique.

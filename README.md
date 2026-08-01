@@ -26,3 +26,4 @@ Le parseur est spécialisé pour la structure habituelle des TP : `\objectifs`, 
 - [Productions scientifiques](docs/scientific_production_model.md) : nature des productions attendues et bases de leurs futures évaluations.
 - [Attendus de grandeurs numériques](docs/quantity_expectations.md) : symboles, unités et exigences structurelles déclarés sans valeur imposée.
 - [Observations textuelles de quantités](docs/quantity_observations.md) : extraction littérale de valeurs, incertitudes et unités déclarées.
+- [Évaluation structurelle des quantités](docs/quantity_structural_evaluation.md) : contrôle interne de présence, sans jugement scientifique ni diagnostic.
