@@ -38,3 +38,7 @@ Cette fragilité est volontaire : A67b ne normalise rien, ne parse pas LaTeX et
 ne calcule aucune équivalence algébrique. Elle stabilise les contrats de
 détection et de preuve avant l'introduction éventuelle d'une normalisation
 contrôlée.
+
+Dans le modèle général introduit par A68a, ce matcher reste un détecteur
+spécialisé, limité aux relations dont le contenu textuel est explicitement
+déclaré par le professeur.

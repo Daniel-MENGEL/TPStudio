@@ -23,3 +23,4 @@ Le parseur est spécialisé pour la structure habituelle des TP : `\objectifs`, 
 - [Glossaire scientifique](docs/glossary.md) : vocabulaire et détection déterministe utilisés par les diagnostics.
 - [Attendus scientifiques du professeur](docs/teacher_expectations.md) : relations et conclusions de référence déclarées en Python.
 - [Détection littérale des relations](docs/literal_relation_matching.md) : recherche exacte des expressions déclarées par le professeur.
+- [Productions scientifiques](docs/scientific_production_model.md) : nature des productions attendues et bases de leurs futures évaluations.

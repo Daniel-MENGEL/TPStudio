@@ -58,3 +58,12 @@ expressions d'une `ExpectedRelation` dans une réponse, sans modifier les
 attendus ni analyser les conclusions. Cette correspondance exacte et ses
 limites sont détaillées dans la
 [documentation de la détection littérale](literal_relation_matching.md).
+
+## Modèle général des productions
+
+`ExpectedRelation` et `ExpectedConclusion` sont les premières spécifications
+détaillées spécialisées. A68a ajoute un
+[modèle général des productions scientifiques](scientific_production_model.md)
+pour décrire la nature de ce que l'étudiant doit produire et les bases de ses
+futures évaluations. Aucun adaptateur automatique ne relie encore ces deux
+niveaux de contrats.
