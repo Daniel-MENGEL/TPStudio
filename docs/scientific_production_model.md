@@ -136,3 +136,15 @@ A69b place un
 pédagogique et la future observation du notebook. Il décrit les cellules
 destinées aux productions sans charger de notebook, résoudre de cellule ou
 extraire de preuve.
+
+A69c complète cette transition en lecture seule :
+
+```text
+ScientificProductionPlan
+→ NotebookBindingPlan
+→ NotebookBindingResolutionSet
+→ future assessment orchestration
+```
+
+Le jeu de résolutions conserve les bindings par identité et dans leur ordre
+d'évaluation, sans transformer encore les fragments observés en évaluations.

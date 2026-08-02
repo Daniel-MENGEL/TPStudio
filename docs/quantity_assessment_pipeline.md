@@ -89,3 +89,8 @@ A69b prépare désormais, avec un
 [plan déclaratif de rattachement](notebook_production_bindings.md), la future
 fourniture du texte et du `production_id` à A69a. Il ne résout pas encore cette
 liaison et n'appelle pas le pipeline d'évaluation.
+
+A69c peut maintenant produire un texte résolu et son `production_id` depuis un
+notebook déjà chargé, mais ne les transmet toujours pas automatiquement à
+A69a. Cette orchestration `NotebookBindingResolution` vers
+`QuantityAssessmentResult` est réservée à A69d.

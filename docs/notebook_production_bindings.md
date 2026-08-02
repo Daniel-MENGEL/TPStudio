@@ -117,8 +117,15 @@ l'ordre déclaré entre les bindings d'une même production.
 
 Un sélecteur ne garantit pas qu'une cellule existe. A69b ne parcourt aucune
 cellule, ne cherche ni identifiant, ni tag, ni marqueur, et ne produit aucun
-diagnostic lorsqu'une correspondance manque ou apparaît plusieurs fois. La
-politique de résolution, de découpage et d'agrégation appartiendra à A69c.
+diagnostic lorsqu'une correspondance manque ou apparaît plusieurs fois. A69c
+met désormais en œuvre la résolution et l'extraction textuelle, sans agréger
+plusieurs cellules. La politique d'agrégation reste hors du périmètre et sera
+définie dans un jalon ultérieur.
 
 A69b n'appelle pas A69a, n'exécute aucun code, n'inspecte aucune sortie et ne
 produit ni feedback, ni score.
+
+A69c [met désormais en œuvre la résolution](notebook_binding_resolution.md)
+sur un notebook `nbformat` déjà chargé. La déclaration A69b reste indépendante :
+elle ne garantit toujours pas qu'une cellule existe, tandis qu'A69c observe et
+représente explicitement l'absence ou l'ambiguïté sans modifier le plan.
