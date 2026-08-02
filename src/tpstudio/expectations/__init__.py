@@ -10,6 +10,13 @@ from .notebook_bindings import (
     NotebookCellSelectorKind,
 )
 from .quantities import ExpectedQuantity, PresenceRequirement, QuantityExpectationSet
+from .quantity_comparisons import (
+    ComparisonPedagogicalContext,
+    ExpectedQuantityComparison,
+    NormalizedErrorThresholds,
+    QuantityComparisonExpectationSet,
+    QuantityComparisonMethod,
+)
 from .registry import ExpectationRegistry
 from .scientific_productions import (
     EvaluationBasis,
@@ -26,7 +33,9 @@ __all__ = [
     "CellProductionBinding",
     "CellTextScope",
     "CellTextScopeKind",
+    "ComparisonPedagogicalContext",
     "ExpectedConclusion",
+    "ExpectedQuantityComparison",
     "ExpectedQuantity",
     "ExpectedRelation",
     "EvaluationBasis",
@@ -35,8 +44,11 @@ __all__ = [
     "NotebookBindingPlan",
     "NotebookCellSelector",
     "NotebookCellSelectorKind",
+    "NormalizedErrorThresholds",
     "PresenceRequirement",
     "QuantityExpectationSet",
+    "QuantityComparisonExpectationSet",
+    "QuantityComparisonMethod",
     "ScientificProductionKind",
     "ScientificProductionPlan",
     "ScientificProductionSpec",

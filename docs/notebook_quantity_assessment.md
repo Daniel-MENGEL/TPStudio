@@ -121,3 +121,8 @@ code n'est jamais exécuté, ses outputs ne sont pas inspectés et ses cellules 
 sont pas modifiées. Les productions non quantitatives attendent leurs futurs
 pipelines spécialisés. Aucune agrégation multi-cellules, aucun diagnostic de
 résolution, aucune note et aucun barème ne sont produits.
+
+A70a permet désormais de [déclarer quelles productions quantitatives devront
+être comparées](quantity_comparison_expectations.md), avec leurs seuils et leur
+contexte pédagogique. A69d conserve les assessments nécessaires, mais ne
+calcule toujours aucune comparaison et ne choisit pas entre plusieurs bindings.

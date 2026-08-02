@@ -152,3 +152,17 @@ d'évaluation, sans transformer encore les fragments observés en évaluations.
 A69d réalise désormais cette dernière transition pour les productions
 `QUANTITY` résolues, tout en laissant les autres catégories dans le jeu de
 résolutions complet pour de futurs pipelines spécialisés.
+
+A70a déclare maintenant les [comparaisons quantitatives attendues](quantity_comparison_expectations.md)
+à partir des dépendances du plan :
+
+```text
+QUANTITY gravity_dynamic
+        \
+         → COMPARISON gravity_comparison
+        /
+QUANTITY gravity_static
+```
+
+Les seuils décrivent le futur constat objectif. Le contexte pédagogique reste
+une information distincte et ne change ni ce constat, ni sa classification.

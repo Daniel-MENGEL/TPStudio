@@ -34,3 +34,4 @@ Le parseur est spécialisé pour la structure habituelle des TP : `\objectifs`, 
 - [Rattachement cellule–production](docs/notebook_production_bindings.md) : configuration déclarative des cellules destinées aux productions scientifiques.
 - [Résolution des rattachements](docs/notebook_binding_resolution.md) : recherche littérale et extraction en lecture seule dans un notebook nbformat déjà chargé.
 - [Évaluation des quantités du notebook](docs/notebook_quantity_assessment.md) : orchestration des bindings quantitatifs résolus vers le pipeline d'assessment.
+- [Attendus de comparaisons quantitatives](docs/quantity_comparison_expectations.md) : méthode, seuils objectifs et contexte pédagogique déclarés sans calcul.
