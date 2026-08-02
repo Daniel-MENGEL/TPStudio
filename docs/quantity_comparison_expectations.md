@@ -92,7 +92,8 @@ peut participer à plusieurs comparaisons.
 
 A70a référence seulement les `production_id`. Il ne choisit pas entre
 plusieurs bindings A69d d'une même quantité, ne fusionne aucun résultat et ne
-lit ni observation ni assessment. Cette politique appartiendra au futur A70b.
+lit ni observation ni assessment. A70b applique désormais explicitement la
+politique d'unique item `ASSESSED` exploitable.
 
 A70a ne compare ou ne convertit aucune unité, n'impose ni symbole identique ni
 dimension physique, et ne calcule aucune compatibilité. Il ne produit aucun

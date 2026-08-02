@@ -12,7 +12,9 @@ La chaîne objective de comparaison est désormais :
 NotebookQuantityAssessmentSet
 → QuantityComparisonExpectationSet
 → QuantityComparisonEvaluationSet
-→ futurs diagnostics et future évaluation de conclusion
+→ QuantityComparisonDiagnosticSet
+→ QuantityComparisonFeedbackSet
+→ future observation du calcul étudiant et future évaluation de conclusion
 ```
 
 ## Cinq niveaux distincts

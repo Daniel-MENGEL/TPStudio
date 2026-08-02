@@ -46,5 +46,6 @@ conclusion.
 
 Le contexte pédagogique est conservé mais n'agit ni sur En ni sur le statut.
 Ainsi `METHOD_LIMITATION_EXPECTED` avec En > 4 reste
-`STRONGLY_INCOHERENT`. A70b ne produit ni diagnostic, ni feedback, ni pénalité,
-ni score, ni note.
+`STRONGLY_INCOHERENT`. A70b ne produit lui-même ni diagnostic, ni feedback, ni
+pénalité, ni score, ni note. A70c peut désormais dériver des diagnostics et
+des feedbacks configurables sans recalculer En.
