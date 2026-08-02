@@ -130,3 +130,9 @@ future notation, qui reste hors périmètre.
 A69a fournit la [première orchestration verticale complète](quantity_assessment_pipeline.md)
 des cinq niveaux pour une grandeur textuelle. Elle conserve chaque objet
 intermédiaire, sans ajouter de logique métier ni valider la valeur scientifique.
+
+A69b place un
+[NotebookBindingPlan déclaratif](notebook_production_bindings.md) entre le plan
+pédagogique et la future observation du notebook. Il décrit les cellules
+destinées aux productions sans charger de notebook, résoudre de cellule ou
+extraire de preuve.

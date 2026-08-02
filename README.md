@@ -31,3 +31,4 @@ Le parseur est spécialisé pour la structure habituelle des TP : `\objectifs`, 
 - [Diagnostics structurés des quantités](docs/quantity_diagnostics.md) : traduction stable des évaluations, sans message étudiant ni sévérité.
 - [Feedback configurable des quantités](docs/quantity_feedback.md) : formulations statiques, audiences et priorités fournies par catalogue.
 - [Orchestration d'une grandeur textuelle](docs/quantity_assessment_pipeline.md) : chaîne complète et auditable pour une production quantitative à la fois.
+- [Rattachement cellule–production](docs/notebook_production_bindings.md) : configuration déclarative des cellules destinées aux productions scientifiques.
