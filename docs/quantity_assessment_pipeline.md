@@ -90,7 +90,10 @@ A69b prépare désormais, avec un
 fourniture du texte et du `production_id` à A69a. Il ne résout pas encore cette
 liaison et n'appelle pas le pipeline d'évaluation.
 
-A69c peut maintenant produire un texte résolu et son `production_id` depuis un
-notebook déjà chargé, mais ne les transmet toujours pas automatiquement à
-A69a. Cette orchestration `NotebookBindingResolution` vers
-`QuantityAssessmentResult` est réservée à A69d.
+A69c produit un texte résolu et son `production_id` depuis un notebook déjà
+chargé, sans appeler lui-même A69a.
+
+A69d fournit désormais automatiquement à A69a le `text` exact et le
+`production_id` de chaque [binding QUANTITY résolu](notebook_quantity_assessment.md).
+Les résolutions échouées et les productions non quantitatives ne déclenchent
+aucun appel à ce pipeline.

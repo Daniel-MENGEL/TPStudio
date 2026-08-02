@@ -305,9 +305,11 @@ def test_result_rejects_every_foreign_link() -> None:
             replace(result, **{field_name: value})
 
 
-def test_public_api_contains_exactly_the_three_assessment_objects() -> None:
+def test_public_api_preserves_the_three_quantity_assessment_objects() -> None:
     import tpstudio.assessment as assessment
-    assert assessment.__all__ == [
+    assert [name for name in assessment.__all__ if name in {
+        "QuantityAssessmentPipeline", "QuantityAssessmentResult", "assess_quantity_text"
+    }] == [
         "QuantityAssessmentPipeline", "QuantityAssessmentResult", "assess_quantity_text"
     ]
     assert not hasattr(QuantityAssessmentResult, "score")

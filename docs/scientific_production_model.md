@@ -143,8 +143,12 @@ A69c complète cette transition en lecture seule :
 ScientificProductionPlan
 → NotebookBindingPlan
 → NotebookBindingResolutionSet
-→ future assessment orchestration
+→ NotebookQuantityAssessmentSet
+→ diagnostics et feedbacks quantitatifs
 ```
 
 Le jeu de résolutions conserve les bindings par identité et dans leur ordre
 d'évaluation, sans transformer encore les fragments observés en évaluations.
+A69d réalise désormais cette dernière transition pour les productions
+`QUANTITY` résolues, tout en laissant les autres catégories dans le jeu de
+résolutions complet pour de futurs pipelines spécialisés.

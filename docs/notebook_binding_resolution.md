@@ -110,5 +110,8 @@ une production peut produire plusieurs résolutions, sans aucune agrégation de
 leurs textes.
 
 A69c ne modifie ni le notebook ni ses cellules, n'exécute aucun code et
-n'inspecte aucun output. Il n'appelle pas A69a. Le futur A69d reliera un texte
-résolu et son `production_id` au pipeline d'assessment.
+n'inspecte aucun output. Il n'appelle pas lui-même A69a.
+
+A69d [consomme désormais ces résolutions](notebook_quantity_assessment.md)
+sans modifier A69c : le jeu complet reste disponible, tandis que chaque
+résolution `QUANTITY` réussie est transmise à A69a.

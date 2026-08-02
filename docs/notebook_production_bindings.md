@@ -129,3 +129,6 @@ A69c [met désormais en œuvre la résolution](notebook_binding_resolution.md)
 sur un notebook `nbformat` déjà chargé. La déclaration A69b reste indépendante :
 elle ne garantit toujours pas qu'une cellule existe, tandis qu'A69c observe et
 représente explicitement l'absence ou l'ambiguïté sans modifier le plan.
+
+A69d orchestre ensuite l'[évaluation des seuls bindings QUANTITY résolus](notebook_quantity_assessment.md),
+sans changer la déclaration ni agréger plusieurs cellules.
