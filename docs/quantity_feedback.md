@@ -75,6 +75,11 @@ est une configuration d'exemple et n'est jamais activé automatiquement.
 Plusieurs langues pourront être proposées par plusieurs catalogues. A68g ne
 traduit aucun texte automatiquement et ne dépend d'aucun service externe.
 
+L'[orchestrateur A69a](quantity_assessment_pipeline.md) peut appeler ce
+renderer en fin de chaîne, mais seulement lorsqu'un catalogue lui est fourni
+explicitement. Il conserve le `QuantityFeedbackSet` avec ses diagnostics
+d'origine et n'active jamais le catalogue français par défaut.
+
 ## Limites
 
 Les textes sont statiques et configurés, jamais générés. A68g ne calcule

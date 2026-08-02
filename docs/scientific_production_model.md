@@ -127,3 +127,6 @@ texte étudiant, sévérité, feedback ou score.
 Avec A68g, le niveau 5 distingue désormais explicitement le diagnostic
 structuré, le [feedback formulé par catalogue](quantity_feedback.md) et la
 future notation, qui reste hors périmètre.
+A69a fournit la [première orchestration verticale complète](quantity_assessment_pipeline.md)
+des cinq niveaux pour une grandeur textuelle. Elle conserve chaque objet
+intermédiaire, sans ajouter de logique métier ni valider la valeur scientifique.

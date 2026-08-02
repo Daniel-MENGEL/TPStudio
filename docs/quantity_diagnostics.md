@@ -98,3 +98,7 @@ ni score.
 Avec A68g, un diagnostic ne devient visible que si un catalogue contient une
 [formulation de feedback pour son code](quantity_feedback.md). L'absence d'une
 entrée supprime volontairement le message, sans fallback implicite.
+
+L'[orchestrateur A69a](quantity_assessment_pipeline.md) construit toujours ce
+jeu de diagnostics, même sans politique de qualité d'incertitude ou sans
+catalogue de feedback, et le conserve dans son résultat auditable.
