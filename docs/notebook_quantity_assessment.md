@@ -15,6 +15,9 @@ NotebookBindingPlan
 Cette coordination appartient à `tpstudio.assessment` parce qu'elle combine
 l'observation technique du notebook avec l'évaluation métier des quantités.
 
+Ces résultats peuvent désormais alimenter A70b. A69d ne calcule toutefois pas
+lui-même En et ne compare pas les productions.
+
 ## Résolutions et items quantitatifs
 
 `NotebookQuantityAssessmentSet.resolution_set` conserve intégralement le

@@ -3,7 +3,8 @@
 A70a permet au professeur de déclarer qu'une production scientifique
 `COMPARISON` compare deux productions `QUANTITY`. Cette déclaration décrit
 l'intention, les seuils objectifs et le contexte pédagogique ; elle ne calcule
-encore rien.
+encore rien. A70b met désormais en œuvre le calcul objectif dans un contrat
+d'évaluation séparé, sans modifier la déclaration.
 
 ## Écart normalisé futur
 

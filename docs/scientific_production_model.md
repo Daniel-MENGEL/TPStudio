@@ -6,6 +6,15 @@ attendues sans supposer que leur résultat est connu à l'avance. Un
 dépendances. Il exprime une intention pédagogique, jamais un résultat
 d'évaluation.
 
+La chaîne objective de comparaison est désormais :
+
+```text
+NotebookQuantityAssessmentSet
+→ QuantityComparisonExpectationSet
+→ QuantityComparisonEvaluationSet
+→ futurs diagnostics et future évaluation de conclusion
+```
+
 ## Cinq niveaux distincts
 
 1. **Production attendue** : ce que l'étudiant doit produire — relation,

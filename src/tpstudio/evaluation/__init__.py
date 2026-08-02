@@ -15,10 +15,23 @@ from .quantity_uncertainty import (
     UncertaintyQualityCriterion,
     evaluate_quantity_uncertainty,
 )
+from .quantity_comparisons import (
+    QuantityComparisonEvaluation,
+    QuantityComparisonEvaluationSet,
+    QuantityComparisonEvaluationStatus,
+    QuantityComparisonEvaluator,
+    QuantityComparisonNotEvaluableReason,
+    evaluate_quantity_comparisons,
+)
 
 __all__ = [
     "EvaluationStatus",
     "QuantityCriterionEvaluation",
+    "QuantityComparisonEvaluation",
+    "QuantityComparisonEvaluationSet",
+    "QuantityComparisonEvaluationStatus",
+    "QuantityComparisonEvaluator",
+    "QuantityComparisonNotEvaluableReason",
     "QuantityStructuralCriterion",
     "QuantityStructuralEvaluation",
     "QuantityStructuralEvaluator",
@@ -27,5 +40,6 @@ __all__ = [
     "UncertaintyCriterionEvaluation",
     "UncertaintyQualityCriterion",
     "evaluate_quantity_structure",
+    "evaluate_quantity_comparisons",
     "evaluate_quantity_uncertainty",
 ]

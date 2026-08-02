@@ -25,6 +25,7 @@ Le parseur est spécialisé pour la structure habituelle des TP : `\objectifs`, 
 - [Détection littérale des relations](docs/literal_relation_matching.md) : recherche exacte des expressions déclarées par le professeur.
 - [Productions scientifiques](docs/scientific_production_model.md) : nature des productions attendues et bases de leurs futures évaluations.
 - [Attendus de grandeurs numériques](docs/quantity_expectations.md) : symboles, unités et exigences structurelles déclarés sans valeur imposée.
+- [Évaluation des comparaisons quantitatives](docs/quantity_comparison_evaluation.md) : calcul Decimal objectif de l'écart normalisé à partir des résultats A69d.
 - [Observations textuelles de quantités](docs/quantity_observations.md) : extraction littérale de valeurs, incertitudes et unités déclarées.
 - [Évaluation structurelle des quantités](docs/quantity_structural_evaluation.md) : contrôle interne de présence, sans jugement scientifique ni diagnostic.
 - [Évaluation intrinsèque des incertitudes](docs/quantity_uncertainty_evaluation.md) : positivité et présentation d'une incertitude observée.
