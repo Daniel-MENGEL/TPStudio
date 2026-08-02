@@ -17,6 +17,21 @@ NotebookQuantityAssessmentSet
 → future observation du calcul étudiant et future évaluation de conclusion
 ```
 
+La branche d'observation du calcul étudiant reste distincte :
+
+```text
+QuantityComparisonEvaluation
+        |
+        +→ normalized_error interne
+        |
+texte COMPARISON
+        |
+        +→ StudentNormalizedErrorObservation
+        |
+        → StudentNormalizedErrorEvaluation
+        → future évaluation séparée de l'interprétation
+```
+
 ## Cinq niveaux distincts
 
 1. **Production attendue** : ce que l'étudiant doit produire — relation,

@@ -20,3 +20,6 @@ ne la transforme pas en cohérence.
 
 Ces diagnostics ne contiennent aucun texte de présentation, aucune priorité,
 aucun score et aucune pénalité.
+
+L'observation A70d du En étudiant reste un contrat séparé et ne modifie aucun
+de ces diagnostics objectifs.

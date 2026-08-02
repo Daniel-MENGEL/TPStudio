@@ -28,6 +28,10 @@ from .uncertainties import (
     UncertaintyQualityExpectationSet,
     UncertaintyQualitySpec,
 )
+from .student_normalized_errors import (
+    ExpectedStudentNormalizedError,
+    StudentNormalizedErrorExpectationSet,
+)
 
 __all__ = [
     "CellProductionBinding",
@@ -38,6 +42,7 @@ __all__ = [
     "ExpectedQuantityComparison",
     "ExpectedQuantity",
     "ExpectedRelation",
+    "ExpectedStudentNormalizedError",
     "EvaluationBasis",
     "ExpectationRegistry",
     "ExpectationSet",
@@ -52,6 +57,7 @@ __all__ = [
     "ScientificProductionKind",
     "ScientificProductionPlan",
     "ScientificProductionSpec",
+    "StudentNormalizedErrorExpectationSet",
     "UncertaintyQualityExpectationSet",
     "UncertaintyQualitySpec",
 ]

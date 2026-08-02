@@ -42,7 +42,8 @@ signifie jamais que l'étudiant a calculé En : A70b ne recherche ni ne valide u
 En étudiant, ne compense pas son absence, n'évalue ni sa démarche ni son
 interprétation et n'insère rien dans la copie. De futurs jalons pourront
 comparer séparément le calcul étudiant à cette référence, puis évaluer sa
-conclusion.
+conclusion. A70d réalise désormais la première de ces étapes par observation
+littérale d'une valeur finale, sans vérifier la formule ni la conclusion.
 
 Le contexte pédagogique est conservé mais n'agit ni sur En ni sur le statut.
 Ainsi `METHOD_LIMITATION_EXPECTED` avec En > 4 reste

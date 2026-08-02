@@ -28,3 +28,7 @@ n'est jamais interpolée automatiquement dans le texte étudiant. Elle est une
 référence interne : A70c ne prétend pas que l'étudiant a calculé En, ne vérifie
 pas son calcul et n'évalue pas son interprétation. Aucun feedback positif,
 score ou note n'est produit.
+
+A70d peut désormais comparer une valeur finale écrite par l'étudiant à la
+référence, mais ces feedbacks n'en déduisent encore rien sur sa démarche ou sa
+conclusion.

@@ -23,6 +23,14 @@ from .quantity_comparisons import (
     QuantityComparisonNotEvaluableReason,
     evaluate_quantity_comparisons,
 )
+from .student_normalized_errors import (
+    StudentNormalizedErrorEvaluation,
+    StudentNormalizedErrorEvaluationSet,
+    StudentNormalizedErrorEvaluationStatus,
+    StudentNormalizedErrorEvaluator,
+    StudentNormalizedErrorNotEvaluableReason,
+    evaluate_student_normalized_errors,
+)
 
 __all__ = [
     "EvaluationStatus",
@@ -37,9 +45,15 @@ __all__ = [
     "QuantityStructuralEvaluator",
     "QuantityUncertaintyEvaluation",
     "QuantityUncertaintyEvaluator",
+    "StudentNormalizedErrorEvaluation",
+    "StudentNormalizedErrorEvaluationSet",
+    "StudentNormalizedErrorEvaluationStatus",
+    "StudentNormalizedErrorEvaluator",
+    "StudentNormalizedErrorNotEvaluableReason",
     "UncertaintyCriterionEvaluation",
     "UncertaintyQualityCriterion",
     "evaluate_quantity_structure",
     "evaluate_quantity_comparisons",
     "evaluate_quantity_uncertainty",
+    "evaluate_student_normalized_errors",
 ]

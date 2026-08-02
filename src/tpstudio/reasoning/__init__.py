@@ -55,6 +55,12 @@ from .relation_matching import (
     RelationMatch,
     match_declared_relations,
 )
+from .student_normalized_errors import (
+    LiteralStudentNormalizedErrorExtractor,
+    StudentNormalizedErrorDetection,
+    StudentNormalizedErrorObservation,
+    extract_student_normalized_error,
+)
 from .rule_set import RuleSet
 from .rules import Rule, RuleConclusion, RuleEvaluation
 
@@ -87,6 +93,7 @@ __all__ = [
     "Location",
     "LiteralRelationMatcher",
     "LiteralQuantityExtractor",
+    "LiteralStudentNormalizedErrorExtractor",
     "Not",
     "Or",
     "PredicateExists",
@@ -100,10 +107,13 @@ __all__ = [
     "RelationDetectionSet",
     "RelationMatch",
     "SubjectExists",
+    "StudentNormalizedErrorDetection",
+    "StudentNormalizedErrorObservation",
     "UnknownDiagnosticDefinitionError",
     "extract_concepts",
     "extract_facts",
     "extract_expected_quantity",
+    "extract_student_normalized_error",
     "format_end_to_end_report",
     "match_declared_relations",
     "run_end_to_end_case",
