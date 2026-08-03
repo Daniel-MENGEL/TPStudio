@@ -33,3 +33,8 @@ classement objectif. Il indique seulement l'objectif pédagogique déclaré.
 A70e n'évalue pas la formule, les étapes, la justification détaillée ou la
 qualité du raisonnement. Il ne relit ni n'exécute le notebook, ne recalcule ni
 En ni A70b et ne produit aucun diagnostic, feedback, score, pénalité ou note.
+
+A70f peut désormais traduire les statuts non conformes en diagnostics et en
+feedbacks configurables. Il ne modifie pas cette évaluation et ne présente
+jamais `MATCHES_OBJECTIVE_CLASSIFICATION` comme une validation détaillée de la
+justification.

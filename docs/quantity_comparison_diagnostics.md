@@ -25,3 +25,5 @@ L'observation A70d du En étudiant reste un contrat séparé et ne modifie aucun
 de ces diagnostics objectifs.
 L'évaluation A70e de sa conclusion est également séparée et ne crée ni ne
 modifie aucun diagnostic A70c.
+Les diagnostics A70f portent uniquement sur la correspondance de la conclusion
+A70e et restent distincts du classement objectif diagnostiqué ici.

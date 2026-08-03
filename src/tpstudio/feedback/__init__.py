@@ -19,8 +19,22 @@ from .quantity_comparisons import (
     french_quantity_comparison_feedback_catalog,
     render_quantity_comparison_feedback,
 )
+from .comparison_interpretations import (
+    ComparisonInterpretationFeedbackCatalog,
+    ComparisonInterpretationFeedbackItem,
+    ComparisonInterpretationFeedbackRenderer,
+    ComparisonInterpretationFeedbackSet,
+    ComparisonInterpretationFeedbackTemplate,
+    french_comparison_interpretation_feedback_catalog,
+    render_comparison_interpretation_feedback,
+)
 
 __all__ = [
+    "ComparisonInterpretationFeedbackCatalog",
+    "ComparisonInterpretationFeedbackItem",
+    "ComparisonInterpretationFeedbackRenderer",
+    "ComparisonInterpretationFeedbackSet",
+    "ComparisonInterpretationFeedbackTemplate",
     "FeedbackAudience",
     "FeedbackPriority",
     "QuantityFeedbackCatalog",
@@ -34,7 +48,9 @@ __all__ = [
     "QuantityFeedbackSet",
     "QuantityFeedbackTemplate",
     "french_quantity_feedback_catalog",
+    "french_comparison_interpretation_feedback_catalog",
     "french_quantity_comparison_feedback_catalog",
     "render_quantity_feedback",
+    "render_comparison_interpretation_feedback",
     "render_quantity_comparison_feedback",
 ]

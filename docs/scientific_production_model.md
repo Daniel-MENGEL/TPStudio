@@ -31,6 +31,17 @@ La première compare la valeur finale de En à la référence interne ; la secon
 compare une conclusion littérale déclarée au statut objectif. Aucun des deux
 résultats ne modifie l'autre.
 
+La branche de présentation de l'interprétation est :
+
+```text
+ComparisonInterpretationEvaluationSet
+→ ComparisonInterpretationDiagnosticSet
+→ ComparisonInterpretationFeedbackSet
+```
+
+Elle ne recalcule aucune donnée. L'évaluation détaillée de la justification
+reste future.
+
 ## Cinq niveaux distincts
 
 1. **Production attendue** : ce que l'étudiant doit produire — relation,

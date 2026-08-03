@@ -34,3 +34,5 @@ référence, mais ces feedbacks n'en déduisent encore rien sur sa démarche ou 
 conclusion.
 A70e peut comparer une conclusion littérale au classement objectif, mais ne
 produit aucun feedback et n'altère pas le catalogue A70c.
+Les feedbacks A70f utilisent leur propre catalogue explicite et ne remplacent
+aucun message relatif au classement objectif A70b.
