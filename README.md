@@ -27,6 +27,7 @@ Le parseur est spécialisé pour la structure habituelle des TP : `\objectifs`, 
 - [Attendus de grandeurs numériques](docs/quantity_expectations.md) : symboles, unités et exigences structurelles déclarés sans valeur imposée.
 - [Évaluation des comparaisons quantitatives](docs/quantity_comparison_evaluation.md) : calcul Decimal objectif de l'écart normalisé à partir des résultats A69d.
 - [Observation du En étudiant](docs/student_normalized_error_evaluation.md) : extraction littérale et comparaison à la référence interne avec une tolérance explicite.
+- [Interprétation du En](docs/comparison_interpretation_evaluation.md) : observation de phrases déclarées et comparaison de la conclusion au classement objectif.
 - [Diagnostics des comparaisons](docs/quantity_comparison_diagnostics.md) et [feedback configurable](docs/quantity_comparison_feedback.md) : constats objectifs et messages explicites, sans notation.
 - [Observations textuelles de quantités](docs/quantity_observations.md) : extraction littérale de valeurs, incertitudes et unités déclarées.
 - [Évaluation structurelle des quantités](docs/quantity_structural_evaluation.md) : contrôle interne de présence, sans jugement scientifique ni diagnostic.

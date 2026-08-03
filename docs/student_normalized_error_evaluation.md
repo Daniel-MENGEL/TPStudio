@@ -37,3 +37,7 @@ que la formule est correctement établie, ni que les étapes sont présentes, ni
 que la conclusion est scientifiquement correcte. A70d n'inspecte aucune
 variable ou output, ne relit pas le notebook et n'analyse pas la conclusion.
 Il ne produit ni diagnostic, ni feedback, ni score, ni note.
+
+A70e observe désormais séparément une conclusion littérale déclarée. Son
+statut reste indépendant de la concordance numérique A70d : un En différent
+peut accompagner une conclusion conforme, et réciproquement.

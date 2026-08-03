@@ -23,3 +23,5 @@ aucun score et aucune pénalité.
 
 L'observation A70d du En étudiant reste un contrat séparé et ne modifie aucun
 de ces diagnostics objectifs.
+L'évaluation A70e de sa conclusion est également séparée et ne crée ni ne
+modifie aucun diagnostic A70c.

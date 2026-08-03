@@ -17,6 +17,11 @@ from .quantity_comparisons import (
     QuantityComparisonExpectationSet,
     QuantityComparisonMethod,
 )
+from .comparison_interpretations import (
+    ComparisonInterpretationExpectationSet,
+    ComparisonInterpretationKind,
+    ExpectedComparisonInterpretation,
+)
 from .registry import ExpectationRegistry
 from .scientific_productions import (
     EvaluationBasis,
@@ -38,7 +43,10 @@ __all__ = [
     "CellTextScope",
     "CellTextScopeKind",
     "ComparisonPedagogicalContext",
+    "ComparisonInterpretationExpectationSet",
+    "ComparisonInterpretationKind",
     "ExpectedConclusion",
+    "ExpectedComparisonInterpretation",
     "ExpectedQuantityComparison",
     "ExpectedQuantity",
     "ExpectedRelation",

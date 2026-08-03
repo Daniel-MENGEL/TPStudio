@@ -61,11 +61,19 @@ from .student_normalized_errors import (
     StudentNormalizedErrorObservation,
     extract_student_normalized_error,
 )
+from .comparison_interpretations import (
+    ComparisonInterpretationDetection,
+    ComparisonInterpretationObservation,
+    LiteralComparisonInterpretationExtractor,
+    extract_comparison_interpretation,
+)
 from .rule_set import RuleSet
 from .rules import Rule, RuleConclusion, RuleEvaluation
 
 __all__ = [
     "ConceptExtractor",
+    "ComparisonInterpretationDetection",
+    "ComparisonInterpretationObservation",
     "AllOf",
     "And",
     "AnyOf",
@@ -92,6 +100,7 @@ __all__ = [
     "InferenceResult",
     "Location",
     "LiteralRelationMatcher",
+    "LiteralComparisonInterpretationExtractor",
     "LiteralQuantityExtractor",
     "LiteralStudentNormalizedErrorExtractor",
     "Not",
@@ -111,6 +120,7 @@ __all__ = [
     "StudentNormalizedErrorObservation",
     "UnknownDiagnosticDefinitionError",
     "extract_concepts",
+    "extract_comparison_interpretation",
     "extract_facts",
     "extract_expected_quantity",
     "extract_student_normalized_error",

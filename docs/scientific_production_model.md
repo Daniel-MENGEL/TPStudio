@@ -14,23 +14,22 @@ NotebookQuantityAssessmentSet
 → QuantityComparisonEvaluationSet
 → QuantityComparisonDiagnosticSet
 → QuantityComparisonFeedbackSet
-→ future observation du calcul étudiant et future évaluation de conclusion
+→ observations parallèles du calcul étudiant et de sa conclusion
 ```
 
-La branche d'observation du calcul étudiant reste distincte :
+Les deux branches étudiantes restent distinctes et indépendantes :
 
 ```text
 QuantityComparisonEvaluation
         |
-        +→ normalized_error interne
+        +→ StudentNormalizedErrorEvaluation
         |
-texte COMPARISON
-        |
-        +→ StudentNormalizedErrorObservation
-        |
-        → StudentNormalizedErrorEvaluation
-        → future évaluation séparée de l'interprétation
+        +→ ComparisonInterpretationEvaluation
 ```
+
+La première compare la valeur finale de En à la référence interne ; la seconde
+compare une conclusion littérale déclarée au statut objectif. Aucun des deux
+résultats ne modifie l'autre.
 
 ## Cinq niveaux distincts
 

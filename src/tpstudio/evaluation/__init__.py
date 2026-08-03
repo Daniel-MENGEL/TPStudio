@@ -31,9 +31,22 @@ from .student_normalized_errors import (
     StudentNormalizedErrorNotEvaluableReason,
     evaluate_student_normalized_errors,
 )
+from .comparison_interpretations import (
+    ComparisonInterpretationEvaluation,
+    ComparisonInterpretationEvaluationSet,
+    ComparisonInterpretationEvaluationStatus,
+    ComparisonInterpretationEvaluator,
+    ComparisonInterpretationNotEvaluableReason,
+    evaluate_comparison_interpretations,
+)
 
 __all__ = [
     "EvaluationStatus",
+    "ComparisonInterpretationEvaluation",
+    "ComparisonInterpretationEvaluationSet",
+    "ComparisonInterpretationEvaluationStatus",
+    "ComparisonInterpretationEvaluator",
+    "ComparisonInterpretationNotEvaluableReason",
     "QuantityCriterionEvaluation",
     "QuantityComparisonEvaluation",
     "QuantityComparisonEvaluationSet",
@@ -53,6 +66,7 @@ __all__ = [
     "UncertaintyCriterionEvaluation",
     "UncertaintyQualityCriterion",
     "evaluate_quantity_structure",
+    "evaluate_comparison_interpretations",
     "evaluate_quantity_comparisons",
     "evaluate_quantity_uncertainty",
     "evaluate_student_normalized_errors",

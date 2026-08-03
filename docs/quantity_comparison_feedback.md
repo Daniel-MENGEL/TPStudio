@@ -32,3 +32,5 @@ score ou note n'est produit.
 A70d peut désormais comparer une valeur finale écrite par l'étudiant à la
 référence, mais ces feedbacks n'en déduisent encore rien sur sa démarche ou sa
 conclusion.
+A70e peut comparer une conclusion littérale au classement objectif, mais ne
+produit aucun feedback et n'altère pas le catalogue A70c.
