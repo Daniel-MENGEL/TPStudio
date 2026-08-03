@@ -39,6 +39,14 @@ from .comparison_interpretations import (
     ComparisonInterpretationNotEvaluableReason,
     evaluate_comparison_interpretations,
 )
+from .comparison_justifications import (
+    ComparisonJustificationEvaluation,
+    ComparisonJustificationEvaluationSet,
+    ComparisonJustificationEvaluationStatus,
+    ComparisonJustificationEvaluator,
+    ComparisonJustificationNotEvaluableReason,
+    evaluate_comparison_justifications,
+)
 
 __all__ = [
     "EvaluationStatus",
@@ -47,6 +55,11 @@ __all__ = [
     "ComparisonInterpretationEvaluationStatus",
     "ComparisonInterpretationEvaluator",
     "ComparisonInterpretationNotEvaluableReason",
+    "ComparisonJustificationEvaluation",
+    "ComparisonJustificationEvaluationSet",
+    "ComparisonJustificationEvaluationStatus",
+    "ComparisonJustificationEvaluator",
+    "ComparisonJustificationNotEvaluableReason",
     "QuantityCriterionEvaluation",
     "QuantityComparisonEvaluation",
     "QuantityComparisonEvaluationSet",
@@ -67,6 +80,7 @@ __all__ = [
     "UncertaintyQualityCriterion",
     "evaluate_quantity_structure",
     "evaluate_comparison_interpretations",
+    "evaluate_comparison_justifications",
     "evaluate_quantity_comparisons",
     "evaluate_quantity_uncertainty",
     "evaluate_student_normalized_errors",

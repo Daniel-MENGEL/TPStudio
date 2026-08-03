@@ -22,6 +22,13 @@ from .comparison_interpretations import (
     ComparisonInterpretationKind,
     ExpectedComparisonInterpretation,
 )
+from .comparison_justifications import (
+    ComparisonJustificationElementKind,
+    ComparisonJustificationExpectationSet,
+    ComparisonJustificationRequirement,
+    ExpectedComparisonJustification,
+    ExpectedComparisonJustificationElement,
+)
 from .registry import ExpectationRegistry
 from .scientific_productions import (
     EvaluationBasis,
@@ -45,8 +52,13 @@ __all__ = [
     "ComparisonPedagogicalContext",
     "ComparisonInterpretationExpectationSet",
     "ComparisonInterpretationKind",
+    "ComparisonJustificationElementKind",
+    "ComparisonJustificationExpectationSet",
+    "ComparisonJustificationRequirement",
     "ExpectedConclusion",
     "ExpectedComparisonInterpretation",
+    "ExpectedComparisonJustification",
+    "ExpectedComparisonJustificationElement",
     "ExpectedQuantityComparison",
     "ExpectedQuantity",
     "ExpectedRelation",

@@ -23,3 +23,5 @@ de En interne ou étudiant n'est interpolée automatiquement.
 items et ne représente ni gravité de notation, ni pénalité, ni impact sur une
 note. A70f ne valide pas la justification détaillée ; cette évaluation devra
 combiner ultérieurement plusieurs critères séparés.
+A70g observe désormais la présence d'éléments justificatifs, mais ces messages
+ne sont ni créés ni modifiés automatiquement à partir de ce nouveau statut.

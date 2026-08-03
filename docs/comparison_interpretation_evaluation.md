@@ -38,3 +38,6 @@ A70f peut désormais traduire les statuts non conformes en diagnostics et en
 feedbacks configurables. Il ne modifie pas cette évaluation et ne présente
 jamais `MATCHES_OBJECTIVE_CLASSIFICATION` comme une validation détaillée de la
 justification.
+A70g peut désormais observer séparément des éléments justificatifs déclarés ;
+une conclusion conforme ne rend jamais cette justification automatiquement
+complète.

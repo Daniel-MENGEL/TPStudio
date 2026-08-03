@@ -16,3 +16,5 @@ Le diagnostic conserve séparément le classement objectif A70b, le statut du
 En étudiant A70d lorsqu'il existe, et la conclusion A70e. Il ne recalcule En,
 ne conclut rien sur le calcul étudiant et ne contient aucun texte, score,
 pénalité ou note.
+L'évaluation structurelle A70g de la justification reste une branche distincte
+et ne modifie aucun diagnostic A70f.

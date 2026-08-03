@@ -67,6 +67,12 @@ from .comparison_interpretations import (
     LiteralComparisonInterpretationExtractor,
     extract_comparison_interpretation,
 )
+from .comparison_justifications import (
+    ComparisonJustificationDetection,
+    ComparisonJustificationObservation,
+    LiteralComparisonJustificationExtractor,
+    extract_comparison_justification,
+)
 from .rule_set import RuleSet
 from .rules import Rule, RuleConclusion, RuleEvaluation
 
@@ -74,6 +80,8 @@ __all__ = [
     "ConceptExtractor",
     "ComparisonInterpretationDetection",
     "ComparisonInterpretationObservation",
+    "ComparisonJustificationDetection",
+    "ComparisonJustificationObservation",
     "AllOf",
     "And",
     "AnyOf",
@@ -101,6 +109,7 @@ __all__ = [
     "Location",
     "LiteralRelationMatcher",
     "LiteralComparisonInterpretationExtractor",
+    "LiteralComparisonJustificationExtractor",
     "LiteralQuantityExtractor",
     "LiteralStudentNormalizedErrorExtractor",
     "Not",
@@ -121,6 +130,7 @@ __all__ = [
     "UnknownDiagnosticDefinitionError",
     "extract_concepts",
     "extract_comparison_interpretation",
+    "extract_comparison_justification",
     "extract_facts",
     "extract_expected_quantity",
     "extract_student_normalized_error",

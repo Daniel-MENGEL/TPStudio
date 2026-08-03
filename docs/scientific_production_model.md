@@ -42,6 +42,21 @@ ComparisonInterpretationEvaluationSet
 Elle ne recalcule aucune donnée. L'évaluation détaillée de la justification
 reste future.
 
+La dépendance des trois observations étudiantes est :
+
+```text
+QuantityComparisonEvaluation
+        |
+        +→ StudentNormalizedErrorEvaluation
+        |
+        +→ ComparisonInterpretationEvaluation
+                 |
+                 +→ ComparisonJustificationEvaluation
+```
+
+La justification A70g est évaluée structurellement à partir d'éléments
+déclarés. Sa pertinence scientifique détaillée reste future.
+
 ## Cinq niveaux distincts
 
 1. **Production attendue** : ce que l'étudiant doit produire — relation,
