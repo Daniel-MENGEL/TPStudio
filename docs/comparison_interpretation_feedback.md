@@ -25,3 +25,5 @@ note. A70f ne valide pas la justification détaillée ; cette évaluation devra
 combiner ultérieurement plusieurs critères séparés.
 A70g observe désormais la présence d'éléments justificatifs, mais ces messages
 ne sont ni créés ni modifiés automatiquement à partir de ce nouveau statut.
+Les feedbacks A70h utilisent leur propre catalogue explicite et peuvent lire
+le statut A70e uniquement comme axe de sélection d'un message configuré.

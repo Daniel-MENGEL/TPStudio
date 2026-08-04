@@ -28,6 +28,17 @@ from .comparison_interpretations import (
     french_comparison_interpretation_feedback_catalog,
     render_comparison_interpretation_feedback,
 )
+from .comparison_justifications import (
+    ComparisonJustificationFeedbackCatalog,
+    ComparisonJustificationFeedbackItem,
+    ComparisonJustificationFeedbackRenderer,
+    ComparisonJustificationFeedbackSet,
+    ComparisonJustificationFeedbackTemplate,
+    ComparisonJustificationFeedbackVariant,
+    comparison_justification_feedback_variant,
+    french_comparison_justification_feedback_catalog,
+    render_comparison_justification_feedback,
+)
 
 __all__ = [
     "ComparisonInterpretationFeedbackCatalog",
@@ -35,6 +46,12 @@ __all__ = [
     "ComparisonInterpretationFeedbackRenderer",
     "ComparisonInterpretationFeedbackSet",
     "ComparisonInterpretationFeedbackTemplate",
+    "ComparisonJustificationFeedbackCatalog",
+    "ComparisonJustificationFeedbackItem",
+    "ComparisonJustificationFeedbackRenderer",
+    "ComparisonJustificationFeedbackSet",
+    "ComparisonJustificationFeedbackTemplate",
+    "ComparisonJustificationFeedbackVariant",
     "FeedbackAudience",
     "FeedbackPriority",
     "QuantityFeedbackCatalog",
@@ -49,8 +66,11 @@ __all__ = [
     "QuantityFeedbackTemplate",
     "french_quantity_feedback_catalog",
     "french_comparison_interpretation_feedback_catalog",
+    "french_comparison_justification_feedback_catalog",
     "french_quantity_comparison_feedback_catalog",
     "render_quantity_feedback",
     "render_comparison_interpretation_feedback",
+    "render_comparison_justification_feedback",
+    "comparison_justification_feedback_variant",
     "render_quantity_comparison_feedback",
 ]

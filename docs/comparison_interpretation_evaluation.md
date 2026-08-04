@@ -41,3 +41,5 @@ justification.
 A70g peut désormais observer séparément des éléments justificatifs déclarés ;
 une conclusion conforme ne rend jamais cette justification automatiquement
 complète.
+Les diagnostics et feedbacks A70h de cette justification restent également
+séparés du statut de conclusion A70e.

@@ -27,3 +27,6 @@ modifient pas ce statut. A70g ne relit pas le notebook, ne recalcule pas En,
 n'analyse pas librement le raisonnement et ne produit aucun diagnostic,
 feedback, score, pénalité ou note. La pertinence scientifique détaillée reste
 future.
+A70h peut désormais traduire les statuts non complets en diagnostics et
+feedbacks configurables. Il ne modifie pas A70g et ne présente jamais
+`COMPLETE` comme une validation scientifique.

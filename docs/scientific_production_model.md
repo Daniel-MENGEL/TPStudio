@@ -57,6 +57,17 @@ QuantityComparisonEvaluation
 La justification A70g est évaluée structurellement à partir d'éléments
 déclarés. Sa pertinence scientifique détaillée reste future.
 
+Sa branche de présentation est :
+
+```text
+ComparisonJustificationEvaluationSet
+→ ComparisonJustificationDiagnosticSet
+→ ComparisonJustificationFeedbackSet
+```
+
+Elle conserve les données manquantes sous forme structurée ; la pertinence
+scientifique détaillée reste future.
+
 ## Cinq niveaux distincts
 
 1. **Production attendue** : ce que l'étudiant doit produire — relation,

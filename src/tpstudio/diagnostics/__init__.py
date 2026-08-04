@@ -24,6 +24,14 @@ from .comparison_interpretations import (
     ComparisonInterpretationDiagnosticSource,
     build_comparison_interpretation_diagnostics,
 )
+from .comparison_justifications import (
+    ComparisonJustificationDiagnostic,
+    ComparisonJustificationDiagnosticBuilder,
+    ComparisonJustificationDiagnosticCode,
+    ComparisonJustificationDiagnosticSet,
+    ComparisonJustificationDiagnosticSource,
+    build_comparison_justification_diagnostics,
+)
 
 __all__ = [
     "ComparisonInterpretationDiagnostic",
@@ -31,6 +39,11 @@ __all__ = [
     "ComparisonInterpretationDiagnosticCode",
     "ComparisonInterpretationDiagnosticSet",
     "ComparisonInterpretationDiagnosticSource",
+    "ComparisonJustificationDiagnostic",
+    "ComparisonJustificationDiagnosticBuilder",
+    "ComparisonJustificationDiagnosticCode",
+    "ComparisonJustificationDiagnosticSet",
+    "ComparisonJustificationDiagnosticSource",
     "QuantityDiagnostic",
     "QuantityComparisonDiagnostic",
     "QuantityComparisonDiagnosticBuilder",
@@ -43,5 +56,6 @@ __all__ = [
     "QuantityDiagnosticSource",
     "build_quantity_diagnostics",
     "build_comparison_interpretation_diagnostics",
+    "build_comparison_justification_diagnostics",
     "build_quantity_comparison_diagnostics",
 ]
