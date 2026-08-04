@@ -1,5 +1,10 @@
 # Modèle général des productions scientifiques
 
+L'[audit de la verticale Snell-Descartes](snells_laws_vertical_audit.md)
+applique ce modèle à un TP réel et distingue les contrats directement
+configurables des adaptateurs encore nécessaires pour le code, les graphes et
+l'orchestration. A71a ne modifie aucun contrat A66–A70h.
+
 A68a permet au professeur de décrire la nature des productions scientifiques
 attendues sans supposer que leur résultat est connu à l'avance. Un
 `ScientificProductionPlan` ordonne des `ScientificProductionSpec` et leurs
