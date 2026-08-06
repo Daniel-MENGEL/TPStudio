@@ -156,3 +156,10 @@ A71b ne vérifie pas les valeurs de code ou outputs, ne juge pas le graphe,
 n'analyse aucune copie et ne produit ni diagnostic, rapport, commentaire,
 score ou note. A71c devra orchestrer les moteurs, fournir les adaptateurs code
 et graphe et préserver la validation humaine obligatoire.
+
+## Orchestration A71c
+
+La configuration est désormais consommée par l'[orchestration en lecture
+seule](snells_laws_copy_orchestration.md). Celle-ci conserve les résolutions,
+provenances et non-évaluabilités sans modifier les attentes A71b. La conclusion
+finale reste distincte des deux interprétations de comparaison.

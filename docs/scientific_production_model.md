@@ -238,3 +238,19 @@ QUANTITY gravity_static
 
 Les seuils décrivent le futur constat objectif. Le contexte pédagogique reste
 une information distincte et ne change ni ce constat, ni sa classification.
+
+A71c agrège désormais une copie sans modifier ce graphe d'identités :
+
+```text
+NotebookBindingResolutionSet
+→ NotebookQuantityAssessmentSet
+→ QuantityComparisonEvaluationSet
+   ├→ StudentNormalizedErrorEvaluationSet
+   ├→ ComparisonInterpretationEvaluationSet
+   └→ ComparisonJustificationEvaluationSet
+→ CopyAnalysisResult
+```
+
+La conclusion finale possède sa propre observation et ne reçoit pas le statut
+d'une comparaison. Les diagnostics et feedbacks restent des vues dérivées sans
+score ni note.

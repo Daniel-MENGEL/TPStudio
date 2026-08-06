@@ -440,3 +440,8 @@ comparaison est nommée `compare_geometric_regression`, conformément à la
 « valeur précédente » réellement utilisée par le troisième bloc. A71c devra
 encore raccorder les observations de code et de graphe et conserver séparément
 la conclusion finale.
+
+A71c matérialise ce raccordement par une orchestration en lecture seule. Les
+adaptateurs AST et graphe restent prudents, les outputs enregistrés conservent
+leur provenance et la revue humaine demeure obligatoire. Le rapport professeur
+détaillé reste le jalon A71d.
