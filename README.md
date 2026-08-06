@@ -20,6 +20,7 @@ Le parseur est spécialisé pour la structure habituelle des TP : `\objectifs`, 
 ## Documentation
 
 - [Audit de la verticale Snell-Descartes](docs/snells_laws_vertical_audit.md) : comparaison des supports et copies anonymisées, couverture des moteurs historiques et actuels, puis périmètre du MVP A71.
+- [Configuration professeur Snell-Descartes](docs/snells_laws_teacher_configuration.md) : projet Python explicite, bindings et attentes du support amélioré, sans donnée de copie.
 - [Commande `improve`](docs/improve.md) : génération non destructive de notebooks améliorés.
 - [Glossaire scientifique](docs/glossary.md) : vocabulaire et détection déterministe utilisés par les diagnostics.
 - [Attendus scientifiques du professeur](docs/teacher_expectations.md) : relations et conclusions de référence déclarées en Python.

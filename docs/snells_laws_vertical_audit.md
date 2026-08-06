@@ -429,3 +429,14 @@ prévu.
 La décision principale pour A71b est donc : configurer l'énoncé amélioré, ne
 réutiliser de l'ancien moteur que ses observations techniques utiles, et
 conserver une revue humaine obligatoire à chaque sortie destinée à l'étudiant.
+
+## Matérialisation A71b
+
+La décision est désormais matérialisée par la
+[configuration professeur Python](snells_laws_teacher_configuration.md).
+Elle déclare 19 productions et 19 bindings littéraux validés contre l'énoncé
+amélioré, sans chemin privé ni lecture de notebook à l'import. La seconde
+comparaison est nommée `compare_geometric_regression`, conformément à la
+« valeur précédente » réellement utilisée par le troisième bloc. A71c devra
+encore raccorder les observations de code et de graphe et conserver séparément
+la conclusion finale.
