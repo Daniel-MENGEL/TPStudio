@@ -7,7 +7,7 @@ name = "tpstudio"
 version = "0.2.0"
 description = "Outils de génération et correction de TP de physique en CPGE."
 requires-python = ">=3.10"
-dependencies = []
+dependencies = ["streamlit>=1.45,<2"]
 
 [project.scripts]
 tpstudio = "tpstudio.cli:main"

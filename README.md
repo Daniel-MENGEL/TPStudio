@@ -53,3 +53,12 @@ A71f exporte explicitement une copie annotée `-correction.ipynb` et son rendu
 HTML depuis le même notebook dérivé, sans exécution ni modification de la source.
 A71g applique la verticale A71f à une petite liste explicite de copies, avec
 isolation des erreurs et rapport de lot anonymisé.
+A72a — Interface web locale expérimentale
+
+Lancer l'interface professeur locale avec :
+
+```bash
+/opt/anaconda3/bin/python3 -m streamlit run src/tpstudio/web/app.py --server.address localhost
+```
+
+A72a prépare et vérifie un lot A71g, mais ne lance pas encore les corrections.
