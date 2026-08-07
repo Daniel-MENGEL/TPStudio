@@ -1,5 +1,7 @@
 # TPStudio
 
+La verticale Snell-Descartes dispose d'un [rapport professeur Markdown A71d](docs/snells_laws_teacher_report.md), construit exclusivement depuis l'analyse structurée A71c.
+
 Outils de génération et de correction de TP de physique en CPGE.
 
 ## Jalon A2 — parseur LaTeX

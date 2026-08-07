@@ -1,5 +1,19 @@
 # Modèle général des productions scientifiques
 
+```text
+A71b Configuration professeur
+        ↓
+A71c CopyAnalysisResult — analyser et évaluer
+        ↓
+A71d TeacherCopyReport — présenter
+        ↓
+A71e annotation contrôlée — future
+        ↓
+A71f export notebook / HTML — futur
+```
+
+La sévérité du rapport est une priorité de présentation, jamais une notation.
+
 L'[audit de la verticale Snell-Descartes](snells_laws_vertical_audit.md)
 applique ce modèle à un TP réel et distingue les contrats directement
 configurables des adaptateurs encore nécessaires pour le code, les graphes et

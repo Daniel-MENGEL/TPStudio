@@ -1,5 +1,7 @@
 # Audit de la verticale Lois de Snell-Descartes — A71a
 
+La verticale dispose maintenant du rapport Markdown A71d, exclusivement construit depuis A71c. Il retrouve la synthèse et les priorités utiles d'A61 sans réintroduire ses heuristiques comme autorité scientifique.
+
 ## 1. Périmètre et méthode
 
 Cet audit prépare une verticale reproductible pour un seul TP. Il compare le

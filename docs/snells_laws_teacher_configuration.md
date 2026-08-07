@@ -1,5 +1,7 @@
 # Configuration professeur Lois de Snell-Descartes — A71b
 
+La configuration fournit aussi l'ordre pédagogique et les libellés du rapport A71d. Le reporting n'ajoute aucune attente et n'active aucun catalogue supplémentaire.
+
 ## Rôle
 
 A71b matérialise la décision de l'audit A71a sous la forme d'une configuration

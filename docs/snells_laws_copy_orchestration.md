@@ -1,5 +1,7 @@
 # Orchestration d'une copie Snell-Descartes
 
+Le résultat A71c alimente le rapport professeur A71d. A71c reste l'unique couche d'analyse et d'évaluation ; A71d projette ses résultats sans relire le notebook ni recalculer un statut.
+
 ## Rôle d'A71c
 
 A71c relie la configuration professeur A71b aux moteurs existants pour une
