@@ -1,5 +1,7 @@
 # Audit de la verticale Lois de Snell-Descartes — A71a
 
+La verticale couvre maintenant l'insertion contrôlée A71e dans une copie dérivée. L'export notebook/HTML reste réservé à A71f.
+
 La verticale dispose maintenant du rapport Markdown A71d, exclusivement construit depuis A71c. Il retrouve la synthèse et les priorités utiles d'A61 sans réintroduire ses heuristiques comme autorité scientifique.
 
 ## 1. Périmètre et méthode

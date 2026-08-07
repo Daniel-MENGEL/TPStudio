@@ -1,5 +1,7 @@
 # Orchestration d'une copie Snell-Descartes
 
+A71e consomme les feedbacks, diagnostics et résolutions A71c sans relancer l'analyse. Le notebook source demeure intact ; seule une copie mémoire peut recevoir les annotations planifiées.
+
 Le résultat A71c alimente le rapport professeur A71d. A71c reste l'unique couche d'analyse et d'évaluation ; A71d projette ses résultats sans relire le notebook ni recalculer un statut.
 
 ## Rôle d'A71c

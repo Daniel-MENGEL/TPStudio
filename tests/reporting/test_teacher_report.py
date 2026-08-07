@@ -81,3 +81,21 @@ def test_external_path_strings_are_removed_from_teacher_model(tmp_path) -> None:
     assert report.technical.external_path_reference_count == 2
     assert not hasattr(report.technical, "referenced_external_paths")
     assert all(path not in repr(report) for path in private_paths)
+
+
+def test_feedback_and_diagnostic_source_keys_are_business_stable_not_positional(tmp_path) -> None:
+    module = _copy_test_module()
+    result = module._analyze(tmp_path, module._notebook(omit_marker="# Méthode statistique"))
+    first = build_teacher_copy_report(result)
+    reordered_result = replace(
+        result,
+        feedback=tuple(reversed(result.feedback)),
+        diagnostics=tuple(reversed(result.diagnostics)),
+    )
+    second = build_teacher_copy_report(reordered_result)
+    assert {item.source_key for item in first.feedback} == {item.source_key for item in second.feedback}
+    assert {item.source_key for item in first.diagnostics} == {item.source_key for item in second.diagnostics}
+    assert len({item.source_key for item in first.feedback}) == len(first.feedback)
+    assert len({item.source_key for item in first.diagnostics}) == len(first.diagnostics)
+    assert all(not item.source_key.startswith("feedback-00") for item in first.feedback)
+    assert all(not item.source_key.startswith("diagnostic-00") for item in first.diagnostics)

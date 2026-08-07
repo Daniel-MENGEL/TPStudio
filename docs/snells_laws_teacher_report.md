@@ -1,5 +1,7 @@
 # Rapport professeur Snell-Descartes — A71d
 
+Le rapport peut désormais alimenter le plan A71e pour localiser les commentaires, sans transformer ses priorités ni ses conseils agrégés en nouveaux feedbacks.
+
 A71d transforme le `CopyAnalysisResult` A71c en restitution professeur immuable. A71c analyse et évalue ; A71d présente les objets déjà obtenus. Le builder ne relit aucune cellule, ne relance aucun moteur et ne produit aucune nouvelle conclusion scientifique.
 
 ## Contenu et priorités

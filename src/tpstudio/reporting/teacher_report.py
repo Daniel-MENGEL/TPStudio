@@ -166,6 +166,7 @@ class TeacherFinalConclusionReport:
 @dataclass(frozen=True, slots=True)
 class TeacherDiagnosticReportItem:
     diagnostic_id: str
+    source_key: str
     category: TeacherReportCategory
     severity: TeacherReportSeverity
     production_id: str | None
@@ -177,6 +178,7 @@ class TeacherDiagnosticReportItem:
 @dataclass(frozen=True, slots=True)
 class TeacherFeedbackReportItem:
     feedback_id: str
+    source_key: str
     audience: FeedbackAudience
     production_id: str | None
     comparison_id: str | None
@@ -230,6 +232,38 @@ def _diagnostic_category(item: object) -> TeacherReportCategory:
     if "comparison" in name:
         return TeacherReportCategory.COMPARISON
     return TeacherReportCategory.QUANTITY
+
+
+def _identity_value(value: object | None) -> str:
+    if value is None:
+        return "-"
+    return str(getattr(value, "value", value))
+
+
+def feedback_source_key(item: object) -> str:
+    """Return the stable business identity of one rendered feedback."""
+
+    return ":".join((
+        "feedback", type(item).__name__,
+        _identity_value(getattr(item, "code", None)),
+        _identity_value(getattr(item, "audience", None)),
+        _identity_value(getattr(item, "production_id", None)),
+        _identity_value(getattr(item, "comparison_id", None)),
+        _identity_value(getattr(item, "variant", None)),
+    ))
+
+
+def diagnostic_source_key(item: object) -> str:
+    """Return the stable business identity of one diagnostic."""
+
+    return ":".join((
+        "diagnostic", type(item).__name__,
+        _identity_value(getattr(item, "code", None)),
+        _identity_value(getattr(item, "message_key", None)),
+        _identity_value(getattr(item, "production_id", None)),
+        _identity_value(getattr(item, "comparison_id", None)),
+        _identity_value(getattr(item, "source", None)),
+    ))
 
 
 def _diagnostic_severity(item: object) -> TeacherReportSeverity:
@@ -382,13 +416,14 @@ def build_teacher_copy_report(result: CopyAnalysisResult) -> TeacherCopyReport:
             _reason_values(justification.not_evaluable_reasons) if justification else (),
         ))
     diagnostics = tuple(TeacherDiagnosticReportItem(
-        f"diagnostic-{index:03d}", _diagnostic_category(item), _diagnostic_severity(item),
+        f"diagnostic-{index:03d}", diagnostic_source_key(item),
+        _diagnostic_category(item), _diagnostic_severity(item),
         getattr(item, "production_id", None), getattr(item, "comparison_id", None),
         _value(getattr(item, "code", type(item).__name__)),
         getattr(item, "message_key", _value(getattr(item, "code", type(item).__name__))),
     ) for index, item in enumerate(result.diagnostics, 1))
     feedback = tuple(TeacherFeedbackReportItem(
-        f"feedback-{index:03d}", item.audience,
+        f"feedback-{index:03d}", feedback_source_key(item), item.audience,
         getattr(item, "production_id", None), getattr(item, "comparison_id", None),
         _value(getattr(item, "priority", "normal")), item.text,
     ) for index, item in enumerate(result.feedback, 1))

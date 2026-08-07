@@ -1,5 +1,7 @@
 # TPStudio
 
+A71e ajoute l'[annotation contrôlée et idempotente](docs/snells_laws_annotation.md) des copies dérivées, exclusivement à partir des feedbacks déjà configurés.
+
 La verticale Snell-Descartes dispose d'un [rapport professeur Markdown A71d](docs/snells_laws_teacher_report.md), construit exclusivement depuis l'analyse structurée A71c.
 
 Outils de génération et de correction de TP de physique en CPGE.

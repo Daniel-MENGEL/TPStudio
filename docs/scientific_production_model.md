@@ -7,7 +7,7 @@ A71c CopyAnalysisResult — analyser et évaluer
         ↓
 A71d TeacherCopyReport — présenter
         ↓
-A71e annotation contrôlée — future
+A71e AnnotationPlan puis copie annotée — annoter sans recalcul
         ↓
 A71f export notebook / HTML — futur
 ```
