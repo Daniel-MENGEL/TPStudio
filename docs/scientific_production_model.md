@@ -270,3 +270,5 @@ d'une comparaison. Les diagnostics et feedbacks restent des vues dérivées sans
 score ni note.
 A71f transforme la copie annotée A71e en artefacts notebook et HTML dérivés ;
 aucune nouvelle évaluation scientifique n'est introduite.
+A71g applique la verticale A71f à une petite série de copies sans dupliquer la
+science des jalons précédents.

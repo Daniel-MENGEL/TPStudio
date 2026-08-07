@@ -51,3 +51,5 @@ Le parseur est spécialisé pour la structure habituelle des TP : `\objectifs`, 
 - [Attendus de comparaisons quantitatives](docs/quantity_comparison_expectations.md) : méthode, seuils objectifs et contexte pédagogique déclarés sans calcul.
 A71f exporte explicitement une copie annotée `-correction.ipynb` et son rendu
 HTML depuis le même notebook dérivé, sans exécution ni modification de la source.
+A71g applique la verticale A71f à une petite liste explicite de copies, avec
+isolation des erreurs et rapport de lot anonymisé.

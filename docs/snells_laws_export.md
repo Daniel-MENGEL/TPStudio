@@ -17,7 +17,9 @@ conservés selon les options de rendu.
 Le dossier de sortie est obligatoire dans le script local. Les chemins sont
 résolus avant toute écriture : une destination équivalente au notebook source,
 y compris par lien symbolique, est refusée. `overwrite` ne concerne qu'une
-copie dérivée déjà existante. Le document HTML complet produit par nbconvert
+copie dérivée déjà existante. Lorsqu'une destination est fournie explicitement
+par A71g, elle doit en outre rester sous le dossier de sortie canonique. Le
+document HTML complet produit par nbconvert
 est personnalisé dans sa structure existante : il ne contient qu'un seul
 `html`, `head`, `body` et `title`, avec un bandeau TPStudio injecté une seule
 fois. Les deux artefacts sont préparés et validés sur des fichiers temporaires,
@@ -28,3 +30,6 @@ Le code et les sorties restent dans le notebook exporté. Ils sont visibles par
 défaut dans le HTML et peuvent seulement être masqués au niveau du rendu, sans
 modifier le notebook. A71g prendra en charge le traitement par lot ; A72
 prendra en charge l'interface.
+
+A71g réutilise cette exportation unitaire pour une petite liste explicitement
+sélectionnée ; A72 fournira ultérieurement la sélection dans une interface.

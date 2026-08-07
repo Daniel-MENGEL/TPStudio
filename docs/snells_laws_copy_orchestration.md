@@ -130,3 +130,5 @@ le traitement par lot, l'interface et la notation restent hors périmètre.
 A71f consomme le résultat d'analyse et le plan A71e pour publier une copie
 annotée et son HTML, sans relire ni exécuter le code étudiant à des fins de
 recalcul.
+A71g orchestre plusieurs analyses unitaires sans parallélisation et isole les
+erreurs de copie.

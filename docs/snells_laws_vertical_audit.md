@@ -451,3 +451,5 @@ leur provenance et la revue humaine demeure obligatoire. Le rapport professeur
 détaillé reste le jalon A71d.
 La verticale prévoit désormais A71f pour les artefacts unitaires notebook et
 HTML, avant le traitement par lot A71g et l'interface A72.
+A71g matérialise le traitement séquentiel d'une petite série sélectionnée ;
+A72 reste le jalon d'interface professeur.

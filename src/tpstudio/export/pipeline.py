@@ -26,6 +26,14 @@ def _same_location(first: Path, second: Path) -> bool:
     return first.resolve() == second.resolve()
 
 
+def _inside_directory(path: Path, directory: Path) -> bool:
+    try:
+        path.resolve().relative_to(directory.resolve())
+    except ValueError:
+        return False
+    return True
+
+
 def _write_temp(directory: Path, suffix: str, content: bytes) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
     handle, name = tempfile.mkstemp(prefix=".tpstudio-", suffix=suffix, dir=directory)
@@ -80,14 +88,25 @@ def export_snells_laws_copy(
     output_dir: Path,
     *,
     options: CopyExportOptions | None = None,
+    notebook_output_path: Path | None = None,
+    html_output_path: Path | None = None,
 ) -> CopyExportResult:
     if not isinstance(source_path, Path) or not isinstance(output_dir, Path):
         raise TypeError("source_path et output_dir doivent être des pathlib.Path.")
     options = CopyExportOptions() if options is None else options
     if type(options) is not CopyExportOptions:
         raise TypeError("Les options d'export sont invalides.")
-    notebook_name, html_name = default_export_names(source_path.name)
-    notebook_path, html_path = output_dir / notebook_name, output_dir / html_name
+    if (notebook_output_path is None) != (html_output_path is None):
+        raise ValueError("Les deux destinations explicites doivent être fournies ensemble.")
+    if notebook_output_path is None:
+        notebook_name, html_name = default_export_names(source_path.name)
+        notebook_path, html_path = output_dir / notebook_name, output_dir / html_name
+    else:
+        if not isinstance(notebook_output_path, Path) or not isinstance(html_output_path, Path):
+            raise TypeError("Les destinations explicites doivent être des pathlib.Path.")
+        notebook_path, html_path = notebook_output_path, html_output_path
+        if not _inside_directory(notebook_path, output_dir) or not _inside_directory(html_path, output_dir):
+            raise ValueError("Les destinations explicites doivent rester dans output_dir.")
     if _same_location(notebook_path, source_path) or _same_location(html_path, source_path):
         raise ValueError("Une destination d'export ne peut pas être le notebook source.")
     if _same_location(notebook_path, html_path):

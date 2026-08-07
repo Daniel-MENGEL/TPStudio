@@ -86,3 +86,17 @@ def test_invalid_temporary_notebook_writes_no_destination(tmp_path, monkeypatch)
     with pytest.raises(ValueError, match="temporaire"):
         export_snells_laws_copy(source, out)
     assert not out.exists() or not tuple(out.iterdir())
+
+
+def test_explicit_destinations_must_remain_inside_output_dir(tmp_path):
+    module = _fixture(); source = tmp_path / "copy.ipynb"; nbformat.write(module._notebook(), source)
+    out = tmp_path / "out"; out.mkdir()
+    (out / "nested").mkdir()
+    accepted_nb = out / "nested" / ".." / "copy.ipynb"
+    accepted_html = out / "nested" / ".." / "copy.html"
+    result = export_snells_laws_copy(source, out, notebook_output_path=accepted_nb, html_output_path=accepted_html)
+    assert result.notebook_artifact.path == accepted_nb and result.html_artifact.path == accepted_html
+    with pytest.raises(ValueError, match="output_dir"):
+        export_snells_laws_copy(source, out, notebook_output_path=tmp_path / "outside.ipynb", html_output_path=out / "copy.html")
+    with pytest.raises(ValueError, match="output_dir"):
+        export_snells_laws_copy(source, out, notebook_output_path=out / "other.ipynb", html_output_path=tmp_path / "outside.html")
