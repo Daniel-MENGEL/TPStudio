@@ -36,3 +36,5 @@ Les conseils ciblés dédupliquent uniquement les feedbacks étudiant existants.
 ## Confidentialité et limites
 
 Le rapport utilise `source_id`, jamais le chemin local. Il n'exécute ni ne modifie le notebook, n'analyse aucun pixel et ne produit ni HTML, ni PDF, ni commentaire inséré, ni notation. A71e prendra en charge l'annotation contrôlée ; A71f, les exports notebook et HTML. La validation humaine reste explicite.
+A71f complète le rapport par l'export du notebook annoté et de son rendu HTML ;
+la restitution scientifique reste celle d'A71d.

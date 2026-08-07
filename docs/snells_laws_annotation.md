@@ -30,6 +30,10 @@ Lorsqu'un `TeacherCopyReport` est fourni au planificateur, il doit être exactem
 
 Le notebook source ne peut jamais servir de destination, même avec `--overwrite` et même si les chemins utilisent des écritures syntaxiques différentes ou un lien symbolique. `--overwrite` autorise uniquement le remplacement explicite d'une copie dérivée existante.
 
+A71f reprend ce notebook annoté pour produire explicitement les artefacts
+`-correction.ipynb` et `-correction.html`. Le HTML est un rendu de la copie
+annotée et non une nouvelle analyse ; A71g traitera les lots.
+
 L'ordre est déterministe par cellule, sévérité de présentation, type, source et identifiant. La sévérité sert uniquement au tri ; elle n'est jamais ajoutée au texte étudiant et ne constitue ni une note ni un score.
 
 ## Placement et format

@@ -127,3 +127,6 @@ et n'enregistre aucun rapport.
 A71d devra construire le rapport professeur détaillé à partir de l'objet
 structuré, avec validation humaine. L'insertion de commentaires, les exports,
 le traitement par lot, l'interface et la notation restent hors périmètre.
+A71f consomme le résultat d'analyse et le plan A71e pour publier une copie
+annotée et son HTML, sans relire ni exécuter le code étudiant à des fins de
+recalcul.
