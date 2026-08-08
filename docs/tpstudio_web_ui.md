@@ -35,6 +35,19 @@ si le fichier change, y compris à taille identique. Les erreurs affichées sont
 réduites à des messages non sensibles ; les chemins internes du workspace ne
 sont jamais présentés.
 
+## Identité des copies
+
+L'identité est lue d'abord dans les premières cellules Markdown du notebook,
+avec quelques libellés explicites (`Noms`, `Étudiants`, `Binôme`). Le nom du
+fichier n'est qu'un indice secondaire ; un fichier CSV pourra devenir une
+source de référence ultérieure, mais n'est pas implémenté ici. Une identité
+absente ou divergente reste « À vérifier » et n'est jamais inventée.
+
+Lorsqu'elle est confirmée, l'interface propose un stem déterministe du type
+`Lois-de-Snell-Descartes-Jules-BERNARD-Daniel-MENGEL`. Ce stem est transmis à
+A71g via son extension générique `output_stem`, qui reste l'autorité des
+sorties et de leurs collisions.
+
 Le plan est invalidé si les sélections, options ou dossier de sortie changent.
 Le bouton Réinitialiser nettoie uniquement le workspace temporaire de la
 session. A72a ne modifie ni source ni notebook et n'appelle pas le runner.

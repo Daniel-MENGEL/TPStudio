@@ -5,6 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 import re
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .identity import CopyIdentity
 
 
 def validate_upload_filename(filename: str) -> str:
@@ -29,6 +33,7 @@ class SelectedCopy:
     original_filename: str
     workspace_path: Path
     content_sha256: str
+    identity: "CopyIdentity | None" = None
 
     def __post_init__(self) -> None:
         validate_web_source_id(self.source_id)

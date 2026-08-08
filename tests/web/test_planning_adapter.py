@@ -54,3 +54,31 @@ def test_invalid_notebook_is_rejected_before_plan(tmp_path):
         copies = workspace.replace_selection((("bad.ipynb", b"not json"),))
         with pytest.raises(ValueError, match="Notebook invalide"):
             build_batch_plan_from_web_selection(copies, tmp_path / "out")
+
+
+def test_confirmed_notebook_identity_drives_canonical_output_stem(tmp_path):
+    from tpstudio.web.workspace import WebWorkspace
+    import nbformat
+    notebook = nbformat.v4.new_notebook(cells=[nbformat.v4.new_markdown_cell("Noms : Jules BERNARD et Daniel MENGEL")])
+    content = nbformat.writes(notebook).encode()
+    with WebWorkspace(tmp_path / "workspace") as workspace:
+        copies = workspace.replace_selection((("tp.ipynb", content),))
+        plan = build_batch_plan_from_web_selection(copies, tmp_path / "out")
+    assert plan.sources[0].output_stem == "Lois-de-Snell-Descartes-Jules-BERNARD-Daniel-MENGEL"
+    assert plan.planned_outputs[0].notebook_path.name == "Lois-de-Snell-Descartes-Jules-BERNARD-Daniel-MENGEL-correction.ipynb"
+    assert plan.planned_outputs[0].html_path.name == "Lois-de-Snell-Descartes-Jules-BERNARD-Daniel-MENGEL-correction.html"
+
+
+def test_identity_to_review_does_not_influence_output_name(tmp_path):
+    from tpstudio.web.workspace import WebWorkspace
+    import nbformat
+    notebook = nbformat.v4.new_notebook(cells=[nbformat.v4.new_markdown_cell("Noms : Jules BERNARD et Daniel MENGEL")])
+    content = nbformat.writes(notebook).encode()
+    with WebWorkspace(tmp_path / "workspace") as workspace:
+        copies = workspace.replace_selection((("Paul-DURAND.ipynb", content),))
+        from tpstudio.web.identity import identify_selected_copy
+        identified = identify_selected_copy(copies[0])
+        plan = build_batch_plan_from_web_selection(copies, tmp_path / "out")
+    assert identified.identity is not None and identified.identity.status.value == "to_review"
+    assert plan.sources[0].output_stem is None
+    assert plan.planned_outputs[0].notebook_path.name == "Paul-DURAND-correction.ipynb"

@@ -9,11 +9,22 @@ from pathlib import Path
 from tpstudio.export import CopyExportOptions
 
 
+def validate_output_stem(output_stem: str) -> str:
+    if not isinstance(output_stem, str) or not output_stem or output_stem != output_stem.strip():
+        raise ValueError("output_stem doit être un stem non vide sans espaces périphériques.")
+    if output_stem in {".", ".."} or "/" in output_stem or "\\" in output_stem or "\x00" in output_stem:
+        raise ValueError("output_stem doit être un nom logique sans chemin.")
+    if output_stem.lower().endswith((".ipynb", ".html")):
+        raise ValueError("output_stem ne doit pas contenir de suffixe de fichier.")
+    return output_stem
+
+
 @dataclass(frozen=True, slots=True)
 class BatchCopySource:
     source_id: str
     path: Path
     display_name: str = ""
+    output_stem: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.source_id, str) or not self.source_id.strip():
@@ -22,6 +33,8 @@ class BatchCopySource:
             raise TypeError("path doit être un pathlib.Path.")
         if self.display_name and not isinstance(self.display_name, str):
             raise TypeError("display_name doit être une chaîne.")
+        if self.output_stem is not None:
+            validate_output_stem(self.output_stem)
 
 
 @dataclass(frozen=True, slots=True)

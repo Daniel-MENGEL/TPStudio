@@ -36,6 +36,13 @@ code non nul dès qu'une copie est `FAILED` ou `SKIPPED`. Un `BatchRunResult`
 final ne contient jamais `PENDING`; `BatchPlan` vérifie la correspondance
 structurelle entre sources et sorties avant l'exécution.
 
+`BatchCopySource.output_stem`, lorsqu'il est fourni par une couche appelante
+(par exemple l'interface A72), est un simple stem logique : non vide, sans
+espaces périphériques, séparateurs de chemin, NUL ni suffixe `.ipynb` ou
+`.html`. Il ne contient jamais un chemin ni un nom de fichier complet. Sans
+ce champ, le nommage historique A71g reste inchangé ; A71g ne lit ni
+n'interprète l'identité des étudiants.
+
 Les résumés et rapports n'affichent que les identifiants anonymes et les
 basenames d'artefacts. Aucun notebook n'est exécuté, aucun PDF, aucune note et
 aucune donnée privée ne sont produits. A72 pourra fournir la sélection

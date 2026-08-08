@@ -43,3 +43,14 @@ def test_batch_run_rejects_pending_final_result_and_empty_is_not_success():
         BatchRunResult("project", (pending,), Path("out"), 0, 0, 0, 0, 0, 0)
     empty = BatchRunResult("project", (), Path("out"), 0, 0, 0, 0, 0, 0)
     assert not empty.success
+
+
+@pytest.mark.parametrize("stem", ["", "   ", "../copy", "folder/copy", r"folder\copy", "copy.ipynb", "copy.html"])
+def test_output_stem_rejects_paths_and_file_suffixes(stem):
+    with pytest.raises(ValueError):
+        BatchCopySource("copy-001", Path("tp.ipynb"), output_stem=stem)
+
+
+def test_output_stem_accepts_unicode_logical_stem():
+    source = BatchCopySource("copy-001", Path("tp.ipynb"), output_stem="Lois-de-Snell-Descartes-Léa-DUPONT")
+    assert source.output_stem == "Lois-de-Snell-Descartes-Léa-DUPONT"

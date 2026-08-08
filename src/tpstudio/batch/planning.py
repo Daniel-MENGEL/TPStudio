@@ -26,7 +26,7 @@ def resolve_batch_output_names(
     sources: tuple[BatchCopySource, ...],
     output_dir: Path,
 ) -> tuple[PlannedBatchOutput, ...]:
-    simple = [default_export_names(item.path.name) for item in sources]
+    simple = [default_export_names((item.output_stem or item.path.name)) for item in sources]
     collision_names = set()
     for names in simple:
         collision_names.update(names)

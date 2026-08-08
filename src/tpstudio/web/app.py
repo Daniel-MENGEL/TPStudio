@@ -6,6 +6,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from tpstudio.web.model import WebBatchOptions
+from tpstudio.web.identity import identify_selected_copy
 from tpstudio.web.planning import WebInputError, build_batch_plan_from_web_selection
 from tpstudio.web.presenters import batch_plan_rows, has_output_name_collision
 from tpstudio.web.state import (
@@ -60,7 +61,7 @@ def main() -> None:
     if uploads:
         try:
             payload = tuple((upload.name, upload.getvalue()) for upload in uploads)
-            copies = list(workspace.replace_selection(payload))
+            copies = [identify_selected_copy(item) for item in workspace.replace_selection(payload)]
             st.session_state[SELECTION_KEY] = tuple(copies)
         except (TypeError, ValueError) as exc:
             st.error(web_error_message(exc))
@@ -95,7 +96,19 @@ def main() -> None:
         st.write(f"Copies : {len(plan.sources)} · Dossier de sortie : {plan.output_dir}")
         st.write(f"Retour professeur : {'oui' if options.include_teacher_feedback else 'non'} · Diagnostics : {'oui' if options.include_diagnostics else 'non'}")
         st.write(f"Code HTML : {'masqué' if options.hide_code else 'visible'} · Sorties HTML : {'masquées' if options.hide_outputs else 'visibles'} · Remplacement : {'oui' if options.overwrite else 'non'}")
-        st.table([asdict(row) for row in batch_plan_rows(plan)])
+        identity_by_id = {item.source_id: item.identity for item in copies}
+        table_rows = []
+        for row in batch_plan_rows(plan, identity_by_id):
+            table_rows.append({
+                "Copie": row.copy_label,
+                "Fichier déposé": row.original_filename,
+                "Étudiants détectés": row.students_display,
+                "Statut identité": row.identity_status,
+                "Source": row.identity_source,
+                "Notebook corrigé": row.notebook_output_name,
+                "Version HTML": row.html_output_name,
+            })
+        st.table(table_rows)
         if has_output_name_collision(plan):
             st.info("Des noms de fichiers identiques ont été détectés. TPStudio a préparé des noms de sortie distincts.")
         st.info("Le lancement de la correction sera ajouté au prochain jalon.")

@@ -2,7 +2,7 @@
 
 from .model import (
     BatchCopyResult, BatchCopySource, BatchCopyStatus, BatchOptions,
-    BatchPlan, BatchRunResult, PlannedBatchOutput,
+    BatchPlan, BatchRunResult, PlannedBatchOutput, validate_output_stem,
 )
 from .planning import build_batch_plan, resolve_batch_output_names
 from .runner import run_snells_laws_batch, sanitize_batch_error_message

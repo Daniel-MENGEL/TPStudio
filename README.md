@@ -62,3 +62,6 @@ Lancer l'interface professeur locale avec :
 ```
 
 A72a prépare et vérifie un lot A71g, mais ne lance pas encore les corrections.
+L'interface affiche aussi les étudiants détectés et propose un nom canonique
+lorsque l'identité du notebook est confirmée ; le filename reste seulement un
+indice.

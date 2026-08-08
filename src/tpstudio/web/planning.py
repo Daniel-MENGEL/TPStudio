@@ -7,6 +7,7 @@ import nbformat
 
 from tpstudio.batch import BatchCopySource, BatchOptions, BatchPlan, build_batch_plan
 
+from .identity import build_canonical_copy_stem, canonical_tp_name, identify_selected_copy
 from .model import SelectedCopy, WebBatchOptions
 
 
@@ -37,7 +38,16 @@ def build_batch_plan_from_web_selection(
         raise TypeError("Les options web sont invalides.")
     for copy in copies:
         validate_selected_notebook(copy)
-    sources = tuple(BatchCopySource(item.source_id, item.workspace_path, item.original_filename) for item in copies)
+    identified = tuple(identify_selected_copy(item) if item.identity is None else item for item in copies)
+    sources = tuple(
+        BatchCopySource(
+            item.source_id,
+            item.workspace_path,
+            item.original_filename,
+            build_canonical_copy_stem(canonical_tp_name("snells-laws-mvp"), item.identity) if item.identity else None,
+        )
+        for item in identified
+    )
     batch_options = BatchOptions(
         overwrite=options.overwrite,
         continue_on_error=True,

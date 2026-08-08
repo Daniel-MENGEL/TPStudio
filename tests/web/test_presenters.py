@@ -12,3 +12,5 @@ def test_presenters_use_planned_basenames_only(tmp_path):
     assert rows[0].notebook_output_name == "copy-001-tp-correction.ipynb"
     assert all("/" not in value for row in rows for value in (row.original_filename, row.notebook_output_name, row.html_output_name))
     assert has_output_name_collision(plan)
+    rows = batch_plan_rows(plan)
+    assert rows[0].copy_label == "Copie 1"
