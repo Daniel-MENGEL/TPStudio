@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict
 from pathlib import Path
 
+from tpstudio.batch import BatchCopyStatus, render_batch_report_markdown
+from tpstudio.web.execution import can_run_batch, run_prepared_batch
 from tpstudio.web.model import WebBatchOptions
 from tpstudio.web.identity import identify_selected_copy
 from tpstudio.web.planning import WebInputError, build_batch_plan_from_web_selection
@@ -13,12 +14,15 @@ from tpstudio.web.state import (
     PLAN_KEY, SELECTION_KEY, SIGNATURE_KEY, WORKSPACE_KEY,
     UPLOADER_GENERATION_KEY, clear_prepared_batch, initialize_session_state,
     invalidate_if_signature_changed, reset_web_session, set_prepared_batch,
+    clear_run_result, get_current_run_result, set_run_result, RUN_IN_PROGRESS_KEY,
 )
 from tpstudio.web.workspace import WebWorkspace
 
 
 def _input_signature(copies, output_dir: Path, options: WebBatchOptions) -> tuple:
-    return tuple((item.source_id, item.original_filename, item.content_sha256) for item in copies), str(output_dir), options
+    return tuple((item.source_id, item.original_filename, item.content_sha256,
+                  getattr(getattr(item, "identity", None), "status", None),
+                  tuple(getattr(getattr(item, "identity", None), "students", ()))) for item in copies), str(output_dir), options
 
 
 def web_error_message(exc: BaseException) -> str:
@@ -111,7 +115,52 @@ def main() -> None:
         st.table(table_rows)
         if has_output_name_collision(plan):
             st.info("Des noms de fichiers identiques ont été détectés. TPStudio a préparé des noms de sortie distincts.")
-        st.info("Le lancement de la correction sera ajouté au prochain jalon.")
+        can_run, reasons = can_run_batch(copies, plan)
+        if not can_run:
+            st.warning("Certaines identités doivent être vérifiées avant correction.")
+        if options.overwrite:
+            st.warning("Les fichiers de sortie existants pourront être remplacés.")
+        if st.button("Corriger le lot", type="primary", disabled=not can_run or st.session_state[RUN_IN_PROGRESS_KEY]):
+            st.session_state[RUN_IN_PROGRESS_KEY] = True
+            try:
+                with st.spinner("Correction du lot en cours…"):
+                    result = run_prepared_batch(plan)
+                set_run_result(st.session_state, result, signature)
+            except Exception:
+                clear_run_result(st.session_state)
+                st.error("Impossible de lancer la correction du lot.")
+            finally:
+                st.session_state[RUN_IN_PROGRESS_KEY] = False
+        result = get_current_run_result(st.session_state, signature)
+        if result is not None:
+            if result.success:
+                st.success("Correction terminée.")
+            elif result.success_count:
+                st.warning("Le lot a été traité avec des erreurs.")
+            else:
+                st.warning("Aucune copie n'a été corrigée.")
+            st.subheader("Résultat de la correction")
+            st.write(f"Copies : {len(result.results)} · Réussies : {result.success_count} · Échecs : {result.failed_count} · Ignorées : {result.skipped_count} · Annotations : {result.total_annotation_count} · Revue humaine confirmée : {result.human_review_count}")
+            from tpstudio.web.presenters import artifact_download_info, batch_run_rows
+            result_rows = batch_run_rows(result, copies)
+            st.table([{
+                "Copie": row.copy_label, "Étudiants": row.students_display,
+                "Statut": row.status, "Notebook corrigé": row.notebook_output_name,
+                "Version HTML": row.html_output_name, "Annotations": row.annotation_count,
+                "Revue humaine": row.human_review, "Limites": row.limitations,
+                "Problème": row.problem,
+            } for row in result_rows])
+            for item, row in zip(result.results, result_rows):
+                if item.status is BatchCopyStatus.SUCCESS:
+                    with st.expander(f"{row.copy_label} · {row.students_display}"):
+                        for kind, label in (("notebook", "Télécharger le notebook"), ("html", "Télécharger le HTML")):
+                            try:
+                                filename, mime, path = artifact_download_info(item, plan.output_dir, kind)
+                                st.download_button(label, data=path.read_bytes(), file_name=filename, mime=mime, key=f"download-{item.source_id}-{kind}")
+                            except (FileNotFoundError, ValueError):
+                                st.warning("Artefact indisponible.")
+            with st.expander("Rapport du lot"):
+                st.markdown(render_batch_report_markdown(result))
     if st.button("Réinitialiser"):
         workspace.reset()
         reset_web_session(st.session_state)

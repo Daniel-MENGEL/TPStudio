@@ -56,6 +56,18 @@ def test_invalid_notebook_is_rejected_before_plan(tmp_path):
             build_batch_plan_from_web_selection(copies, tmp_path / "out")
 
 
+def test_web_validation_uses_the_same_no_convert_contract_as_a71(tmp_path):
+    from tpstudio.web.planning import validate_selected_notebook
+    from tpstudio.orchestration import NotebookCopySource, load_notebook_copy
+    import nbformat
+    path = tmp_path / "copy.ipynb"
+    nbformat.write(nbformat.v4.new_notebook(), path)
+    selected = _copy(tmp_path, "copy-001", path.name)
+    validate_selected_notebook(selected)
+    loaded = load_notebook_copy(NotebookCopySource("copy-001", path.name, path))
+    assert loaded.nbformat == nbformat.read(path, as_version=nbformat.NO_CONVERT).nbformat
+
+
 def test_confirmed_notebook_identity_drives_canonical_output_stem(tmp_path):
     from tpstudio.web.workspace import WebWorkspace
     import nbformat

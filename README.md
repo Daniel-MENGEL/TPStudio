@@ -61,7 +61,9 @@ Lancer l'interface professeur locale avec :
 /opt/anaconda3/bin/python3 -m streamlit run src/tpstudio/web/app.py --server.address localhost
 ```
 
-A72a prépare et vérifie un lot A71g, mais ne lance pas encore les corrections.
+A72a prépare et vérifie un lot A71g. A72b permet expérimentalement de lancer un
+lot validé depuis l'interface locale et de télécharger les notebooks/HTML
+corrigés ; aucune cellule notebook n'est exécutée.
 L'interface affiche aussi les étudiants détectés et propose un nom canonique
 lorsque l'identité du notebook est confirmée ; le filename reste seulement un
 indice.

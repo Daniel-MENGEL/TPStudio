@@ -93,7 +93,7 @@ def extract_copy_identity_from_notebook(notebook_path: Path) -> CopyIdentity:
 def extract_identity_hint_from_filename(original_filename: str) -> tuple[str, ...]:
     stem = Path(original_filename).stem
     tokens = [token for token in re.split(r"[-_\s]+", stem) if token]
-    ignored = {"tp", "lois", "de", "snell", "descartes", "laws", "untitled", "copy"}
+    ignored = {"tp", "lois", "de", "snell", "descartes", "laws", "untitled", "copy", "et", "and"}
     return tuple(token for token in tokens if token.casefold() not in ignored and not token.isdigit() and len(token) > 1)
 
 
@@ -102,15 +102,22 @@ def _normalise(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", value).strip()
 
 
+def _identity_tokens(value: str) -> set[str]:
+    return {token for token in _normalise(value).split() if len(token) > 1}
+
+
 def resolve_copy_identity(notebook_identity: CopyIdentity, *, filename_hint: tuple[str, ...] = ()) -> CopyIdentity:
     if notebook_identity.status is CopyIdentityStatus.MISSING:
         if filename_hint:
             return CopyIdentity((), CopyIdentitySource.FILENAME, CopyIdentityStatus.TO_REVIEW, warnings=("Identité absente du notebook ; indice filename à vérifier.",))
         return notebook_identity
-    notebook_text = _normalise(" ".join(student.display_name for student in notebook_identity.students))
-    filename_text = _normalise(" ".join(filename_hint))
-    if filename_hint and not all(token in filename_text for token in notebook_text.split()):
-        return replace(notebook_identity, status=CopyIdentityStatus.TO_REVIEW, warnings=("Le filename semble divergent de l'identité du notebook.",))
+    filename_tokens = _identity_tokens(" ".join(filename_hint))
+    student_tokens = [_identity_tokens(student.display_name) for student in notebook_identity.students]
+    # Missing tokens are not contradictory: a filename may contain only first
+    # names, only family names, or names in a different order. Contradiction
+    # requires a sufficiently strong signal with no overlap at all.
+    if filename_tokens and len(filename_tokens) >= 2 and not any(filename_tokens & tokens for tokens in student_tokens):
+        return replace(notebook_identity, status=CopyIdentityStatus.TO_REVIEW, warnings=("Le nom du fichier semble indiquer une identité différente.",))
     return notebook_identity
 
 

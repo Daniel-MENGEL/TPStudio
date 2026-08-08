@@ -24,6 +24,7 @@ from .notebook_inspection import (
     NotebookCopySource,
     NotebookTechnicalInspection,
     inspect_notebook,
+    load_and_normalize_notebook,
     load_notebook_copy,
 )
 from .observed_values import (

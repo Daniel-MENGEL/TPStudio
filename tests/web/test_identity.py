@@ -51,6 +51,29 @@ def test_notebook_filename_compatibility_and_divergence(tmp_path):
     assert divergent.status is CopyIdentityStatus.TO_REVIEW and divergent.warnings
 
 
+@pytest.mark.parametrize("filename", [
+    "Lois-de-Snell-Descartes-Daniel et Jules.ipynb",
+    "Jules-BERNARD-Daniel-MENGEL.ipynb",
+    "Daniel-et-Jules.ipynb",
+    "Bernard-Mengel.ipynb",
+    "Jules-Mengel.ipynb",
+    "TP-Snell-2025-09-22.ipynb",
+    "Untitled.ipynb",
+])
+def test_partial_or_neutral_filename_does_not_degrade_notebook_identity(filename):
+    identity = CopyIdentity((StudentIdentity("Jules BERNARD"), StudentIdentity("Daniel MENGEL")), CopyIdentitySource.NOTEBOOK, CopyIdentityStatus.CONFIRMED)
+    resolved = resolve_copy_identity(identity, filename_hint=extract_identity_hint_from_filename(filename))
+    assert resolved.status is CopyIdentityStatus.CONFIRMED
+    assert resolved.source is CopyIdentitySource.NOTEBOOK
+
+
+def test_strongly_contradictory_filename_requires_review():
+    identity = CopyIdentity((StudentIdentity("Jules BERNARD"), StudentIdentity("Daniel MENGEL")), CopyIdentitySource.NOTEBOOK, CopyIdentityStatus.CONFIRMED)
+    resolved = resolve_copy_identity(identity, filename_hint=extract_identity_hint_from_filename("Paul-DURAND-Marie-MARTIN.ipynb"))
+    assert resolved.status is CopyIdentityStatus.TO_REVIEW
+    assert resolved.warnings == ("Le nom du fichier semble indiquer une identité différente.",)
+
+
 def test_canonical_stem_preserves_declared_order_and_sanitizes():
     identity = CopyIdentity((StudentIdentity("Jules BERNARD"), StudentIdentity("Léa D'Ange / Martin")), None, CopyIdentityStatus.CONFIRMED)
     assert build_canonical_copy_stem(canonical_tp_name("snells-laws-mvp"), identity) == "Lois-de-Snell-Descartes-Jules-BERNARD-Léa-D-Ange-Martin"

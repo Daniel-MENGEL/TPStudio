@@ -8,6 +8,7 @@ from tpstudio.orchestration import (
     NotebookCopySource,
     inspect_notebook,
     load_notebook_copy,
+    load_and_normalize_notebook,
 )
 
 
@@ -36,6 +37,69 @@ def test_load_valid_notebook_without_extension_and_preserve_bytes(tmp_path: Path
     before = _write(path, nbformat.v4.new_notebook(cells=[nbformat.v4.new_markdown_cell("Texte")]))
     loaded = load_notebook_copy(NotebookCopySource("copy", "Copie", path))
     assert len(loaded.cells) == 1
+    assert path.read_bytes() == before
+
+
+def test_load_repairs_duplicate_or_empty_cell_ids_in_memory_only(tmp_path: Path) -> None:
+    import json
+    path = tmp_path / "notebook.ipynb"
+    notebook = nbformat.v4.new_notebook(cells=[nbformat.v4.new_markdown_cell("a"), nbformat.v4.new_markdown_cell("b")])
+    payload = json.loads(nbformat.writes(notebook))
+    payload["cells"][0]["id"] = ""
+    payload["cells"][1]["id"] = ""
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    before = path.read_bytes()
+    loaded = load_notebook_copy(NotebookCopySource("copy", "Copie", path))
+    ids = [cell.id for cell in loaded.cells]
+    assert len(set(ids)) == 2 and all(identifier.startswith("tpstudio-cell-") for identifier in ids)
+    assert path.read_bytes() == before
+
+
+def test_common_loader_parity_with_web_and_source_list(tmp_path: Path) -> None:
+    import json
+    from tpstudio.web.model import SelectedCopy
+    from tpstudio.web.planning import validate_selected_notebook
+    path = tmp_path / "problematic.ipynb"
+    payload = {
+        "cells": [
+            {"cell_type": "markdown", "metadata": {}, "id": "", "source": ["ligne 1\n", "ligne 2"]},
+            {"cell_type": "markdown", "metadata": {}, "id": "", "source": ["suite"]},
+        ], "metadata": {}, "nbformat": 4, "nbformat_minor": 5,
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    before = path.read_bytes()
+    validate_selected_notebook(SelectedCopy("copy-001", path.name, path, "a" * 64))
+    web_loaded = load_and_normalize_notebook(path)
+    a71_loaded = load_notebook_copy(NotebookCopySource("copy-001", path.name, path))
+    assert [cell.id for cell in web_loaded.cells] == [cell.id for cell in a71_loaded.cells]
+    assert [cell.source for cell in web_loaded.cells] == ["ligne 1\nligne 2", "suite"]
+    assert [cell.source for cell in web_loaded.cells] == [cell.source for cell in a71_loaded.cells]
+    assert path.read_bytes() == before
+
+
+def test_common_loader_ids_are_deterministic_and_preserve_valid_ids(tmp_path: Path) -> None:
+    import json
+    path = tmp_path / "ids.ipynb"
+    payload = {"cells": [
+        {"cell_type": "markdown", "metadata": {}, "id": "kept", "source": "a"},
+        {"cell_type": "markdown", "metadata": {}, "id": "", "source": "b"},
+        {"cell_type": "markdown", "metadata": {}, "id": "tpstudio-cell-0001", "source": "c"},
+    ], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    first = load_and_normalize_notebook(path)
+    second = load_and_normalize_notebook(path)
+    assert [cell.id for cell in first.cells] == ["kept", "tpstudio-cell-0001-1", "tpstudio-cell-0001"]
+    assert [cell.id for cell in first.cells] == [cell.id for cell in second.cells]
+
+
+def test_common_loader_removes_ids_from_legacy_v44_notebook(tmp_path: Path) -> None:
+    import json
+    path = tmp_path / "legacy-v44.ipynb"
+    payload = {"cells": [{"cell_type": "markdown", "metadata": {}, "id": "old", "source": "a"}], "metadata": {}, "nbformat": 4, "nbformat_minor": 4}
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    before = path.read_bytes()
+    loaded = load_and_normalize_notebook(path)
+    assert "id" not in loaded.cells[0]
     assert path.read_bytes() == before
 
 

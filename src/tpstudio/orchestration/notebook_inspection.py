@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
 import re
 
@@ -79,15 +80,75 @@ _PATH_PATTERN = re.compile(
 )
 
 
-def load_notebook_copy(source: NotebookCopySource) -> NotebookNode:
-    """Load one notebook without execution, normalization, or writing."""
+def _normalize_analysis_cell_ids(notebook: NotebookNode) -> NotebookNode:
+    """Repair missing/invalid/duplicate cell ids in memory only.
 
-    if type(source) is not NotebookCopySource:
-        raise TypeError("La source doit être exactement un NotebookCopySource.")
+    Older Jupyter files can pass a permissive read/validation path while
+    failing validation after A71 inserts annotation cells.  IDs are technical
+    notebook structure, not student content; deterministic replacements keep
+    the source bytes untouched and preserve cell order.
+    """
+    pattern = re.compile(r"^[A-Za-z0-9-_]+$")
+    for cell in notebook.get("cells", ()):
+        if isinstance(cell.get("source"), list):
+            cell["source"] = "".join(str(part) for part in cell["source"])
+    # Cell IDs are part of the v4.5 schema. Older v4 notebooks reject the
+    # property altogether, so remove it in memory rather than adding it.
+    if notebook.get("nbformat") == 4 and notebook.get("nbformat_minor", 0) < 5:
+        for cell in notebook.get("cells", ()):
+            cell.pop("id", None)
+        return notebook
+    reserved = {
+        cell.get("id") for cell in notebook.get("cells", ())
+        if isinstance(cell.get("id"), str) and pattern.fullmatch(cell.get("id"))
+    }
+    used: set[str] = set()
+    for index, cell in enumerate(notebook.get("cells", ())):
+        value = cell.get("id")
+        if isinstance(value, str) and pattern.fullmatch(value) and value not in used:
+            used.add(value)
+            continue
+        candidate = f"tpstudio-cell-{index:04d}"
+        suffix = 1
+        while candidate in used or candidate in reserved:
+            candidate = f"tpstudio-cell-{index:04d}-{suffix}"
+            suffix += 1
+        cell["id"] = candidate
+        used.add(candidate)
+    return notebook
+
+
+def load_and_normalize_notebook(path: Path) -> NotebookNode:
+    """Load and structurally normalize a notebook in memory.
+
+    No cell is executed and the source file is never written. Normalization is
+    limited to technical cell IDs and legacy list-valued sources; it does not
+    alter scientific content, outputs, execution counts, or cell order.
+    """
+    if not isinstance(path, Path):
+        raise TypeError("Le chemin du notebook doit être un pathlib.Path.")
     try:
-        return nbformat.read(source.path, as_version=nbformat.NO_CONVERT)
+        # Parse without nbformat's implicit duplicate-id repair first.  This
+        # lets the in-memory normalizer apply deterministic ids while keeping
+        # the source bytes untouched.
+        with path.open("r", encoding="utf-8") as stream:
+            notebook = nbformat.from_dict(json.load(stream))
+        notebook = _normalize_analysis_cell_ids(notebook)
+        nbformat.validate(notebook)
+        return notebook
     except Exception as exc:
         raise ValueError("Le fichier fourni n'est pas un notebook valide.") from exc
+
+
+def load_notebook_copy(source: NotebookCopySource) -> NotebookNode:
+    """Load and structurally normalize one notebook in memory.
+
+    The source remains byte-for-byte untouched; normalization is technical,
+    never scientific, and no cell is executed.
+    """
+    if type(source) is not NotebookCopySource:
+        raise TypeError("La source doit être exactement un NotebookCopySource.")
+    return load_and_normalize_notebook(source.path)
 
 
 def inspect_notebook(notebook: NotebookNode) -> NotebookTechnicalInspection:

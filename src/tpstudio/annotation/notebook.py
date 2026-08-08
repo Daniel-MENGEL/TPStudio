@@ -78,11 +78,14 @@ def remove_tpstudio_annotations(
     return result
 
 
-def _annotation_cell(annotation) -> NotebookNode:
+def _annotation_cell(annotation, *, include_id: bool = True) -> NotebookNode:
     cell = nbformat.v4.new_markdown_cell(render_notebook_annotation(annotation))
-    cell.id = "tpstudio-" + hashlib.sha256(
-        annotation.annotation_id.encode("utf-8")
-    ).hexdigest()[:24]
+    if include_id:
+        cell.id = "tpstudio-" + hashlib.sha256(
+            annotation.annotation_id.encode("utf-8")
+        ).hexdigest()[:24]
+    else:
+        cell.pop("id", None)
     cell.metadata["tpstudio"] = {
         "annotation": True,
         "annotation_id": annotation.annotation_id,
@@ -115,6 +118,10 @@ def apply_annotation_plan(
         removed = ()
     existing_ids = {item.annotation_id for item in find_tpstudio_annotations(working)}
     pending = tuple(item for item in plan.annotations if item.annotation_id not in existing_ids)
+    include_cell_ids = not (
+        working.get("nbformat") == 4
+        and working.get("nbformat_minor", 0) < 5
+    )
 
     logical_cells = [cell for cell in working.cells if not _dedicated_ids(cell)]
     if len(logical_cells) <= max((item.target_cell_index for item in pending), default=-1):
@@ -137,9 +144,13 @@ def apply_annotation_plan(
         physical = next(index for index, cell in enumerate(working.cells) if cell is target_cell)
         before = [item for item in by_target[target_index] if item.placement is AnnotationPlacement.BEFORE_CELL]
         after = [item for item in by_target[target_index] if item.placement is AnnotationPlacement.AFTER_CELL]
-        working.cells[physical:physical] = [_annotation_cell(item) for item in before]
+        working.cells[physical:physical] = [
+            _annotation_cell(item, include_id=include_cell_ids) for item in before
+        ]
         physical += len(before) + 1
-        working.cells[physical:physical] = [_annotation_cell(item) for item in after]
+        working.cells[physical:physical] = [
+            _annotation_cell(item, include_id=include_cell_ids) for item in after
+        ]
 
     applied = tuple(item.annotation_id for item in pending)
     changed = working != original

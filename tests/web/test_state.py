@@ -2,6 +2,8 @@ from tpstudio.web.state import (
     PLAN_KEY, SELECTION_KEY, SIGNATURE_KEY, UPLOADER_GENERATION_KEY, clear_prepared_batch, initialize_session_state,
     invalidate_if_signature_changed, set_prepared_batch,
     reset_web_session,
+    RUN_IN_PROGRESS_KEY, RUN_RESULT_KEY, RUN_SIGNATURE_KEY,
+    clear_run_result, get_current_run_result, set_run_result,
 )
 
 
@@ -10,10 +12,11 @@ def test_state_initialization_and_invalidation():
     initialize_session_state(state)
     assert state[PLAN_KEY] is None
     set_prepared_batch(state, "plan", ("signature",))
+    set_run_result(state, "result", ("signature",))
     assert state[PLAN_KEY] == "plan"
     assert not invalidate_if_signature_changed(state, ("signature",))
     assert invalidate_if_signature_changed(state, ("changed",))
-    assert state[PLAN_KEY] is None and state[SIGNATURE_KEY] is None
+    assert state[PLAN_KEY] is None and state[SIGNATURE_KEY] is None and state[RUN_RESULT_KEY] is None
     clear_prepared_batch(state)
 
 
@@ -26,3 +29,17 @@ def test_reset_web_session_clears_selection_and_advances_uploader():
     reset_web_session(state)
     assert state[UPLOADER_GENERATION_KEY] == 1
     assert state[SELECTION_KEY] == () and state[PLAN_KEY] is None and state[SIGNATURE_KEY] is None
+
+
+def test_run_result_lifecycle_and_reset():
+    state = {}
+    initialize_session_state(state)
+    assert state[RUN_RESULT_KEY] is None and not state[RUN_IN_PROGRESS_KEY]
+    set_run_result(state, "result", ("sig",))
+    assert get_current_run_result(state, ("sig",)) == "result"
+    assert get_current_run_result(state, ("other",)) is None
+    clear_run_result(state)
+    assert state[RUN_RESULT_KEY] is None and state[RUN_SIGNATURE_KEY] is None
+    state[RUN_IN_PROGRESS_KEY] = True
+    reset_web_session(state)
+    assert state[RUN_RESULT_KEY] is None and not state[RUN_IN_PROGRESS_KEY]

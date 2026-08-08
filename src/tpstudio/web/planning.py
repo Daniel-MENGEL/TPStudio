@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-import nbformat
 
 from tpstudio.batch import BatchCopySource, BatchOptions, BatchPlan, build_batch_plan
+from tpstudio.orchestration import load_and_normalize_notebook
 
 from .identity import build_canonical_copy_stem, canonical_tp_name, identify_selected_copy
 from .model import SelectedCopy, WebBatchOptions
@@ -17,8 +17,7 @@ class WebInputError(ValueError):
 
 def validate_selected_notebook(copy: SelectedCopy) -> None:
     try:
-        notebook = nbformat.read(copy.workspace_path, as_version=4)
-        nbformat.validate(notebook)
+        load_and_normalize_notebook(copy.workspace_path)
     except Exception as exc:
         raise WebInputError("Notebook invalide.") from exc
 

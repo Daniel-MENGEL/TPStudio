@@ -48,6 +48,15 @@ Lorsqu'elle est confirmée, l'interface propose un stem déterministe du type
 A71g via son extension générique `output_stem`, qui reste l'autorité des
 sorties et de leurs collisions.
 
-Le plan est invalidé si les sélections, options ou dossier de sortie changent.
-Le bouton Réinitialiser nettoie uniquement le workspace temporaire de la
-session. A72a ne modifie ni source ni notebook et n'appelle pas le runner.
+Le plan est invalidé si les sélections, options, identités ou dossier de sortie
+changent. Depuis A72b, une identité `CONFIRMED` est requise pour lancer le lot ;
+les états « À vérifier » et « Non renseignée » bloquent l'action. Le bouton
+`Corriger le lot` délègue exclusivement à `run_snells_laws_batch()` : aucune
+cellule n'est exécutée, les erreurs restent isolées par copie et les artefacts
+notebook/HTML produits par A71f sont téléchargeables. `overwrite` reste géré
+par le moteur. Le bouton Réinitialiser nettoie uniquement le workspace
+temporaire de la session.
+
+Le chargeur A71 normalise uniquement en mémoire les identifiants de cellules
+vides ou dupliqués et les formes de `source` héritées ; le fichier uploadé reste
+inchangé byte-for-byte.
