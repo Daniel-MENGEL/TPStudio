@@ -53,7 +53,7 @@ A71f exporte explicitement une copie annotée `-correction.ipynb` et son rendu
 HTML depuis le même notebook dérivé, sans exécution ni modification de la source.
 A71g applique la verticale A71f à une petite liste explicite de copies, avec
 isolation des erreurs et rapport de lot anonymisé.
-A72a — Interface web locale expérimentale
+A72c — Interface web locale expérimentale
 
 Lancer l'interface professeur locale avec :
 
@@ -66,4 +66,6 @@ lot validé depuis l'interface locale et de télécharger les notebooks/HTML
 corrigés ; aucune cellule notebook n'est exécutée.
 L'interface affiche aussi les étudiants détectés et propose un nom canonique
 lorsque l'identité du notebook est confirmée ; le filename reste seulement un
-indice.
+indice. A72c ajoute un dossier de corrections configurable (proposé par défaut
+dans `~/Documents/Sup/TP/Notebooks-corrigés/`) et un rendu coloré, accessible
+des annotations TPStudio dans le notebook et le HTML.

@@ -103,6 +103,28 @@ def test_common_loader_removes_ids_from_legacy_v44_notebook(tmp_path: Path) -> N
     assert path.read_bytes() == before
 
 
+def test_common_loader_joins_multiline_stream_text_only_when_all_parts_are_strings(tmp_path: Path) -> None:
+    import json
+    path = tmp_path / "stream-list.ipynb"
+    payload = {"cells": [{"cell_type": "code", "execution_count": 1, "metadata": {}, "outputs": [{
+        "output_type": "stream", "name": "stdout", "text": ["première ligne\n", "deuxième ligne\n"]
+    }], "source": "print('x')"}], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}
+    path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    before = path.read_bytes()
+    loaded = load_and_normalize_notebook(path)
+    assert loaded.cells[0].outputs[0].text == "première ligne\ndeuxième ligne\n"
+    assert path.read_bytes() == before
+
+    invalid = dict(payload)
+    invalid["cells"] = [dict(payload["cells"][0], outputs=[{
+        "output_type": "stream", "name": "stdout", "text": ["ok\n", 3]
+    }])]
+    bad = tmp_path / "invalid-stream-list.ipynb"
+    bad.write_text(json.dumps(invalid), encoding="utf-8")
+    with pytest.raises(ValueError):
+        load_and_normalize_notebook(bad)
+
+
 def test_invalid_notebook_is_rejected(tmp_path: Path) -> None:
     path = tmp_path / "bad"
     path.write_text("not json", encoding="utf-8")

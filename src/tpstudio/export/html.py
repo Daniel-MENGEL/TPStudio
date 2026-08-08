@@ -7,11 +7,13 @@ import re
 from nbformat.notebooknode import NotebookNode
 from nbconvert import HTMLExporter
 
+from tpstudio.annotation.rendering import annotation_css
+
 from .model import CopyExportOptions
 
 
 _TITLE = "TPStudio — Lois de Snell-Descartes — Correction"
-_STYLE = "<style>.tpstudio-banner{padding:0.8em;margin:0 0 1.2em;border:1px solid #ccd;background:#f7f8fa}.tpstudio-banner strong{display:block;margin-bottom:.25em}</style>"
+_STYLE = "<style>.tpstudio-banner{padding:0.8em;margin:0 0 1.2em;border:1px solid #ccd;background:#f7f8fa}.tpstudio-banner strong{display:block;margin-bottom:.25em}</style>" + annotation_css()
 _BANNER = "<div class=\"tpstudio-banner\"><strong>TPStudio — copie annotée</strong>Générée en lecture seule ; le notebook n'a pas été exécuté. Les annotations proviennent de la configuration professeur. Aucune note automatique.</div>"
 
 

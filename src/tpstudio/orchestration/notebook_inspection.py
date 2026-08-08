@@ -90,8 +90,19 @@ def _normalize_analysis_cell_ids(notebook: NotebookNode) -> NotebookNode:
     """
     pattern = re.compile(r"^[A-Za-z0-9-_]+$")
     for cell in notebook.get("cells", ()):
-        if isinstance(cell.get("source"), list):
-            cell["source"] = "".join(str(part) for part in cell["source"])
+        source = cell.get("source")
+        if isinstance(source, list) and all(isinstance(part, str) for part in source):
+            cell["source"] = "".join(source)
+        for output in cell.get("outputs", ()):
+            if output.get("output_type") == "stream":
+                text = output.get("text")
+                if isinstance(text, list) and all(isinstance(part, str) for part in text):
+                    output["text"] = "".join(text)
+            data = output.get("data")
+            if isinstance(data, dict):
+                for mime, value in tuple(data.items()):
+                    if isinstance(value, list) and all(isinstance(part, str) for part in value):
+                        data[mime] = "".join(value)
     # Cell IDs are part of the v4.5 schema. Older v4 notebooks reject the
     # property altogether, so remove it in memory rather than adding it.
     if notebook.get("nbformat") == 4 and notebook.get("nbformat_minor", 0) < 5:

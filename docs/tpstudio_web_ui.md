@@ -1,4 +1,4 @@
-# Interface web locale TPStudio — A72a
+# Interface web locale TPStudio — A72c
 
 A72a fournit un premier écran Streamlit local pour sélectionner plusieurs
 notebooks, régler les options principales et préparer un `BatchPlan` A71g.
@@ -56,6 +56,21 @@ cellule n'est exécutée, les erreurs restent isolées par copie et les artefact
 notebook/HTML produits par A71f sont téléchargeables. `overwrite` reste géré
 par le moteur. Le bouton Réinitialiser nettoie uniquement le workspace
 temporaire de la session.
+
+## Confort A72c
+
+Le champ « Dossier des corrections » est proposé avec un chemin local basé sur
+`Path.home()` : `~/Documents/Sup/TP/Notebooks-corrigés/`. Il peut être modifié,
+est résolu avant le lancement et n'est créé qu'au moment de produire les
+artefacts. Le dossier ne peut pas être un fichier et les protections de
+confinement A71f restent actives.
+
+Les annotations conservent leur message et leur sévérité métier, avec une
+présentation visuelle centralisée : vert doux pour `info`, bleu pour
+`important`, ambre pour `attention` et rouge doux pour `blocking`. Chaque
+annotation porte aussi un libellé textuel (« Très bien », « Remarque », « À
+vérifier », « Problème »), afin de rester compréhensible sans couleur et à
+l'impression. Le HTML embarque ces styles sans ressource réseau.
 
 Le chargeur A71 normalise uniquement en mémoire les identifiants de cellules
 vides ou dupliqués et les formes de `source` héritées ; le fichier uploadé reste

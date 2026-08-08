@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from pathlib import Path
 
 import nbformat
@@ -21,6 +22,29 @@ def test_pipeline_creates_two_derived_artifacts_and_preserves_source(tmp_path):
     assert result.notebook_artifact.path.exists() and result.html_artifact.path.exists()
     exported = nbformat.read(result.notebook_artifact.path, as_version=nbformat.NO_CONVERT)
     assert "Retour TPStudio" in "\n".join(cell.source for cell in exported.cells if cell.cell_type == "markdown")
+
+
+def test_pipeline_renders_multiline_stream_output_as_text(tmp_path):
+    module = _fixture()
+    payload = json.loads(nbformat.writes(module._notebook()))
+    code = next(cell for cell in payload["cells"] if cell["cell_type"] == "code")
+    code["outputs"].append({
+        "output_type": "stream",
+        "name": "stdout",
+        "text": [
+            "Ecart normalisé avec la valeur précédente : 0.1236...\n",
+            "Les mesures sont cohérentes\n",
+        ],
+    })
+    source = tmp_path / "multiline-stream.ipynb"
+    source.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    before = source.read_bytes()
+    result = export_snells_laws_copy(source, tmp_path / "out")
+    html = result.html_artifact.path.read_text(encoding="utf-8")
+    assert "Ecart normalisé avec la valeur précédente : 0.1236..." in html
+    assert "Les mesures sont cohérentes" in html
+    assert "['Ecart normalisé" not in html
+    assert source.read_bytes() == before
 
 
 def test_pipeline_refuses_existing_destination_transactionally(tmp_path):

@@ -8,13 +8,14 @@ from tpstudio.batch import BatchCopyStatus, render_batch_report_markdown
 from tpstudio.web.execution import can_run_batch, run_prepared_batch
 from tpstudio.web.model import WebBatchOptions
 from tpstudio.web.identity import identify_selected_copy
-from tpstudio.web.planning import WebInputError, build_batch_plan_from_web_selection
+from tpstudio.web.planning import WebInputError, build_batch_plan_from_web_selection, resolve_output_dir
 from tpstudio.web.presenters import batch_plan_rows, has_output_name_collision
 from tpstudio.web.state import (
     PLAN_KEY, SELECTION_KEY, SIGNATURE_KEY, WORKSPACE_KEY,
     UPLOADER_GENERATION_KEY, clear_prepared_batch, initialize_session_state,
     invalidate_if_signature_changed, reset_web_session, set_prepared_batch,
     clear_run_result, get_current_run_result, set_run_result, RUN_IN_PROGRESS_KEY,
+    default_output_dir,
 )
 from tpstudio.web.workspace import WebWorkspace
 
@@ -33,6 +34,8 @@ def web_error_message(exc: BaseException) -> str:
         "Seuls les fichiers .ipynb sont acceptés.",
         "source_id web invalide.",
         "Notebook invalide.",
+        "Le dossier de sortie est vide.",
+        "Le dossier de sortie est invalide.",
     }
     if isinstance(exc, ValueError) and text in safe_messages:
         return text
@@ -60,7 +63,7 @@ def main() -> None:
         overwrite = st.checkbox("Autoriser le remplacement des fichiers existants")
     generation = st.session_state[UPLOADER_GENERATION_KEY]
     uploads = st.file_uploader("Sélectionner les notebooks (.ipynb)", type=["ipynb"], accept_multiple_files=True, key=f"tpstudio_web_uploads_{generation}")
-    output_text = st.text_input("Dossier de sortie", value="./tpstudio-output")
+    output_text = st.text_input("Dossier des corrections", value=str(default_output_dir()))
     copies = []
     if uploads:
         try:
@@ -79,21 +82,26 @@ def main() -> None:
         else:
             st.session_state[SELECTION_KEY] = ()
             clear_prepared_batch(st.session_state)
+    output_error = None
     try:
-        output_dir = Path(output_text).expanduser().resolve()
-    except (OSError, RuntimeError, ValueError):
+        output_dir = resolve_output_dir(output_text)
+    except WebInputError as exc:
         output_dir = Path(output_text)
+        output_error = exc
     options = WebBatchOptions(include_teacher, include_diagnostics, hide_code, hide_outputs, overwrite)
     signature = _input_signature(copies, output_dir, options) if copies and all(item.workspace_path.exists() for item in copies) else ()
     invalidate_if_signature_changed(st.session_state, signature)
     if st.button("Vérifier le lot", type="primary"):
-        try:
-            plan = build_batch_plan_from_web_selection(tuple(copies), output_dir, options)
-            set_prepared_batch(st.session_state, plan, signature)
-            st.success("Lot prêt")
-        except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
-            clear_prepared_batch(st.session_state)
-            st.error(web_error_message(exc))
+        if output_error is not None:
+            st.error(web_error_message(output_error))
+        else:
+            try:
+                plan = build_batch_plan_from_web_selection(tuple(copies), output_dir, options)
+                set_prepared_batch(st.session_state, plan, signature)
+                st.success("Lot prêt")
+            except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
+                clear_prepared_batch(st.session_state)
+                st.error(web_error_message(exc))
     if st.session_state.get(PLAN_KEY) is not None and st.session_state.get(SIGNATURE_KEY) == signature:
         plan = st.session_state[PLAN_KEY]
         st.success("Lot prêt")
@@ -123,6 +131,9 @@ def main() -> None:
         if st.button("Corriger le lot", type="primary", disabled=not can_run or st.session_state[RUN_IN_PROGRESS_KEY]):
             st.session_state[RUN_IN_PROGRESS_KEY] = True
             try:
+                plan.output_dir.mkdir(parents=True, exist_ok=True)
+                if not plan.output_dir.is_dir():
+                    raise ValueError("Le dossier de sortie est invalide.")
                 with st.spinner("Correction du lot en cours…"):
                     result = run_prepared_batch(plan)
                 set_run_result(st.session_state, result, signature)

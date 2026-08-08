@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import MutableMapping
+from pathlib import Path
 
 
 WORKSPACE_KEY = "tpstudio_web_workspace"
@@ -13,6 +14,10 @@ UPLOADER_GENERATION_KEY = "tpstudio_web_uploader_generation"
 RUN_RESULT_KEY = "tpstudio_web_run_result"
 RUN_SIGNATURE_KEY = "tpstudio_web_run_signature"
 RUN_IN_PROGRESS_KEY = "tpstudio_web_run_in_progress"
+
+
+def default_output_dir() -> Path:
+    return Path.home() / "Documents" / "Sup" / "TP" / "Notebooks-corrigés"
 
 
 def initialize_session_state(state: MutableMapping) -> None:

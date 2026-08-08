@@ -6,7 +6,7 @@ from hashlib import sha256
 
 from tpstudio.batch import BatchOptions
 from tpstudio.web.model import SelectedCopy, WebBatchOptions
-from tpstudio.web.planning import build_batch_plan_from_web_selection
+from tpstudio.web.planning import build_batch_plan_from_web_selection, resolve_output_dir, WebInputError
 
 
 def _copy(tmp_path, source_id, name):
@@ -26,6 +26,16 @@ def test_adapter_builds_batch_plan_and_preserves_planned_outputs(tmp_path):
 def test_adapter_does_not_run_batch(tmp_path):
     with pytest.raises(ValueError, match="Aucune"):
         build_batch_plan_from_web_selection((), tmp_path / "out")
+
+
+def test_output_dir_expands_tilde_and_rejects_files(tmp_path):
+    assert resolve_output_dir("~/Documents/Sup/TP/Notebooks-corrigés").is_absolute()
+    file_path = tmp_path / "not-a-directory"
+    file_path.write_text("x", encoding="utf-8")
+    with pytest.raises(WebInputError, match="invalide"):
+        resolve_output_dir(str(file_path))
+    with pytest.raises(WebInputError, match="vide"):
+        resolve_output_dir("   ")
 
 
 def test_original_basenames_drive_a71g_names(tmp_path):

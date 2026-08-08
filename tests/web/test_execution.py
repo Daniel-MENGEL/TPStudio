@@ -77,6 +77,8 @@ def test_run_prepared_batch_real_vertical_preserves_source(tmp_path):
     result = run_prepared_batch(plan)
     assert result.success and result.results[0].notebook_path.exists() and result.results[0].html_path.exists()
     assert source.read_bytes() == before
+    assert "tpstudio-severity-" in result.results[0].notebook_path.read_text(encoding="utf-8")
+    assert "tpstudio-severity-" in result.results[0].html_path.read_text(encoding="utf-8")
 
 
 def test_run_prepared_batch_real_vertical_isolates_invalid_copy(tmp_path):

@@ -3,7 +3,7 @@ from tpstudio.web.state import (
     invalidate_if_signature_changed, set_prepared_batch,
     reset_web_session,
     RUN_IN_PROGRESS_KEY, RUN_RESULT_KEY, RUN_SIGNATURE_KEY,
-    clear_run_result, get_current_run_result, set_run_result,
+    clear_run_result, get_current_run_result, set_run_result, default_output_dir,
 )
 
 
@@ -43,3 +43,8 @@ def test_run_result_lifecycle_and_reset():
     state[RUN_IN_PROGRESS_KEY] = True
     reset_web_session(state)
     assert state[RUN_RESULT_KEY] is None and not state[RUN_IN_PROGRESS_KEY]
+
+
+def test_default_output_dir_is_local_home_path():
+    from pathlib import Path
+    assert default_output_dir() == Path.home() / "Documents" / "Sup" / "TP" / "Notebooks-corrigés"

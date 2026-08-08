@@ -15,6 +15,18 @@ class WebInputError(ValueError):
     """A safe, user-facing validation error created by the web layer."""
 
 
+def resolve_output_dir(value: str) -> Path:
+    if not isinstance(value, str) or not value.strip():
+        raise WebInputError("Le dossier de sortie est vide.")
+    try:
+        path = Path(value).expanduser().resolve()
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise WebInputError("Le dossier de sortie est invalide.") from exc
+    if path.exists() and not path.is_dir():
+        raise WebInputError("Le dossier de sortie est invalide.")
+    return path
+
+
 def validate_selected_notebook(copy: SelectedCopy) -> None:
     try:
         load_and_normalize_notebook(copy.workspace_path)
