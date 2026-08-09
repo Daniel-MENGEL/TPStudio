@@ -184,6 +184,8 @@ class TeacherFeedbackReportItem:
     comparison_id: str | None
     priority: str
     text: str
+    cell_index: int | None = None
+    cell_type: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -225,6 +227,8 @@ class TeacherCopyReport:
 
 def _diagnostic_category(item: object) -> TeacherReportCategory:
     name = type(item).__name__.lower()
+    if "protocol" in name:
+        return TeacherReportCategory.PROTOCOL
     if "justification" in name:
         return TeacherReportCategory.JUSTIFICATION
     if "interpretation" in name:
@@ -249,6 +253,7 @@ def feedback_source_key(item: object) -> str:
         _identity_value(getattr(item, "audience", None)),
         _identity_value(getattr(item, "production_id", None)),
         _identity_value(getattr(item, "comparison_id", None)),
+        _identity_value(getattr(item, "expectation_id", None)),
         _identity_value(getattr(item, "variant", None)),
     ))
 
@@ -262,6 +267,7 @@ def diagnostic_source_key(item: object) -> str:
         _identity_value(getattr(item, "message_key", None)),
         _identity_value(getattr(item, "production_id", None)),
         _identity_value(getattr(item, "comparison_id", None)),
+        _identity_value(getattr(item, "expectation_id", None)),
         _identity_value(getattr(item, "source", None)),
     ))
 
@@ -426,6 +432,7 @@ def build_teacher_copy_report(result: CopyAnalysisResult) -> TeacherCopyReport:
         f"feedback-{index:03d}", feedback_source_key(item), item.audience,
         getattr(item, "production_id", None), getattr(item, "comparison_id", None),
         _value(getattr(item, "priority", "normal")), item.text,
+        getattr(item, "cell_index", None), getattr(item, "cell_type", None),
     ) for index, item in enumerate(result.feedback, 1))
     priorities = _build_priorities(result, diagnostics, feedback)
     conclusion = result.final_conclusion

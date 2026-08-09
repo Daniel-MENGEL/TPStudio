@@ -24,6 +24,7 @@ from tpstudio.feedback import (
     QuantityComparisonFeedbackCatalog,
     QuantityFeedbackCatalog,
 )
+from tpstudio.protocol import ExperimentalManipulation
 
 
 def _required_text(value: object, field_name: str) -> None:
@@ -177,6 +178,7 @@ class TeacherProjectConfiguration:
     comparison_justification_expectation_set: ComparisonJustificationExpectationSet
     feedback_catalogs: tuple[object, ...]
     description: str = ""
+    experimental_manipulations: tuple[ExperimentalManipulation, ...] = ()
 
     def __post_init__(self) -> None:
         validate_teacher_project_configuration(self, normalize=True)
@@ -229,6 +231,15 @@ def validate_teacher_project_configuration(
         raise ValueError("Le projet accepte au plus un corrigé et une copie contrôlée.")
     if normalize:
         object.__setattr__(configuration, "notebook_references", references)
+
+    manipulations = tuple(configuration.experimental_manipulations)
+    if any(type(item) is not ExperimentalManipulation for item in manipulations):
+        raise TypeError("Chaque manipulation doit être une ExperimentalManipulation.")
+    manipulation_ids = tuple(item.stable_id for item in manipulations)
+    if len(manipulation_ids) != len(set(manipulation_ids)):
+        raise ValueError("Les identifiants de manipulation doivent être uniques.")
+    if normalize:
+        object.__setattr__(configuration, "experimental_manipulations", manipulations)
 
     plan = configuration.scientific_production_plan
     if type(plan) is not ScientificProductionPlan:

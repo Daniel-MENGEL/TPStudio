@@ -48,6 +48,13 @@ from tpstudio.projects import (
     snells_laws_teacher_project,
     validate_teacher_project_configuration,
 )
+from tpstudio.protocol import (
+    ProtocolDiagnostic,
+    ProtocolEvaluation,
+    ProtocolFeedbackItem,
+    ProtocolStatus,
+    evaluate_protocol_cells,
+)
 from tpstudio.reasoning import extract_expected_quantity
 
 from .graph_adapter import GraphEvaluation, evaluate_saved_graph, observe_saved_graph
@@ -218,10 +225,12 @@ class CopyAnalysisResult:
     feedback: tuple[object, ...]
     final_conclusion: FinalConclusionObservation
     limitations: tuple[str, ...] = ()
+    protocol_evaluations: tuple[ProtocolEvaluation, ...] = ()
 
     def __post_init__(self) -> None:
         detections = tuple(self.observed_value_detections)
         object.__setattr__(self, "observed_value_detections", detections)
+        object.__setattr__(self, "protocol_evaluations", tuple(self.protocol_evaluations))
         expected_ids = tuple(item.production_id for item in self.quantity_evaluations)
         observed_ids = tuple(item.production.id for item in detections)
         if observed_ids != expected_ids:
@@ -298,6 +307,10 @@ class CopyAnalysisResult:
         return bool(self.feedback)
 
     @property
+    def has_protocol_issues(self) -> bool:
+        return any(item.status is not ProtocolStatus.PRESENT for item in self.protocol_evaluations)
+
+    @property
     def requires_human_review(self) -> bool:
         return any((
             self.has_technical_errors,
@@ -309,6 +322,7 @@ class CopyAnalysisResult:
             self.has_comparison_issues,
             self.has_interpretation_issues,
             self.has_justification_issues,
+            self.has_protocol_issues,
         ))
 
     def __repr__(self) -> str:
@@ -404,6 +418,9 @@ class SnellsLawsCopyAnalyzer:
         resolution_set = resolve_notebook_bindings(
             notebook, project.notebook_binding_plan
         )
+        protocol_evaluations = evaluate_protocol_cells(
+            notebook, tuple(project.experimental_manipulations)
+        )
         quantity_catalog = (
             _catalog(project, QuantityFeedbackCatalog)
             if options.build_diagnostics and options.render_feedback else None
@@ -475,6 +492,24 @@ class SnellsLawsCopyAnalyzer:
             diagnostics.extend(comparison_diagnostics)
             diagnostics.extend(interpretation_diagnostics)
             diagnostics.extend(justification_diagnostics)
+            for item in protocol_evaluations:
+                if item.status is not ProtocolStatus.PRESENT:
+                    diagnostics.append(ProtocolDiagnostic(
+                        item.expectation_id, item.manipulation_id, item.cell_index,
+                        item.status,
+                        "PROTOCOL_EXPECTED_MISSING" if item.status is ProtocolStatus.MISSING else "PROTOCOL_NOT_EVALUABLE",
+                        "Le protocole expérimental de cette manipulation n'est pas décrit."
+                        if item.status is ProtocolStatus.MISSING
+                        else "La cellule de protocole ne peut pas être évaluée automatiquement.",
+                    ))
+                    target_index = item.cell_index if item.cell_index is not None else item.anchor_cell_index
+                    if options.render_feedback and item.status is ProtocolStatus.MISSING and target_index is not None:
+                        feedback.append(ProtocolFeedbackItem(
+                            item.expectation_id, item.manipulation_id,
+                            "Le protocole expérimental de cette manipulation n'est pas décrit.",
+                            target_index,
+                            item.cell_type or "markdown",
+                        ))
             if options.render_feedback:
                 feedback.extend(quantity_set.student_feedback)
                 feedback.extend(quantity_set.teacher_feedback)
@@ -536,6 +571,7 @@ class SnellsLawsCopyAnalyzer:
             tuple(relation_evaluations), tuple(graph_evaluations), comparison_set,
             student_errors, interpretations, justifications, tuple(diagnostics),
             tuple(feedback), conclusion, tuple(limitations),
+            tuple(protocol_evaluations),
         )
 
 

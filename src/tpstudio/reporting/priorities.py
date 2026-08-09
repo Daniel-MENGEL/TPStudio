@@ -26,6 +26,7 @@ class TeacherReportCategory(str, Enum):
     JUSTIFICATION = "justification"
     FINAL_CONCLUSION = "final_conclusion"
     LIMITATION = "limitation"
+    PROTOCOL = "protocol"
 
 
 @dataclass(frozen=True, slots=True)

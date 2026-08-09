@@ -118,6 +118,26 @@ def build_annotation_plan(
         if not allowed:
             skipped.append(SkippedAnnotation(item.source_key, AnnotationKind.FEEDBACK, item.audience, SkippedAnnotationReason.AUDIENCE_EXCLUDED, production_id, comparison_id))
             continue
+        if item.cell_index is not None and production_id is None and comparison_id is None:
+            if item.cell_index < 0 or item.cell_index >= result.technical_inspection.cell_count:
+                skipped.append(SkippedAnnotation(item.source_key, AnnotationKind.FEEDBACK, item.audience, SkippedAnnotationReason.TARGET_UNAVAILABLE))
+                continue
+            placement = _placement(item.cell_type or "markdown", options)
+            if placement is None:
+                skipped.append(SkippedAnnotation(item.source_key, AnnotationKind.FEEDBACK, item.audience, SkippedAnnotationReason.PLACEMENT_DISABLED))
+                continue
+            severity = {
+                "high": TeacherReportSeverity.IMPORTANT,
+                "normal": TeacherReportSeverity.ATTENTION,
+                "low": TeacherReportSeverity.INFO,
+            }.get(item.priority, TeacherReportSeverity.ATTENTION)
+            annotation_id = _stable_id(result.project_id, result.source_id, AnnotationKind.FEEDBACK, item.audience, item.source_key, item.cell_index)
+            annotations.append(NotebookAnnotation(
+                annotation_id, AnnotationKind.FEEDBACK, item.audience, item.text,
+                (item.source_key,), None, None,
+                item.cell_index, placement, severity,
+            ))
+            continue
         resolution, reason = _target(result, production_id, comparison_id)
         if reason is not None:
             skipped.append(SkippedAnnotation(item.source_key, AnnotationKind.FEEDBACK, item.audience, reason, production_id, comparison_id))

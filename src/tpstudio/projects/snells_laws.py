@@ -41,6 +41,7 @@ from tpstudio.feedback import (
     french_quantity_comparison_feedback_catalog,
     french_quantity_feedback_catalog,
 )
+from tpstudio.protocol import snells_laws_manipulations
 
 from .model import (
     GraphExpectation,
@@ -396,6 +397,7 @@ def snells_laws_teacher_project() -> TeacherProjectConfiguration:
             french_comparison_justification_feedback_catalog(),
         ),
         "Configuration déclarative ; aucune copie, évaluation ou note n'est stockée.",
+        experimental_manipulations=snells_laws_manipulations(),
     )
     validate_teacher_project_configuration(configuration)
     return configuration

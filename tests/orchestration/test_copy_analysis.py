@@ -19,6 +19,12 @@ from tpstudio.orchestration import (
     summarize_copy_analysis,
 )
 from tpstudio.projects import snells_laws_teacher_project
+from tpstudio.protocol import (
+    ProtocolStatus,
+    prepare_notebook_with_protocol_cells,
+    snells_laws_manipulations,
+)
+from tpstudio.annotation import build_annotation_plan
 
 
 def _notebook(*, placeholder=False, error=False, inverted_graph=False, omit_marker=None, duplicate_marker=None):
@@ -96,6 +102,82 @@ def test_synthetic_copy_runs_all_declared_chains_read_only(tmp_path: Path) -> No
     assert result.final_conclusion.unique
     assert "Conclusion finale distincte" in result.final_conclusion.text
     assert "path=" not in repr(result)
+
+
+def test_prepared_protocol_cells_are_evaluated_without_global_scan(tmp_path: Path) -> None:
+    notebook = prepare_notebook_with_protocol_cells(_notebook(), snells_laws_manipulations())
+    for cell in notebook.cells:
+        if cell.metadata.get("tpstudio", {}).get("role") == "protocol_response":
+            cell.source = cell.source + (
+                "\n\nNous plaçons le disque gradué, alignons le rayon et relevons "
+                "plusieurs angles dans un tableau."
+            )
+    result = _analyze(tmp_path, notebook)
+    assert [item.status for item in result.protocol_evaluations] == [
+        ProtocolStatus.PRESENT,
+        ProtocolStatus.PRESENT,
+        ProtocolStatus.PRESENT,
+    ]
+    assert not any("protocole" in getattr(item, "text", "").lower() for item in result.feedback)
+
+
+def test_missing_prepared_protocol_creates_one_targeted_feedback(tmp_path: Path) -> None:
+    notebook = prepare_notebook_with_protocol_cells(_notebook(), snells_laws_manipulations())
+    protocol_cells = [cell for cell in notebook.cells if cell.metadata.get("tpstudio", {}).get("role") == "protocol_response"]
+    for cell in protocol_cells:
+        cell.source += "\n\nNous plaçons le disque, alignons le rayon et relevons plusieurs angles dans un tableau."
+    protocol_cells[1].source = "### Protocole expérimental\n\nVoir énoncé"
+    result = _analyze(tmp_path, notebook)
+    assert [item.status for item in result.protocol_evaluations].count(ProtocolStatus.MISSING) == 1
+    protocol_feedback = [item for item in result.feedback if type(item).__name__ == "ProtocolFeedbackItem"]
+    assert len(protocol_feedback) == 1
+    protocol_annotations = [
+        item for item in build_annotation_plan(result).annotations
+        if any("PROTOCOL_EXPECTED_MISSING" in source_id for source_id in item.source_ids)
+    ]
+    assert len(protocol_annotations) == 1
+
+
+def test_all_missing_protocol_cells_have_distinct_diagnostics(tmp_path: Path) -> None:
+    notebook = prepare_notebook_with_protocol_cells(_notebook(), snells_laws_manipulations())
+    result = _analyze(tmp_path, notebook)
+    protocol_diagnostics = [
+        item for item in result.diagnostics if type(item).__name__ == "ProtocolDiagnostic"
+    ]
+    assert len(protocol_diagnostics) == 3
+    assert len({item.expectation_id for item in protocol_diagnostics}) == 3
+
+
+def test_missing_response_is_annotated_on_section_anchor(tmp_path: Path) -> None:
+    notebook = _notebook()
+    notebook.cells.insert(0, nbformat.v4.new_markdown_cell("1. Mesure par angle limite\nConsigne professeur"))
+    notebook = prepare_notebook_with_protocol_cells(notebook, snells_laws_manipulations())
+    response_cells = [cell for cell in notebook.cells if cell.metadata.get("tpstudio", {}).get("role") == "protocol_response"]
+    response_cells[0].metadata = {}
+    response_cells[0].source = "texte historique sans réponse estampillée"
+    for cell in response_cells[1:]:
+        cell.source += "\n\nNous plaçons le disque, alignons le rayon et relevons plusieurs angles dans un tableau."
+    result = _analyze(tmp_path, notebook)
+    protocol_annotations = [
+        item for item in build_annotation_plan(result).annotations
+        if any("PROTOCOL_EXPECTED_MISSING" in source_id for source_id in item.source_ids)
+    ]
+    assert len(protocol_annotations) == 1
+    assert protocol_annotations[0].target_cell_index == 0
+
+
+def test_missing_response_without_section_is_not_placed_at_cell_zero(tmp_path: Path) -> None:
+    notebook = prepare_notebook_with_protocol_cells(_notebook(), snells_laws_manipulations())
+    for cell in notebook.cells:
+        if cell.metadata.get("tpstudio", {}).get("role") in {"protocol_response", "protocol_prompt"}:
+            cell.metadata = {}
+            cell.source = "Texte sans section identifiée"
+    result = _analyze(tmp_path, notebook)
+    protocol_annotations = [
+        item for item in build_annotation_plan(result).annotations
+        if any("PROTOCOL_EXPECTED_MISSING" in source_id for source_id in item.source_ids)
+    ]
+    assert not protocol_annotations
 
 
 def test_incomplete_code_and_saved_error_require_review_without_global_failure(tmp_path: Path) -> None:
