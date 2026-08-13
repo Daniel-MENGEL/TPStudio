@@ -19,6 +19,7 @@ from tpstudio.orchestration import (
     summarize_copy_analysis,
 )
 from tpstudio.projects import snells_laws_teacher_project
+from tpstudio.reporting import build_teacher_copy_report
 from tpstudio.protocol import (
     ProtocolStatus,
     prepare_notebook_with_protocol_cells,
@@ -117,6 +118,40 @@ def test_prepared_protocol_cells_are_evaluated_without_global_scan(tmp_path: Pat
         ProtocolStatus.PRESENT,
         ProtocolStatus.PRESENT,
         ProtocolStatus.PRESENT,
+    ]
+
+
+def test_conclusion_response_reaches_analysis_report_and_annotation(tmp_path: Path) -> None:
+    notebook = _notebook()
+    response = nbformat.v4.new_markdown_cell(
+        "Nous avons déterminé les valeurs obtenues. Les résultats sont compatibles avec la théorie, "
+        "ce qui confirme le modèle dans les limites expérimentales.",
+        metadata={"tpstudio": {"role": "conclusion_response", "expectation_id": "conclusion-main"}},
+    )
+    notebook.cells.append(response)
+    result = _analyze(tmp_path, notebook)
+    assert result.conclusion_evaluations[0].status is ProtocolStatus.PRESENT
+    report = build_teacher_copy_report(result)
+    assert not any(item.category.value == "conclusion" for item in report.diagnostics)
+    plan = build_annotation_plan(result)
+    assert any(item.target_cell_index == len(notebook.cells) - 1 for item in plan.annotations)
+
+
+def test_missing_conclusion_reaches_conclusion_category_and_not_evaluable_is_safe(tmp_path: Path) -> None:
+    notebook = _notebook()
+    notebook.cells.append(nbformat.v4.new_markdown_cell(
+        "...", metadata={"tpstudio": {"role": "conclusion_response", "expectation_id": "conclusion-main"}}
+    ))
+    result = _analyze(tmp_path, notebook)
+    report = build_teacher_copy_report(result)
+    assert any(item.category.value == "conclusion" for item in report.diagnostics)
+    ambiguous = nbformat.v4.new_markdown_cell(
+        "Conclusion", metadata={"tpstudio": {"role": "conclusion_response", "expectation_id": "conclusion-2"}}
+    )
+    notebook.cells.append(ambiguous)
+    result = _analyze(tmp_path, notebook)
+    assert [item.status for item in result.conclusion_evaluations] == [
+        ProtocolStatus.MISSING, ProtocolStatus.PRESENT
     ]
     assert not any("protocole" in getattr(item, "text", "").lower() for item in result.feedback)
 

@@ -229,6 +229,8 @@ def _diagnostic_category(item: object) -> TeacherReportCategory:
     name = type(item).__name__.lower()
     if "protocol" in name:
         return TeacherReportCategory.PROTOCOL
+    if "conclusion" in name:
+        return TeacherReportCategory.CONCLUSION
     if "justification" in name:
         return TeacherReportCategory.JUSTIFICATION
     if "interpretation" in name:

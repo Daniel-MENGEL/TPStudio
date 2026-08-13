@@ -152,7 +152,7 @@ def _content_status(source: str) -> ProtocolStatus:
         "mesures",
         "mesure des angles",
     }
-    if normalized in {_normalized(item) for item in placeholders}:
+    if is_empty_or_placeholder(source, tuple(placeholders)):
         return ProtocolStatus.MISSING
     words = re.findall(r"\b[\wÀ-ÿ'-]+\b", text, flags=re.UNICODE)
     sentences = [part for part in re.split(r"[.!?]+", text) if part.strip()]
@@ -162,6 +162,18 @@ def _content_status(source: str) -> ProtocolStatus:
     ):
         return ProtocolStatus.PRESENT
     return ProtocolStatus.MISSING
+
+
+def is_empty_or_placeholder(source: str, extra: tuple[str, ...] = ()) -> bool:
+    """Shared conservative placeholder check for student response cells."""
+    if not isinstance(source, str):
+        return True
+    text = re.sub(r"(?m)^\s{1,6}#+\s*", "", source)
+    text = re.sub(r"[*_`~]", "", text)
+    value = _normalized(re.sub(r"\s+", " ", text).strip())
+    values = {"", "...", "?", "a completer", "a completer :", "voir enonce"}
+    values.update(_normalized(item) for item in extra)
+    return value in values or value.startswith("a completer :")
 
 
 def evaluate_protocol_cells(

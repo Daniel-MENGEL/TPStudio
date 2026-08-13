@@ -13,6 +13,7 @@ from .copy_analysis import (
     analyze_snells_laws_copy,
     summarize_copy_analysis,
 )
+from tpstudio.conclusion import ConclusionEvaluation
 from .graph_adapter import (
     GraphCheckStatus,
     GraphEvaluation,
