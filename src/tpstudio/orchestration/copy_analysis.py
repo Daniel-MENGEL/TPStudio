@@ -62,6 +62,13 @@ from tpstudio.conclusion import (
     evaluate_conclusion_cells,
     build_conclusion_contexts,
 )
+from tpstudio.interpretation import (
+    InterpretationEvaluation,
+    build_interpretation_contexts,
+    build_interpretation_diagnostics,
+    build_interpretation_feedback,
+    evaluate_interpretation_cells,
+)
 from tpstudio.reasoning import extract_expected_quantity
 
 from .graph_adapter import GraphEvaluation, evaluate_saved_graph, observe_saved_graph
@@ -234,12 +241,14 @@ class CopyAnalysisResult:
     limitations: tuple[str, ...] = ()
     protocol_evaluations: tuple[ProtocolEvaluation, ...] = ()
     conclusion_evaluations: tuple[ConclusionEvaluation, ...] = ()
+    interpretation_response_evaluations: tuple[InterpretationEvaluation, ...] = ()
 
     def __post_init__(self) -> None:
         detections = tuple(self.observed_value_detections)
         object.__setattr__(self, "observed_value_detections", detections)
         object.__setattr__(self, "protocol_evaluations", tuple(self.protocol_evaluations))
         object.__setattr__(self, "conclusion_evaluations", tuple(self.conclusion_evaluations))
+        object.__setattr__(self, "interpretation_response_evaluations", tuple(self.interpretation_response_evaluations))
         expected_ids = tuple(item.production_id for item in self.quantity_evaluations)
         observed_ids = tuple(item.production.id for item in detections)
         if observed_ids != expected_ids:
@@ -329,6 +338,14 @@ class CopyAnalysisResult:
         )
 
     @property
+    def has_interpretation_response_issues(self) -> bool:
+        return any(
+            item.status is not ProtocolStatus.PRESENT
+            or item.requires_human_review
+            for item in self.interpretation_response_evaluations
+        )
+
+    @property
     def requires_human_review(self) -> bool:
         return any((
             self.has_technical_errors,
@@ -342,6 +359,7 @@ class CopyAnalysisResult:
             self.has_justification_issues,
             self.has_protocol_issues,
             self.has_conclusion_issues,
+            self.has_interpretation_response_issues,
         ))
 
     def __repr__(self) -> str:
@@ -443,6 +461,9 @@ class SnellsLawsCopyAnalyzer:
         conclusion_evaluations = evaluate_conclusion_cells(
             notebook, contexts=build_conclusion_contexts(notebook)
         )
+        interpretation_response_evaluations = evaluate_interpretation_cells(
+            notebook, contexts=build_interpretation_contexts(notebook)
+        )
         quantity_catalog = (
             _catalog(project, QuantityFeedbackCatalog)
             if options.build_diagnostics and options.render_feedback else None
@@ -536,6 +557,9 @@ class SnellsLawsCopyAnalyzer:
             diagnostics.extend(conclusion_diagnostics)
             if options.render_feedback:
                 feedback.extend(build_conclusion_feedback(conclusion_evaluations))
+            diagnostics.extend(build_interpretation_diagnostics(interpretation_response_evaluations))
+            if options.render_feedback:
+                feedback.extend(build_interpretation_feedback(interpretation_response_evaluations))
             if options.render_feedback:
                 feedback.extend(quantity_set.student_feedback)
                 feedback.extend(quantity_set.teacher_feedback)
@@ -599,6 +623,7 @@ class SnellsLawsCopyAnalyzer:
             tuple(feedback), conclusion, tuple(limitations),
             tuple(protocol_evaluations),
             tuple(conclusion_evaluations),
+            tuple(interpretation_response_evaluations),
         )
 
 

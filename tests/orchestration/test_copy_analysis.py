@@ -25,6 +25,7 @@ from tpstudio.protocol import (
     prepare_notebook_with_protocol_cells,
     snells_laws_manipulations,
 )
+from tpstudio.interpretation import InterpretationClassification
 from tpstudio.annotation import build_annotation_plan
 
 
@@ -153,6 +154,23 @@ def test_missing_conclusion_reaches_conclusion_category_and_not_evaluable_is_saf
     assert [item.status for item in result.conclusion_evaluations] == [
         ProtocolStatus.MISSING, ProtocolStatus.PRESENT
     ]
+
+
+def test_ambiguous_interpretation_reaches_teacher_report_without_student_teacher_text(tmp_path: Path) -> None:
+    notebook = _notebook()
+    notebook.cells.append(nbformat.v4.new_markdown_cell(
+        "L'écart est faible, donc c'est bon.",
+        metadata={"tpstudio": {"role": "interpretation_response", "expectation_id": "interp-main"}},
+    ))
+    result = _analyze(tmp_path, notebook)
+    evaluation = result.interpretation_response_evaluations[0]
+    assert evaluation.classification is InterpretationClassification.AMBIGUOUS
+    assert evaluation.requires_human_review is True
+    report = build_teacher_copy_report(result)
+    assert any(item.category.value == "interpretation" for item in report.diagnostics)
+    assert report.human_review.required is True
+    plan = build_annotation_plan(result)
+    assert not any("revue humaine" in annotation.message.lower() for annotation in plan.annotations)
     assert not any("protocole" in getattr(item, "text", "").lower() for item in result.feedback)
 
 

@@ -231,10 +231,10 @@ def _diagnostic_category(item: object) -> TeacherReportCategory:
         return TeacherReportCategory.PROTOCOL
     if "conclusion" in name:
         return TeacherReportCategory.CONCLUSION
-    if "justification" in name:
-        return TeacherReportCategory.JUSTIFICATION
     if "interpretation" in name:
         return TeacherReportCategory.INTERPRETATION
+    if "justification" in name:
+        return TeacherReportCategory.JUSTIFICATION
     if "comparison" in name:
         return TeacherReportCategory.COMPARISON
     return TeacherReportCategory.QUANTITY
