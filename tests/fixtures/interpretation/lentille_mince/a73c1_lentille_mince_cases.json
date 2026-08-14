@@ -1,0 +1,283 @@
+{
+  "schema_version": 1,
+  "fixture_set": "A73c1_lentille_mince_real_contexts",
+  "description": "15 controlled interpretation fixtures: 5 real scientific contexts from historical student notebooks × 3 simulated answer qualities.",
+  "cases": [
+    {
+      "id": "lentille_clement_paul_mesures_multiples__clearly_sufficient",
+      "source_notebook": "Clément-et-Paul-TP-lentille-mince-PHILIPPE-Clément;ROHR-Paul-2025-09-22.ipynb",
+      "provenance": {
+        "source_kind": "real_student_notebook",
+        "scientific_context_is_source_derived": true,
+        "student_answer_is_simulated": true
+      },
+      "local_prompt": "Interpréter la valeur obtenue pour la distance focale f' et la comparer à la valeur attendue. S'appuyer sur l'écart normalisé lorsqu'il est exploitable.",
+      "scientific_context": {
+        "result_text": "Mesures multiples : f' = 30.29 ± 0.39 cm. Écart normalisé avec la valeur attendue : En = 0.01446.",
+        "reference_context": "La valeur attendue est calculée avec f_th = 100/3.3 cm et u(f_th) = 1 cm."
+      },
+      "student_answer": "On obtient f' = 30,29 ± 0,39 cm et un écart normalisé d'environ 0,014. Cet écart étant très inférieur à 2, la mesure est compatible avec la valeur attendue.",
+      "expected_classification": "CLEARLY_SUFFICIENT",
+      "expected_status": "PRESENT",
+      "notes": "Fixture A73c1. The scientific context comes from a real student notebook; the interpretation answer is deliberately simulated for controlled validation."
+    },
+    {
+      "id": "lentille_clement_paul_mesures_multiples__clearly_insufficient",
+      "source_notebook": "Clément-et-Paul-TP-lentille-mince-PHILIPPE-Clément;ROHR-Paul-2025-09-22.ipynb",
+      "provenance": {
+        "source_kind": "real_student_notebook",
+        "scientific_context_is_source_derived": true,
+        "student_answer_is_simulated": true
+      },
+      "local_prompt": "Interpréter la valeur obtenue pour la distance focale f' et la comparer à la valeur attendue. S'appuyer sur l'écart normalisé lorsqu'il est exploitable.",
+      "scientific_context": {
+        "result_text": "Mesures multiples : f' = 30.29 ± 0.39 cm. Écart normalisé avec la valeur attendue : En = 0.01446.",
+        "reference_context": "La valeur attendue est calculée avec f_th = 100/3.3 cm et u(f_th) = 1 cm."
+      },
+      "student_answer": "Les mesures sont cohérentes.",
+      "expected_classification": "CLEARLY_INSUFFICIENT",
+      "expected_status": "PRESENT",
+      "notes": "Fixture A73c1. The scientific context comes from a real student notebook; the interpretation answer is deliberately simulated for controlled validation."
+    },
+    {
+      "id": "lentille_clement_paul_mesures_multiples__ambiguous",
+      "source_notebook": "Clément-et-Paul-TP-lentille-mince-PHILIPPE-Clément;ROHR-Paul-2025-09-22.ipynb",
+      "provenance": {
+        "source_kind": "real_student_notebook",
+        "scientific_context_is_source_derived": true,
+        "student_answer_is_simulated": true
+      },
+      "local_prompt": "Interpréter la valeur obtenue pour la distance focale f' et la comparer à la valeur attendue. S'appuyer sur l'écart normalisé lorsqu'il est exploitable.",
+      "scientific_context": {
+        "result_text": "Mesures multiples : f' = 30.29 ± 0.39 cm. Écart normalisé avec la valeur attendue : En = 0.01446.",
+        "reference_context": "La valeur attendue est calculée avec f_th = 100/3.3 cm et u(f_th) = 1 cm."
+      },
+      "student_answer": "La valeur obtenue est très proche de la valeur attendue, donc le résultat semble bon.",
+      "expected_classification": "AMBIGUOUS",
+      "expected_status": "PRESENT",
+      "notes": "Fixture A73c1. The scientific context comes from a real student notebook; the interpretation answer is deliberately simulated for controlled validation."
+    },
+    {
+      "id": "lentille_antonin_nathan_mesures_multiples__clearly_sufficient",
+      "source_notebook": "Lentille-mince-(Antonin-et)-Nathan-2025-09-22.ipynb",
+      "provenance": {
+        "source_kind": "real_student_notebook",
+        "scientific_context_is_source_derived": true,
+        "student_answer_is_simulated": true
+      },
+      "local_prompt": "Interpréter la valeur obtenue pour la distance focale f' et la comparer à la valeur attendue. S'appuyer sur l'écart normalisé lorsqu'il est exploitable.",
+      "scientific_context": {
+        "result_text": "Mesures multiples : f' = 31.58 ± 0.21 cm. Écart normalisé avec la valeur attendue : En = 1.2560.",
+        "reference_context": "La valeur attendue est calculée avec f_th = 100/3.3 cm et u(f_th) = 1 cm."
+      },
+      "student_answer": "On obtient f' = 31,58 ± 0,21 cm. L'écart normalisé vaut environ 1,26, donc il reste inférieur à 2 : la mesure est compatible avec la valeur attendue.",
+      "expected_classification": "CLEARLY_SUFFICIENT",
+      "expected_status": "PRESENT",
+      "notes": "Fixture A73c1. The scientific context comes from a real student notebook; the interpretation answer is deliberately simulated for controlled validation."
+    },
+    {
+      "id": "lentille_antonin_nathan_mesures_multiples__clearly_insufficient",
+      "source_notebook": "Lentille-mince-(Antonin-et)-Nathan-2025-09-22.ipynb",
+      "provenance": {
+        "source_kind": "real_student_notebook",
+        "scientific_context_is_source_derived": true,
+        "student_answer_is_simulated": true
+      },
+      "local_prompt": "Interpréter la valeur obtenue pour la distance focale f' et la comparer à la valeur attendue. S'appuyer sur l'écart normalisé lorsqu'il est exploitable.",
+      "scientific_context": {
+        "result_text": "Mesures multiples : f' = 31.58 ± 0.21 cm. Écart normalisé avec la valeur attendue : En = 1.2560.",
+        "reference_context": "La valeur attendue est calculée avec f_th = 100/3.3 cm et u(f_th) = 1 cm."
+      },
+      "student_answer": "Les mesures sont cohérentes.",
+      "expected_classification": "CLEARLY_INSUFFICIENT",
+      "expected_status": "PRESENT",
+      "notes": "Fixture A73c1. The scientific context comes from a real student notebook; the interpretation answer is deliberately simulated for controlled validation."
+    },
+    {
+      "id": "lentille_antonin_nathan_mesures_multiples__ambiguous",
+      "source_notebook": "Lentille-mince-(Antonin-et)-Nathan-2025-09-22.ipynb",
+      "provenance": {
+        "source_kind": "real_student_notebook",
+        "scientific_context_is_source_derived": true,
+        "student_answer_is_simulated": true
+      },
+      "local_prompt": "Interpréter la valeur obtenue pour la distance focale f' et la comparer à la valeur attendue. S'appuyer sur l'écart normalisé lorsqu'il est exploitable.",
+      "scientific_context": {
+        "result_text": "Mesures multiples : f' = 31.58 ± 0.21 cm. Écart normalisé avec la valeur attendue : En = 1.2560.",
+        "reference_context": "La valeur attendue est calculée avec f_th = 100/3.3 cm et u(f_th) = 1 cm."
+      },
+      "student_answer": "La valeur mesurée est un peu plus grande que la valeur attendue, mais l'écart reste raisonnable.",
+      "expected_classification": "AMBIGUOUS",
+      "expected_status": "PRESENT",
+      "notes": "Fixture A73c1. The scientific context comes from a real student notebook; the interpretation answer is deliberately simulated for controlled validation."
+    },
+    {
+      "id": "lentille_hugo_carl_mesures_multiples__clearly_sufficient",
+      "source_notebook": "TP-formation-d'une-image-par-une-lentille-mince-HugoMELE&CarlHIRSCHFELDER-Hugo-Mele-et-Carl-HIRSCHFELDER-2025-09-25.ipynb",
+      "provenance": {
+        "source_kind": "real_student_notebook",
+        "scientific_context_is_source_derived": true,
+        "student_answer_is_simulated": true
+      },
+      "local_prompt": "Interpréter la valeur obtenue pour la distance focale f' et la comparer à la valeur attendue. S'appuyer sur l'écart normalisé lorsqu'il est exploitable.",
+      "scientific_context": {
+        "result_text": "Mesures multiples : f' = 31.09 ± 0.40 cm.",
+        "reference_context": "Le notebook étudiant calcule ensuite un écart normalisé avec l'opérateur // et affiche En = 0.0 ; cette valeur est conservée comme provenance mais signalée comme résultat de code suspect.",
+        "quality_note": "Do not use the displayed En=0.0 as a trusted scientific fact: the student code uses floor division (//)."
+      },
+      "student_answer": "La mesure multiple donne f' = 31,09 ± 0,40 cm, ce qui est proche de la valeur attendue. Le calcul affiché de l'écart normalisé ne peut pas être utilisé tel quel car le code emploie // ; il faut corriger ce calcul avant de conclure quantitativement sur la compatibilité.",
+      "expected_classification": "CLEARLY_SUFFICIENT",
+      "expected_status": "PRESENT",
+      "notes": "Fixture A73c1. The scientific context comes from a real student notebook; the interpretation answer is deliberately simulated for controlled validation."
+    },
+    {
+      "id": "lentille_hugo_carl_mesures_multiples__clearly_insufficient",
+      "source_notebook": "TP-formation-d'une-image-par-une-lentille-mince-HugoMELE&CarlHIRSCHFELDER-Hugo-Mele-et-Carl-HIRSCHFELDER-2025-09-25.ipynb",
+      "provenance": {
+        "source_kind": "real_student_notebook",
+        "scientific_context_is_source_derived": true,
+        "student_answer_is_simulated": true
+      },
+      "local_prompt": "Interpréter la valeur obtenue pour la distance focale f' et la comparer à la valeur attendue. S'appuyer sur l'écart normalisé lorsqu'il est exploitable.",
+      "scientific_context": {
+        "result_text": "Mesures multiples : f' = 31.09 ± 0.40 cm.",
+        "reference_context": "Le notebook étudiant calcule ensuite un écart normalisé avec l'opérateur // et affiche En = 0.0 ; cette valeur est conservée comme provenance mais signalée comme résultat de code suspect.",
+        "quality_note": "Do not use the displayed En=0.0 as a trusted scientific fact: the student code uses floor division (//)."
+      },
+      "student_answer": "Les mesures sont cohérentes.",
+      "expected_classification": "CLEARLY_INSUFFICIENT",
+      "expected_status": "PRESENT",
+      "notes": "Fixture A73c1. The scientific context comes from a real student notebook; the interpretation answer is deliberately simulated for controlled validation."
+    },
+    {
+      "id": "lentille_hugo_carl_mesures_multiples__ambiguous",
+      "source_notebook": "TP-formation-d'une-image-par-une-lentille-mince-HugoMELE&CarlHIRSCHFELDER-Hugo-Mele-et-Carl-HIRSCHFELDER-2025-09-25.ipynb",
+      "provenance": {
+        "source_kind": "real_student_notebook",
+        "scientific_context_is_source_derived": true,
+        "student_answer_is_simulated": true
+      },
+      "local_prompt": "Interpréter la valeur obtenue pour la distance focale f' et la comparer à la valeur attendue. S'appuyer sur l'écart normalisé lorsqu'il est exploitable.",
+      "scientific_context": {
+        "result_text": "Mesures multiples : f' = 31.09 ± 0.40 cm.",
+        "reference_context": "Le notebook étudiant calcule ensuite un écart normalisé avec l'opérateur // et affiche En = 0.0 ; cette valeur est conservée comme provenance mais signalée comme résultat de code suspect.",
+        "quality_note": "Do not use the displayed En=0.0 as a trusted scientific fact: the student code uses floor division (//)."
+      },
+      "student_answer": "La valeur obtenue est proche de la valeur attendue, donc les mesures semblent cohérentes.",
+      "expected_classification": "AMBIGUOUS",
+      "expected_status": "PRESENT",
+      "notes": "Fixture A73c1. The scientific context comes from a real student notebook; the interpretation answer is deliberately simulated for controlled validation."
+    },
+    {
+      "id": "lentille_stanislas_milane_mesures_multiples__clearly_sufficient",
+      "source_notebook": "Tp-Lentille-Stanislas-Milane_Grancher-Hamza.ipynb",
+      "provenance": {
+        "source_kind": "real_student_notebook",
+        "scientific_context_is_source_derived": true,
+        "student_answer_is_simulated": true
+      },
+      "local_prompt": "Interpréter la valeur obtenue pour la distance focale f' et la comparer à la valeur attendue. S'appuyer sur l'écart normalisé lorsqu'il est exploitable.",
+      "scientific_context": {
+        "result_text": "Mesures multiples : f' = 30.32 ± 0.20 cm. Écart normalisé avec la valeur attendue : En = 0.01315.",
+        "reference_context": "Pour cette comparaison multiple, la valeur attendue est calculée avec f_th = 100/3.3 cm et u(f_th) = 1 cm."
+      },
+      "student_answer": "On obtient f' = 30,32 ± 0,20 cm et un écart normalisé très faible, environ 0,013. La mesure est donc compatible avec la valeur attendue.",
+      "expected_classification": "CLEARLY_SUFFICIENT",
+      "expected_status": "PRESENT",
+      "notes": "Fixture A73c1. The scientific context comes from a real student notebook; the interpretation answer is deliberately simulated for controlled validation."
+    },
+    {
+      "id": "lentille_stanislas_milane_mesures_multiples__clearly_insufficient",
+      "source_notebook": "Tp-Lentille-Stanislas-Milane_Grancher-Hamza.ipynb",
+      "provenance": {
+        "source_kind": "real_student_notebook",
+        "scientific_context_is_source_derived": true,
+        "student_answer_is_simulated": true
+      },
+      "local_prompt": "Interpréter la valeur obtenue pour la distance focale f' et la comparer à la valeur attendue. S'appuyer sur l'écart normalisé lorsqu'il est exploitable.",
+      "scientific_context": {
+        "result_text": "Mesures multiples : f' = 30.32 ± 0.20 cm. Écart normalisé avec la valeur attendue : En = 0.01315.",
+        "reference_context": "Pour cette comparaison multiple, la valeur attendue est calculée avec f_th = 100/3.3 cm et u(f_th) = 1 cm."
+      },
+      "student_answer": "Les mesures sont cohérentes.",
+      "expected_classification": "CLEARLY_INSUFFICIENT",
+      "expected_status": "PRESENT",
+      "notes": "Fixture A73c1. The scientific context comes from a real student notebook; the interpretation answer is deliberately simulated for controlled validation."
+    },
+    {
+      "id": "lentille_stanislas_milane_mesures_multiples__ambiguous",
+      "source_notebook": "Tp-Lentille-Stanislas-Milane_Grancher-Hamza.ipynb",
+      "provenance": {
+        "source_kind": "real_student_notebook",
+        "scientific_context_is_source_derived": true,
+        "student_answer_is_simulated": true
+      },
+      "local_prompt": "Interpréter la valeur obtenue pour la distance focale f' et la comparer à la valeur attendue. S'appuyer sur l'écart normalisé lorsqu'il est exploitable.",
+      "scientific_context": {
+        "result_text": "Mesures multiples : f' = 30.32 ± 0.20 cm. Écart normalisé avec la valeur attendue : En = 0.01315.",
+        "reference_context": "Pour cette comparaison multiple, la valeur attendue est calculée avec f_th = 100/3.3 cm et u(f_th) = 1 cm."
+      },
+      "student_answer": "La valeur expérimentale est presque la même que la valeur attendue, donc le résultat est bon.",
+      "expected_classification": "AMBIGUOUS",
+      "expected_status": "PRESENT",
+      "notes": "Fixture A73c1. The scientific context comes from a real student notebook; the interpretation answer is deliberately simulated for controlled validation."
+    },
+    {
+      "id": "lentille_galaad_louis_mesures_multiples__clearly_sufficient",
+      "source_notebook": "TP_physique_2_Galaad-Louis_Louis[]Galaad.ipynb",
+      "provenance": {
+        "source_kind": "real_student_notebook",
+        "scientific_context_is_source_derived": true,
+        "student_answer_is_simulated": true
+      },
+      "local_prompt": "Interpréter la valeur obtenue pour la distance focale f' et la comparer à la valeur attendue. S'appuyer sur l'écart normalisé lorsqu'il est exploitable.",
+      "scientific_context": {
+        "result_text": "Mesures multiples : f' = 30.98 ± 0.44 cm. Écart normalisé avec la valeur attendue : En = 0.61852.",
+        "reference_context": "La valeur attendue est calculée avec f_th = 100/3.3 cm et u(f_th) = 1 cm.",
+        "additional_real_result": "La régression affichée dans la copie donne : 1/OA' - 1.063/OA = 0.033."
+      },
+      "student_answer": "On obtient f' = 30,98 ± 0,44 cm et un écart normalisé d'environ 0,62. Comme cet écart est inférieur à 2, la mesure est compatible avec la valeur attendue.",
+      "expected_classification": "CLEARLY_SUFFICIENT",
+      "expected_status": "PRESENT",
+      "notes": "Fixture A73c1. The scientific context comes from a real student notebook; the interpretation answer is deliberately simulated for controlled validation."
+    },
+    {
+      "id": "lentille_galaad_louis_mesures_multiples__clearly_insufficient",
+      "source_notebook": "TP_physique_2_Galaad-Louis_Louis[]Galaad.ipynb",
+      "provenance": {
+        "source_kind": "real_student_notebook",
+        "scientific_context_is_source_derived": true,
+        "student_answer_is_simulated": true
+      },
+      "local_prompt": "Interpréter la valeur obtenue pour la distance focale f' et la comparer à la valeur attendue. S'appuyer sur l'écart normalisé lorsqu'il est exploitable.",
+      "scientific_context": {
+        "result_text": "Mesures multiples : f' = 30.98 ± 0.44 cm. Écart normalisé avec la valeur attendue : En = 0.61852.",
+        "reference_context": "La valeur attendue est calculée avec f_th = 100/3.3 cm et u(f_th) = 1 cm.",
+        "additional_real_result": "La régression affichée dans la copie donne : 1/OA' - 1.063/OA = 0.033."
+      },
+      "student_answer": "Les mesures sont cohérentes.",
+      "expected_classification": "CLEARLY_INSUFFICIENT",
+      "expected_status": "PRESENT",
+      "notes": "Fixture A73c1. The scientific context comes from a real student notebook; the interpretation answer is deliberately simulated for controlled validation."
+    },
+    {
+      "id": "lentille_galaad_louis_mesures_multiples__ambiguous",
+      "source_notebook": "TP_physique_2_Galaad-Louis_Louis[]Galaad.ipynb",
+      "provenance": {
+        "source_kind": "real_student_notebook",
+        "scientific_context_is_source_derived": true,
+        "student_answer_is_simulated": true
+      },
+      "local_prompt": "Interpréter la valeur obtenue pour la distance focale f' et la comparer à la valeur attendue. S'appuyer sur l'écart normalisé lorsqu'il est exploitable.",
+      "scientific_context": {
+        "result_text": "Mesures multiples : f' = 30.98 ± 0.44 cm. Écart normalisé avec la valeur attendue : En = 0.61852.",
+        "reference_context": "La valeur attendue est calculée avec f_th = 100/3.3 cm et u(f_th) = 1 cm.",
+        "additional_real_result": "La régression affichée dans la copie donne : 1/OA' - 1.063/OA = 0.033."
+      },
+      "student_answer": "La distance focale mesurée est assez proche de la valeur théorique, le résultat paraît satisfaisant.",
+      "expected_classification": "AMBIGUOUS",
+      "expected_status": "PRESENT",
+      "notes": "Fixture A73c1. The scientific context comes from a real student notebook; the interpretation answer is deliberately simulated for controlled validation."
+    }
+  ]
+}

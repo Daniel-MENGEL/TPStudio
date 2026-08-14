@@ -121,14 +121,47 @@ def _classify(source: str, context: InterpretationContext) -> InterpretationClas
         return InterpretationClassification.CLEARLY_INSUFFICIENT
     if re.fullmatch(r"(?:le |la |les )?(?:graphe|courbe|résultats?) (?:est|sont) (?:correct|bons?|bonnes?)\.?", normalized):
         return InterpretationClassification.CLEARLY_INSUFFICIENT
-    has_link = bool(re.search(r"\b(donc|ainsi|car|compatible|cohérent|coherent|inférieur|superieur|montre|signifie|interpr|valide|théor|theor|accord)\b", normalized))
-    has_observation = bool(re.search(r"\b(valeur|résultat|resultat|mesure|écart|ecart|courbe|graphe|tendance|pente|augmente|diminue)\b", normalized))
+
+    # These are deliberately broad linguistic roots, not a TP vocabulary.
+    # They separate an observed quantity, a qualitative comparison, and an
+    # explicit scientific criterion without turning the decision into a score.
+    has_observation = bool(re.search(
+        r"\b(valeur|résultat\w*|resultat\w*|mesur\w*|écart|ecart|courb\w*|graph\w*|"
+        r"tendanc\w*|pente|augment\w*|diminu\w*)\b",
+        normalized,
+    ))
+    has_comparison = bool(re.search(
+        r"\b(proch\w*|supérieur\w*|superieur\w*|inférieur\w*|inferieur\w*|"
+        r"attendu\w*|théor\w*|theor\w*|constructeur|raisonn\w*|"
+        r"faible|grand\w*|petit\w*)\b",
+        normalized,
+    ))
+    has_criterion = bool(re.search(
+        r"écart\s+normalisé|ecart\s+normalise|\bseuil\b|\bincertitude\w*\b|"
+        r"\bconstructeur\b",
+        normalized,
+    ))
+    has_link = bool(re.search(
+        r"\b(donc|ainsi|car|comme|puisque|ce qui|permet\w*|montre\w*|"
+        r"signifie\w*|interpr\w*|valide\w*)\b",
+        normalized,
+    ))
+    has_conclusion = bool(re.search(
+        r"\b(compatible\w*|cohérent\w*|coherent\w*|accord\w*|"
+        r"satisfais\w*|correct\w*)\b",
+        normalized,
+    ))
+    is_hedged = bool(re.search(r"\b(sembl\w*|para[iî]t\w*)\b", normalized))
     has_context = bool(context.local_scientific_context or context.linked_protocol)
-    if has_observation and has_link and has_context and not re.search(r"\b(faible|bon|bonne|bons|correct)\b", normalized):
+    if has_observation and has_criterion and has_context and (has_link or has_conclusion):
         return InterpretationClassification.CLEARLY_SUFFICIENT
-    if has_observation and re.search(r"\b(faible|bon|bonne|bons|correct)\b", normalized):
+    # An unqualified evaluative assertion is not an interpretation, whereas
+    # a hedged or comparative statement is useful but incomplete.
+    if has_observation and has_conclusion and not has_comparison and not has_criterion and not has_link and not is_hedged:
+        return InterpretationClassification.CLEARLY_INSUFFICIENT
+    if has_observation and (has_comparison or is_hedged):
         return InterpretationClassification.AMBIGUOUS
-    if has_observation and not has_link:
+    if has_observation and not has_link and not has_conclusion:
         return InterpretationClassification.CLEARLY_INSUFFICIENT
     return InterpretationClassification.AMBIGUOUS
 

@@ -46,6 +46,49 @@ def test_clear_insufficient_ambiguous_and_sufficient():
         assert result.classification is expected
 
 
+def test_bare_evaluative_assertions_are_clearly_insufficient():
+    context = {"i1": InterpretationContext("i1", local_scientific_context=("Résultat expérimental disponible.",))}
+    for text in (
+        "Les résultats sont compatibles.",
+        "Les mesures sont cohérentes.",
+        "Le résultat est correct.",
+        "La mesure est correcte.",
+    ):
+        result = evaluate_interpretation_cells(
+            nbformat.v4.new_notebook(cells=[_cell(text, "interpretation_response")]),
+            contexts=context,
+        )[0]
+        assert result.classification is InterpretationClassification.CLEARLY_INSUFFICIENT
+
+
+def test_qualitative_partial_interpretations_are_ambiguous():
+    context = {"i1": InterpretationContext("i1", local_scientific_context=("Valeur expérimentale et valeur attendue.",))}
+    for text in (
+        "La valeur est proche de celle attendue.",
+        "La valeur mesurée est légèrement supérieure à la valeur théorique.",
+        "L'écart paraît raisonnable.",
+        "Le résultat semble satisfaisant.",
+    ):
+        result = evaluate_interpretation_cells(
+            nbformat.v4.new_notebook(cells=[_cell(text, "interpretation_response")]),
+            contexts=context,
+        )[0]
+        assert result.classification is InterpretationClassification.AMBIGUOUS
+
+
+def test_justified_interpretation_and_qualitative_term_can_be_sufficient():
+    context = {"i1": InterpretationContext("i1", local_scientific_context=("Valeur expérimentale disponible.",))}
+    for text in (
+        "On obtient x = 1,2 et l'écart normalisé vaut 0,4. Comme il est inférieur au seuil retenu, les résultats sont compatibles.",
+        "L'écart normalisé est très faible, environ 0,2 ; les résultats sont donc compatibles.",
+    ):
+        result = evaluate_interpretation_cells(
+            nbformat.v4.new_notebook(cells=[_cell(text, "interpretation_response")]),
+            contexts=context,
+        )[0]
+        assert result.classification is InterpretationClassification.CLEARLY_SUFFICIENT
+
+
 def test_prompt_does_not_improve_poor_answer():
     notebook = nbformat.v4.new_notebook(cells=[_cell("Comparer tau et RC.", "interpretation_prompt"), _cell("Les résultats sont bons.", "interpretation_response")])
     contexts = build_interpretation_contexts(notebook)
