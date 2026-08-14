@@ -7,6 +7,7 @@ from enum import Enum
 from pathlib import Path
 
 from tpstudio.export import CopyExportOptions
+from tpstudio.interpretation import InterpretationReviewTrace
 
 
 def validate_output_stem(output_stem: str) -> str:
@@ -79,6 +80,7 @@ class BatchCopyResult:
     limitations: tuple[str, ...] = ()
     error_type: str | None = None
     error_message: str | None = None
+    interpretation_review_traces: tuple[InterpretationReviewTrace, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.source_id, str) or not self.source_id.strip():
@@ -88,6 +90,7 @@ class BatchCopyResult:
         if type(self.annotation_count) is not int or self.annotation_count < 0:
             raise ValueError("annotation_count doit être positif ou nul.")
         object.__setattr__(self, "limitations", tuple(self.limitations))
+        object.__setattr__(self, "interpretation_review_traces", tuple(self.interpretation_review_traces))
         if self.status is BatchCopyStatus.SUCCESS:
             if not isinstance(self.notebook_path, Path) or not isinstance(self.html_path, Path):
                 raise ValueError("Une copie réussie doit référencer ses deux artefacts.")

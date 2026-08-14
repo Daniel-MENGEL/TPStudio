@@ -14,6 +14,9 @@ UPLOADER_GENERATION_KEY = "tpstudio_web_uploader_generation"
 RUN_RESULT_KEY = "tpstudio_web_run_result"
 RUN_SIGNATURE_KEY = "tpstudio_web_run_signature"
 RUN_IN_PROGRESS_KEY = "tpstudio_web_run_in_progress"
+REVIEW_INDEX_KEY = "tpstudio_web_review_index"
+REVIEW_FILTER_KEY = "tpstudio_web_review_only_pending"
+REVIEW_MESSAGE_KEY = "tpstudio_web_review_message"
 
 
 def default_output_dir() -> Path:
@@ -29,6 +32,9 @@ def initialize_session_state(state: MutableMapping) -> None:
     state.setdefault(RUN_RESULT_KEY, None)
     state.setdefault(RUN_SIGNATURE_KEY, None)
     state.setdefault(RUN_IN_PROGRESS_KEY, False)
+    state.setdefault(REVIEW_INDEX_KEY, 0)
+    state.setdefault(REVIEW_FILTER_KEY, True)
+    state.setdefault(REVIEW_MESSAGE_KEY, None)
 
 
 def clear_prepared_batch(state: MutableMapping) -> None:
@@ -61,6 +67,8 @@ def reset_web_session(state: MutableMapping) -> None:
     clear_prepared_batch(state)
     clear_run_result(state)
     state[RUN_IN_PROGRESS_KEY] = False
+    state[REVIEW_INDEX_KEY] = 0
+    state[REVIEW_MESSAGE_KEY] = None
     state[UPLOADER_GENERATION_KEY] = state.get(UPLOADER_GENERATION_KEY, 0) + 1
 
 
@@ -73,5 +81,6 @@ def invalidate_if_signature_changed(state: MutableMapping, signature: tuple) -> 
     if state.get(SIGNATURE_KEY) != signature:
         clear_prepared_batch(state)
         clear_run_result(state)
+        state[REVIEW_INDEX_KEY] = 0
         return True
     return False

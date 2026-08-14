@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
+from tpstudio.interpretation import InterpretationReviewTrace
+
 
 class ExportArtifactKind(str, Enum):
     NOTEBOOK = "notebook"
@@ -78,6 +80,11 @@ class CopyExportResult:
     notebook_valid: bool
     html_generated: bool
     limitations: tuple[str, ...] = ()
+    interpretation_review_traces: tuple[InterpretationReviewTrace, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "limitations", tuple(self.limitations))
+        object.__setattr__(self, "interpretation_review_traces", tuple(self.interpretation_review_traces))
 
     @property
     def output_paths(self) -> tuple[Path, Path]:

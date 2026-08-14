@@ -2,9 +2,23 @@
 
 from __future__ import annotations
 
+from hashlib import sha256
+import re
+import unicodedata
+
 from tpstudio.export import export_snells_laws_copy
 
 from .model import BatchCopyResult, BatchCopyStatus, BatchPlan, BatchRunResult
+
+
+def stable_review_copy_id(source) -> str:
+    """Stable review identity derived from source filename and bytes, not order/path."""
+    normalized = unicodedata.normalize("NFKC", source.display_name or source.path.name).casefold()
+    stem = normalized.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
+    stem = stem.removesuffix(".ipynb")
+    slug = re.sub(r"[^a-z0-9]+", "-", stem).strip("-") or "notebook"
+    digest = sha256(normalized.encode("utf-8") + b"\0" + source.path.read_bytes()).hexdigest()[:12]
+    return f"review-{slug[:40]}-{digest}"
 
 
 def run_snells_laws_batch(plan: BatchPlan) -> BatchRunResult:
@@ -13,6 +27,7 @@ def run_snells_laws_batch(plan: BatchPlan) -> BatchRunResult:
     results = []
     started = 0
     stopped = False
+    review_ids: dict[str, int] = {}
     for source, output in zip(plan.sources, plan.planned_outputs):
         if stopped:
             results.append(BatchCopyResult(
@@ -31,18 +46,26 @@ def run_snells_laws_batch(plan: BatchPlan) -> BatchRunResult:
             continue
         started += 1
         try:
+            review_id = stable_review_copy_id(source)
+            occurrence = review_ids.get(review_id, 0) + 1
+            review_ids[review_id] = occurrence
+            if occurrence > 1:
+                review_id = f"{review_id}-{occurrence}"
             exported = export_snells_laws_copy(
-                source.path, plan.output_dir,
+                source.path, plan.output_dir, source_id=review_id,
                 options=plan.options.export_options(),
                 notebook_output_path=output.notebook_path,
                 html_output_path=output.html_path,
             )
             if exported.notebook_artifact.path != output.notebook_path or exported.html_artifact.path != output.html_path:
                 raise RuntimeError("L'export unitaire n'a pas respecté le plan de lot.")
+            review_traces = tuple(getattr(exported, "interpretation_review_traces", ()))
             result = BatchCopyResult(
                 source.source_id, BatchCopyStatus.SUCCESS,
                 exported.notebook_artifact.path, exported.html_artifact.path,
-                exported.annotation_count, None, exported.limitations,
+                exported.annotation_count,
+                any(trace.requires_human_review for trace in review_traces),
+                exported.limitations, None, None, review_traces,
             )
         except Exception as exc:
             result = BatchCopyResult(

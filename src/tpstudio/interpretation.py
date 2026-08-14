@@ -102,6 +102,8 @@ class InterpretationReviewTrace:
     teacher_decision: InterpretationClassification | None = None
     teacher_feedback: str | None = None
     reviewed_at: str | None = None
+    tpstudio_status: ProtocolStatus = ProtocolStatus.PRESENT
+    requires_human_review: bool = False
 
     def __post_init__(self) -> None:
         if self.schema_version != 1:
@@ -123,6 +125,10 @@ class InterpretationReviewTrace:
             raise ValueError("reviewed_at doit être absent pour une trace PENDING.")
         if self.teacher_decision is not None and (not isinstance(self.reviewed_at, str) or not self.reviewed_at.strip()):
             raise ValueError("reviewed_at est requis pour une décision enseignant.")
+        if type(self.tpstudio_status) is not ProtocolStatus:
+            raise TypeError("Le statut technique TPStudio est invalide.")
+        if type(self.requires_human_review) is not bool:
+            raise TypeError("requires_human_review doit être booléen.")
 
     @property
     def review_status(self) -> str:
@@ -147,6 +153,8 @@ class InterpretationReviewTrace:
             "teacher_decision": self.teacher_decision.name if self.teacher_decision else None,
             "teacher_feedback": self.teacher_feedback,
             "reviewed_at": self.reviewed_at,
+            "tpstudio_status": self.tpstudio_status.name,
+            "requires_human_review": self.requires_human_review,
             "review_status": self.review_status,
         }
 
@@ -165,6 +173,8 @@ class InterpretationReviewTrace:
             classification(payload.get("teacher_decision")),
             str(payload["teacher_feedback"]) if payload.get("teacher_feedback") is not None else None,
             str(payload["reviewed_at"]) if payload.get("reviewed_at") is not None else None,
+            ProtocolStatus[str(payload.get("tpstudio_status", "PRESENT"))],
+            bool(payload.get("requires_human_review", False)),
         )
 
 
@@ -204,6 +214,8 @@ def build_interpretation_review_traces(
             1, copy_id, copy_sha256, expectation_id, cell_id, index,
             str(cell.get("source", "")), context,
             evaluation.classification, feedback_by_key.get((expectation_id, index)),
+            tpstudio_status=evaluation.status,
+            requires_human_review=evaluation.requires_human_review,
         ))
     return tuple(traces)
 

@@ -4,6 +4,7 @@ from tpstudio.web.state import (
     reset_web_session,
     RUN_IN_PROGRESS_KEY, RUN_RESULT_KEY, RUN_SIGNATURE_KEY,
     clear_run_result, get_current_run_result, set_run_result, default_output_dir,
+    REVIEW_INDEX_KEY,
 )
 
 
@@ -17,6 +18,7 @@ def test_state_initialization_and_invalidation():
     assert not invalidate_if_signature_changed(state, ("signature",))
     assert invalidate_if_signature_changed(state, ("changed",))
     assert state[PLAN_KEY] is None and state[SIGNATURE_KEY] is None and state[RUN_RESULT_KEY] is None
+    assert state[REVIEW_INDEX_KEY] == 0
     clear_prepared_batch(state)
 
 

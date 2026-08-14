@@ -87,6 +87,7 @@ def export_snells_laws_copy(
     source_path: Path,
     output_dir: Path,
     *,
+    source_id: str = "local-copy",
     options: CopyExportOptions | None = None,
     notebook_output_path: Path | None = None,
     html_output_path: Path | None = None,
@@ -117,7 +118,7 @@ def export_snells_laws_copy(
         raise FileExistsError("Une destination d'export existe déjà.")
 
     before = sha256(source_path.read_bytes()).digest()
-    source = NotebookCopySource("local-copy", source_path.name, source_path)
+    source = NotebookCopySource(source_id, source_path.name, source_path)
     analysis = analyze_snells_laws_copy(source)
     report = build_teacher_copy_report(analysis)
     annotation_options = AnnotationOptions(
@@ -157,7 +158,7 @@ def export_snells_laws_copy(
         ExportArtifact(ExportArtifactKind.NOTEBOOK, notebook_path, True, options.overwrite and notebook_existed, "application/x-ipynb+json", analysis.source_id),
         ExportArtifact(ExportArtifactKind.HTML, html_path, True, options.overwrite and html_existed, "text/html", analysis.source_id),
         plan.count, student, teacher, before == after, True, True,
-        tuple(analysis.limitations),
+        tuple(analysis.limitations), analysis.interpretation_review_traces,
     )
 
 

@@ -8,6 +8,10 @@ from pathlib import Path
 
 from tpstudio.batch import BatchPlan
 from tpstudio.batch import BatchCopyStatus, BatchRunResult
+from tpstudio.interpretation import InterpretationClassification, InterpretationReviewTrace
+from tpstudio.review_store import (
+    latest_interpretation_review, load_interpretation_reviews, review_store_path,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,3 +98,80 @@ def artifact_download_info(item, output_dir: Path, kind: str) -> tuple[str, str,
     if not resolved_path.is_file():
         raise FileNotFoundError("Artefact indisponible.")
     return path.name, "application/x-ipynb+json" if kind == "notebook" else "text/html", path
+
+
+@dataclass(frozen=True, slots=True)
+class InterpretationReviewItem:
+    trace: InterpretationReviewTrace
+    copy_label: str
+    current_review: InterpretationReviewTrace | None = None
+    stale_review: bool = False
+
+    @property
+    def key(self) -> str:
+        return f"{self.trace.copy_id}:{self.trace.expectation_id}:{self.trace.cell_id}"
+
+    @property
+    def status_label(self) -> str:
+        if self.current_review is None:
+            return "À revoir"
+        return "Confirmée" if self.current_review.review_status == "CONFIRMED" else "Remplacée"
+
+    @property
+    def proposed_label(self) -> str:
+        if self.trace.tpstudio_proposal is None:
+            return f"{self.trace.tpstudio_status.name} — aucune classification automatique"
+        return _classification_label(self.trace.tpstudio_proposal)
+
+
+def _classification_label(value: InterpretationClassification | None) -> str:
+    return {
+        InterpretationClassification.CLEARLY_SUFFICIENT: "CLEARLY_SUFFICIENT",
+        InterpretationClassification.CLEARLY_INSUFFICIENT: "CLEARLY_INSUFFICIENT",
+        InterpretationClassification.AMBIGUOUS: "AMBIGUOUS",
+        None: "—",
+    }[value]
+
+
+def select_interpretation_review_items(
+    result: BatchRunResult,
+    output_dir: Path,
+    *,
+    only_pending: bool = True,
+    copy_labels: Mapping[str, str] | None = None,
+) -> tuple[InterpretationReviewItem, ...]:
+    """Select current interpretation proposals without mutating the store."""
+    if not isinstance(output_dir, Path):
+        raise TypeError("output_dir doit être un Path.")
+    history = load_interpretation_reviews(review_store_path(output_dir))
+    copy_labels = copy_labels or {}
+    rows: list[InterpretationReviewItem] = []
+    for index, copy_result in enumerate(result.results, 1):
+        for trace in copy_result.interpretation_review_traces:
+            if not trace.requires_human_review:
+                continue
+            current = latest_interpretation_review(
+                history, copy_id=trace.copy_id, copy_sha256=trace.copy_sha256,
+                expectation_id=trace.expectation_id, cell_id=trace.cell_id,
+            )
+            stale = current is None and any(
+                old.copy_id == trace.copy_id
+                and old.expectation_id == trace.expectation_id
+                and old.cell_id == trace.cell_id
+                and old.copy_sha256 != trace.copy_sha256
+                and old.teacher_decision is not None
+                for old in history
+            )
+            if only_pending and current is not None:
+                continue
+            rows.append(InterpretationReviewItem(
+                trace, copy_labels.get(copy_result.source_id, f"Copie {index}"), current, stale,
+            ))
+    return tuple(rows)
+
+
+def review_prefill(item: InterpretationReviewItem) -> tuple[InterpretationClassification, str]:
+    if item.current_review is not None:
+        return item.current_review.teacher_decision, item.current_review.teacher_feedback or ""
+    decision = item.trace.tpstudio_proposal or InterpretationClassification.AMBIGUOUS
+    return decision, item.trace.tpstudio_feedback or ""
