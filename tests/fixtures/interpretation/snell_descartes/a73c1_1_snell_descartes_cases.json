@@ -1,0 +1,265 @@
+{
+  "schema_version": 1,
+  "fixture_set": "A73c1_1_snell_descartes_generalization",
+  "description": "15 fixtures de généralisation hors corpus Lentille : 5 contextes scientifiques réels de Snell-Descartes × 3 niveaux de réponse simulée.",
+  "cases": [
+    {
+      "id": "snell_abdallah_abadelia_compare_methods__clearly_sufficient",
+      "source_notebook": "Lois-de-Snell-Descartes-abdallah-abadelia-2025-10-06.ipynb",
+      "provenance": {
+        "source_kind": "real_student_notebook",
+        "scientific_context_is_source_derived": true,
+        "student_answer_is_simulated": true
+      },
+      "local_prompt": "Comparer les deux déterminations de l'indice et conclure sur leur compatibilité.",
+      "scientific_context": {
+        "result_text": "Première méthode : n = 1.4813 ± 0.0284. Deuxième méthode : n = 1.5233 ± 0.0663. Écart normalisé entre les deux méthodes : En = 0.5943."
+      },
+      "student_answer": "Les deux valeurs de n diffèrent légèrement, mais l'écart normalisé vaut environ 0,59. Comme il est inférieur au seuil usuel de 2, les deux déterminations sont compatibles.",
+      "expected_classification": "CLEARLY_SUFFICIENT",
+      "expected_status": "PRESENT",
+      "notes": "Fixture de généralisation A73c1.1. Le contexte scientifique provient d'une copie réelle ; la réponse d'interprétation est simulée pour obtenir une référence pédagogique contrôlée."
+    },
+    {
+      "id": "snell_abdallah_abadelia_compare_methods__clearly_insufficient",
+      "source_notebook": "Lois-de-Snell-Descartes-abdallah-abadelia-2025-10-06.ipynb",
+      "provenance": {
+        "source_kind": "real_student_notebook",
+        "scientific_context_is_source_derived": true,
+        "student_answer_is_simulated": true
+      },
+      "local_prompt": "Comparer les deux déterminations de l'indice et conclure sur leur compatibilité.",
+      "scientific_context": {
+        "result_text": "Première méthode : n = 1.4813 ± 0.0284. Deuxième méthode : n = 1.5233 ± 0.0663. Écart normalisé entre les deux méthodes : En = 0.5943."
+      },
+      "student_answer": "Les deux méthodes donnent des résultats cohérents.",
+      "expected_classification": "CLEARLY_INSUFFICIENT",
+      "expected_status": "PRESENT",
+      "notes": "Fixture de généralisation A73c1.1. Le contexte scientifique provient d'une copie réelle ; la réponse d'interprétation est simulée pour obtenir une référence pédagogique contrôlée."
+    },
+    {
+      "id": "snell_abdallah_abadelia_compare_methods__ambiguous",
+      "source_notebook": "Lois-de-Snell-Descartes-abdallah-abadelia-2025-10-06.ipynb",
+      "provenance": {
+        "source_kind": "real_student_notebook",
+        "scientific_context_is_source_derived": true,
+        "student_answer_is_simulated": true
+      },
+      "local_prompt": "Comparer les deux déterminations de l'indice et conclure sur leur compatibilité.",
+      "scientific_context": {
+        "result_text": "Première méthode : n = 1.4813 ± 0.0284. Deuxième méthode : n = 1.5233 ± 0.0663. Écart normalisé entre les deux méthodes : En = 0.5943."
+      },
+      "student_answer": "Les deux indices obtenus sont assez proches l'un de l'autre ; l'accord paraît satisfaisant.",
+      "expected_classification": "AMBIGUOUS",
+      "expected_status": "PRESENT",
+      "notes": "Fixture de généralisation A73c1.1. Le contexte scientifique provient d'une copie réelle ; la réponse d'interprétation est simulée pour obtenir une référence pédagogique contrôlée."
+    },
+    {
+      "id": "snell_antonin_nathan_regression__clearly_sufficient",
+      "source_notebook": "Lois-de-Snell-Descartes(Antonin-et)-Nathan-2025-09-22.ipynb",
+      "provenance": {
+        "source_kind": "real_student_notebook",
+        "scientific_context_is_source_derived": true,
+        "student_answer_is_simulated": true
+      },
+      "local_prompt": "Interpréter la régression de sin(i1) en fonction de sin(i2) pour vérifier la loi de la réfraction et déterminer l'indice.",
+      "scientific_context": {
+        "result_text": "Régression obtenue : sin(i1) = 1.48909 sin(i2) - 0.01161."
+      },
+      "student_answer": "La relation obtenue est bien affine avec une ordonnée à l'origine proche de zéro. La pente vaut environ 1,49 : elle fournit l'indice du milieu et le résultat est cohérent avec la loi de Snell-Descartes attendue.",
+      "expected_classification": "CLEARLY_SUFFICIENT",
+      "expected_status": "PRESENT",
+      "notes": "Fixture de généralisation A73c1.1. Le contexte scientifique provient d'une copie réelle ; la réponse d'interprétation est simulée pour obtenir une référence pédagogique contrôlée."
+    },
+    {
+      "id": "snell_antonin_nathan_regression__clearly_insufficient",
+      "source_notebook": "Lois-de-Snell-Descartes(Antonin-et)-Nathan-2025-09-22.ipynb",
+      "provenance": {
+        "source_kind": "real_student_notebook",
+        "scientific_context_is_source_derived": true,
+        "student_answer_is_simulated": true
+      },
+      "local_prompt": "Interpréter la régression de sin(i1) en fonction de sin(i2) pour vérifier la loi de la réfraction et déterminer l'indice.",
+      "scientific_context": {
+        "result_text": "Régression obtenue : sin(i1) = 1.48909 sin(i2) - 0.01161."
+      },
+      "student_answer": "La droite est correcte.",
+      "expected_classification": "CLEARLY_INSUFFICIENT",
+      "expected_status": "PRESENT",
+      "notes": "Fixture de généralisation A73c1.1. Le contexte scientifique provient d'une copie réelle ; la réponse d'interprétation est simulée pour obtenir une référence pédagogique contrôlée."
+    },
+    {
+      "id": "snell_antonin_nathan_regression__ambiguous",
+      "source_notebook": "Lois-de-Snell-Descartes(Antonin-et)-Nathan-2025-09-22.ipynb",
+      "provenance": {
+        "source_kind": "real_student_notebook",
+        "scientific_context_is_source_derived": true,
+        "student_answer_is_simulated": true
+      },
+      "local_prompt": "Interpréter la régression de sin(i1) en fonction de sin(i2) pour vérifier la loi de la réfraction et déterminer l'indice.",
+      "scientific_context": {
+        "result_text": "Régression obtenue : sin(i1) = 1.48909 sin(i2) - 0.01161."
+      },
+      "student_answer": "Les points suivent globalement une droite et la pente est voisine de 1,5, ce qui semble correspondre au comportement attendu.",
+      "expected_classification": "AMBIGUOUS",
+      "expected_status": "PRESENT",
+      "notes": "Fixture de généralisation A73c1.1. Le contexte scientifique provient d'une copie réelle ; la réponse d'interprétation est simulée pour obtenir une référence pédagogique contrôlée."
+    },
+    {
+      "id": "snell_milane_stanislas_compare_methods__clearly_sufficient",
+      "source_notebook": "Tp-Loi-snell-descartes-Milane-Stanislas-Grancher-2025-09-22.ipynb",
+      "provenance": {
+        "source_kind": "real_student_notebook",
+        "scientific_context_is_source_derived": true,
+        "student_answer_is_simulated": true
+      },
+      "local_prompt": "Comparer les deux premières mesures de l'indice et commenter leur accord.",
+      "scientific_context": {
+        "result_text": "Première méthode : n = 1.46895 ± 0.05585. Deuxième méthode : n = 1.45031 ± 0.08515. Écart normalisé : En = 0.18898."
+      },
+      "student_answer": "Les valeurs 1,469 et 1,450 sont compatibles compte tenu de leurs incertitudes : l'écart normalisé est seulement d'environ 0,19, donc nettement inférieur à 2.",
+      "expected_classification": "CLEARLY_SUFFICIENT",
+      "expected_status": "PRESENT",
+      "notes": "Fixture de généralisation A73c1.1. Le contexte scientifique provient d'une copie réelle ; la réponse d'interprétation est simulée pour obtenir une référence pédagogique contrôlée."
+    },
+    {
+      "id": "snell_milane_stanislas_compare_methods__clearly_insufficient",
+      "source_notebook": "Tp-Loi-snell-descartes-Milane-Stanislas-Grancher-2025-09-22.ipynb",
+      "provenance": {
+        "source_kind": "real_student_notebook",
+        "scientific_context_is_source_derived": true,
+        "student_answer_is_simulated": true
+      },
+      "local_prompt": "Comparer les deux premières mesures de l'indice et commenter leur accord.",
+      "scientific_context": {
+        "result_text": "Première méthode : n = 1.46895 ± 0.05585. Deuxième méthode : n = 1.45031 ± 0.08515. Écart normalisé : En = 0.18898."
+      },
+      "student_answer": "C'est compatible.",
+      "expected_classification": "CLEARLY_INSUFFICIENT",
+      "expected_status": "PRESENT",
+      "notes": "Fixture de généralisation A73c1.1. Le contexte scientifique provient d'une copie réelle ; la réponse d'interprétation est simulée pour obtenir une référence pédagogique contrôlée."
+    },
+    {
+      "id": "snell_milane_stanislas_compare_methods__ambiguous",
+      "source_notebook": "Tp-Loi-snell-descartes-Milane-Stanislas-Grancher-2025-09-22.ipynb",
+      "provenance": {
+        "source_kind": "real_student_notebook",
+        "scientific_context_is_source_derived": true,
+        "student_answer_is_simulated": true
+      },
+      "local_prompt": "Comparer les deux premières mesures de l'indice et commenter leur accord.",
+      "scientific_context": {
+        "result_text": "Première méthode : n = 1.46895 ± 0.05585. Deuxième méthode : n = 1.45031 ± 0.08515. Écart normalisé : En = 0.18898."
+      },
+      "student_answer": "Les deux estimations sont très voisines et leurs intervalles semblent largement se recouvrir.",
+      "expected_classification": "AMBIGUOUS",
+      "expected_status": "PRESENT",
+      "notes": "Fixture de généralisation A73c1.1. Le contexte scientifique provient d'une copie réelle ; la réponse d'interprétation est simulée pour obtenir une référence pédagogique contrôlée."
+    },
+    {
+      "id": "snell_hugo_carl_suspicious_normalized_gap__clearly_sufficient",
+      "source_notebook": "TP-lois-de-Snell-Descartes-HugoMELE&CarlHIRSCHFELDER-Hugo-Mele-et-Carl-HIRSCHFELDER-2025-09-25.ipynb",
+      "provenance": {
+        "source_kind": "real_student_notebook",
+        "scientific_context_is_source_derived": true,
+        "student_answer_is_simulated": true
+      },
+      "local_prompt": "Interpréter la comparaison entre la dernière détermination de l'indice et la valeur précédente, en vérifiant la cohérence du résultat numérique affiché.",
+      "scientific_context": {
+        "result_text": "Dernière détermination : n = 1.44580 ± 0.06037. Valeur précédente utilisée : n0 = 1.47347 ± 0.11265. Le notebook affiche En = 10.0833 et conclut « Les mesures ne sont pas cohérentes ».",
+        "quality_note": "Le code source calcule abs(n.mean() - n0 / sqrt(...)) au lieu de abs(n.mean() - n0) / sqrt(...). L'écart normalisé affiché n'est donc pas fiable."
+      },
+      "student_answer": "L'affichage En = 10,08 est incompatible avec les deux valeurs très proches de n et avec leurs incertitudes. En examinant le calcul, les parenthèses sont mal placées : l'écart normalisé affiché n'est pas exploitable et il faut le recalculer avant de conclure sur la compatibilité.",
+      "expected_classification": "CLEARLY_SUFFICIENT",
+      "expected_status": "PRESENT",
+      "notes": "Fixture de généralisation A73c1.1. Le contexte scientifique provient d'une copie réelle ; la réponse d'interprétation est simulée pour obtenir une référence pédagogique contrôlée."
+    },
+    {
+      "id": "snell_hugo_carl_suspicious_normalized_gap__clearly_insufficient",
+      "source_notebook": "TP-lois-de-Snell-Descartes-HugoMELE&CarlHIRSCHFELDER-Hugo-Mele-et-Carl-HIRSCHFELDER-2025-09-25.ipynb",
+      "provenance": {
+        "source_kind": "real_student_notebook",
+        "scientific_context_is_source_derived": true,
+        "student_answer_is_simulated": true
+      },
+      "local_prompt": "Interpréter la comparaison entre la dernière détermination de l'indice et la valeur précédente, en vérifiant la cohérence du résultat numérique affiché.",
+      "scientific_context": {
+        "result_text": "Dernière détermination : n = 1.44580 ± 0.06037. Valeur précédente utilisée : n0 = 1.47347 ± 0.11265. Le notebook affiche En = 10.0833 et conclut « Les mesures ne sont pas cohérentes ».",
+        "quality_note": "Le code source calcule abs(n.mean() - n0 / sqrt(...)) au lieu de abs(n.mean() - n0) / sqrt(...). L'écart normalisé affiché n'est donc pas fiable."
+      },
+      "student_answer": "Les mesures ne sont pas cohérentes.",
+      "expected_classification": "CLEARLY_INSUFFICIENT",
+      "expected_status": "PRESENT",
+      "notes": "Fixture de généralisation A73c1.1. Le contexte scientifique provient d'une copie réelle ; la réponse d'interprétation est simulée pour obtenir une référence pédagogique contrôlée."
+    },
+    {
+      "id": "snell_hugo_carl_suspicious_normalized_gap__ambiguous",
+      "source_notebook": "TP-lois-de-Snell-Descartes-HugoMELE&CarlHIRSCHFELDER-Hugo-Mele-et-Carl-HIRSCHFELDER-2025-09-25.ipynb",
+      "provenance": {
+        "source_kind": "real_student_notebook",
+        "scientific_context_is_source_derived": true,
+        "student_answer_is_simulated": true
+      },
+      "local_prompt": "Interpréter la comparaison entre la dernière détermination de l'indice et la valeur précédente, en vérifiant la cohérence du résultat numérique affiché.",
+      "scientific_context": {
+        "result_text": "Dernière détermination : n = 1.44580 ± 0.06037. Valeur précédente utilisée : n0 = 1.47347 ± 0.11265. Le notebook affiche En = 10.0833 et conclut « Les mesures ne sont pas cohérentes ».",
+        "quality_note": "Le code source calcule abs(n.mean() - n0 / sqrt(...)) au lieu de abs(n.mean() - n0) / sqrt(...). L'écart normalisé affiché n'est donc pas fiable."
+      },
+      "student_answer": "Le programme annonce une incompatibilité, mais les deux valeurs de n paraissent pourtant proches ; il faudrait vérifier le calcul.",
+      "expected_classification": "AMBIGUOUS",
+      "expected_status": "PRESENT",
+      "notes": "Fixture de généralisation A73c1.1. Le contexte scientifique provient d'une copie réelle ; la réponse d'interprétation est simulée pour obtenir une référence pédagogique contrôlée."
+    },
+    {
+      "id": "snell_galaad_louis_regression__clearly_sufficient",
+      "source_notebook": "TP_physique_Galaad-Louis_Louis[]Galaad.ipynb",
+      "provenance": {
+        "source_kind": "real_student_notebook",
+        "scientific_context_is_source_derived": true,
+        "student_answer_is_simulated": true
+      },
+      "local_prompt": "Interpréter la droite obtenue pour sin(i1) en fonction de sin(i2) et en déduire ce qu'elle indique sur la loi de réfraction et l'indice.",
+      "scientific_context": {
+        "result_text": "Régression obtenue : sin(i1) = 1.45243 sin(i2) + 0.01010."
+      },
+      "student_answer": "L'ordonnée à l'origine est proche de zéro et la pente vaut environ 1,45. La relation entre les sinus est donc compatible avec une proportionnalité, et la pente donne une estimation de l'indice voisine de 1,45.",
+      "expected_classification": "CLEARLY_SUFFICIENT",
+      "expected_status": "PRESENT",
+      "notes": "Fixture de généralisation A73c1.1. Le contexte scientifique provient d'une copie réelle ; la réponse d'interprétation est simulée pour obtenir une référence pédagogique contrôlée."
+    },
+    {
+      "id": "snell_galaad_louis_regression__clearly_insufficient",
+      "source_notebook": "TP_physique_Galaad-Louis_Louis[]Galaad.ipynb",
+      "provenance": {
+        "source_kind": "real_student_notebook",
+        "scientific_context_is_source_derived": true,
+        "student_answer_is_simulated": true
+      },
+      "local_prompt": "Interpréter la droite obtenue pour sin(i1) en fonction de sin(i2) et en déduire ce qu'elle indique sur la loi de réfraction et l'indice.",
+      "scientific_context": {
+        "result_text": "Régression obtenue : sin(i1) = 1.45243 sin(i2) + 0.01010."
+      },
+      "student_answer": "La loi est vérifiée.",
+      "expected_classification": "CLEARLY_INSUFFICIENT",
+      "expected_status": "PRESENT",
+      "notes": "Fixture de généralisation A73c1.1. Le contexte scientifique provient d'une copie réelle ; la réponse d'interprétation est simulée pour obtenir une référence pédagogique contrôlée."
+    },
+    {
+      "id": "snell_galaad_louis_regression__ambiguous",
+      "source_notebook": "TP_physique_Galaad-Louis_Louis[]Galaad.ipynb",
+      "provenance": {
+        "source_kind": "real_student_notebook",
+        "scientific_context_is_source_derived": true,
+        "student_answer_is_simulated": true
+      },
+      "local_prompt": "Interpréter la droite obtenue pour sin(i1) en fonction de sin(i2) et en déduire ce qu'elle indique sur la loi de réfraction et l'indice.",
+      "scientific_context": {
+        "result_text": "Régression obtenue : sin(i1) = 1.45243 sin(i2) + 0.01010."
+      },
+      "student_answer": "La régression paraît bien correspondre à une droite et la pente obtenue semble plausible.",
+      "expected_classification": "AMBIGUOUS",
+      "expected_status": "PRESENT",
+      "notes": "Fixture de généralisation A73c1.1. Le contexte scientifique provient d'une copie réelle ; la réponse d'interprétation est simulée pour obtenir une référence pédagogique contrôlée."
+    }
+  ]
+}
