@@ -174,6 +174,41 @@ def test_ambiguous_interpretation_reaches_teacher_report_without_student_teacher
     assert not any("protocole" in getattr(item, "text", "").lower() for item in result.feedback)
 
 
+def test_interpretation_review_traces_capture_independent_contexts(tmp_path: Path) -> None:
+    notebook = _notebook()
+    notebook.cells.extend([
+        nbformat.v4.new_markdown_cell(
+            "Interpréter la première comparaison.",
+            metadata={"tpstudio": {"role": "interpretation_prompt", "expectation_id": "interp-1"}},
+        ),
+        nbformat.v4.new_markdown_cell(
+            "L'écart est faible, donc c'est bon.",
+            metadata={"tpstudio": {"role": "interpretation_response", "expectation_id": "interp-1"}},
+        ),
+        nbformat.v4.new_markdown_cell(
+            "Interpréter la seconde comparaison.",
+            metadata={"tpstudio": {"role": "interpretation_prompt", "expectation_id": "interp-2"}},
+        ),
+        nbformat.v4.new_markdown_cell(
+            "Le graphe est correct.",
+            metadata={"tpstudio": {"role": "interpretation_response", "expectation_id": "interp-2"}},
+        ),
+    ])
+    result = _analyze(tmp_path, notebook)
+    traces = result.interpretation_review_traces
+    assert [trace.expectation_id for trace in traces] == ["interp-1", "interp-2"]
+    assert [trace.cell_index_snapshot for trace in traces] == [len(notebook.cells) - 3, len(notebook.cells) - 1]
+    assert [trace.local_context.local_prompt for trace in traces] == [
+        "Interpréter la première comparaison.",
+        "Interpréter la seconde comparaison.",
+    ]
+    assert all(len(trace.copy_sha256) == 64 for trace in traces)
+    assert traces[0].tpstudio_proposal is result.interpretation_response_evaluations[0].classification
+    assert traces[1].tpstudio_proposal is result.interpretation_response_evaluations[1].classification
+    assert "seconde" not in traces[0].local_context.reference_text
+    assert "première" not in traces[1].local_context.reference_text
+
+
 def test_missing_prepared_protocol_creates_one_targeted_feedback(tmp_path: Path) -> None:
     notebook = prepare_notebook_with_protocol_cells(_notebook(), snells_laws_manipulations())
     protocol_cells = [cell for cell in notebook.cells if cell.metadata.get("tpstudio", {}).get("role") == "protocol_response"]

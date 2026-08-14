@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Iterator
 from dataclasses import dataclass
 from enum import Enum
@@ -63,10 +64,13 @@ from tpstudio.conclusion import (
     build_conclusion_contexts,
 )
 from tpstudio.interpretation import (
+    InterpretationFeedbackItem,
     InterpretationEvaluation,
+    InterpretationReviewTrace,
     build_interpretation_contexts,
     build_interpretation_diagnostics,
     build_interpretation_feedback,
+    build_interpretation_review_traces,
     evaluate_interpretation_cells,
 )
 from tpstudio.reasoning import extract_expected_quantity
@@ -242,6 +246,7 @@ class CopyAnalysisResult:
     protocol_evaluations: tuple[ProtocolEvaluation, ...] = ()
     conclusion_evaluations: tuple[ConclusionEvaluation, ...] = ()
     interpretation_response_evaluations: tuple[InterpretationEvaluation, ...] = ()
+    interpretation_review_traces: tuple[InterpretationReviewTrace, ...] = ()
 
     def __post_init__(self) -> None:
         detections = tuple(self.observed_value_detections)
@@ -249,6 +254,7 @@ class CopyAnalysisResult:
         object.__setattr__(self, "protocol_evaluations", tuple(self.protocol_evaluations))
         object.__setattr__(self, "conclusion_evaluations", tuple(self.conclusion_evaluations))
         object.__setattr__(self, "interpretation_response_evaluations", tuple(self.interpretation_response_evaluations))
+        object.__setattr__(self, "interpretation_review_traces", tuple(self.interpretation_review_traces))
         expected_ids = tuple(item.production_id for item in self.quantity_evaluations)
         observed_ids = tuple(item.production.id for item in detections)
         if observed_ids != expected_ids:
@@ -461,8 +467,9 @@ class SnellsLawsCopyAnalyzer:
         conclusion_evaluations = evaluate_conclusion_cells(
             notebook, contexts=build_conclusion_contexts(notebook)
         )
+        interpretation_contexts = build_interpretation_contexts(notebook)
         interpretation_response_evaluations = evaluate_interpretation_cells(
-            notebook, contexts=build_interpretation_contexts(notebook)
+            notebook, contexts=interpretation_contexts
         )
         quantity_catalog = (
             _catalog(project, QuantityFeedbackCatalog)
@@ -573,6 +580,12 @@ class SnellsLawsCopyAnalyzer:
                 if justification_catalog is not None:
                     feedback.extend(render_comparison_justification_feedback(justification_diagnostics, justification_catalog))
         feedback = [item for item in feedback if _audience_allowed(item, options)]
+        source_sha256 = hashlib.sha256(source.path.read_bytes()).hexdigest()
+        interpretation_review_traces = build_interpretation_review_traces(
+            notebook, tuple(interpretation_response_evaluations), interpretation_contexts,
+            tuple(item for item in feedback if isinstance(item, InterpretationFeedbackItem)),
+            copy_id=source.source_id, copy_sha256=source_sha256,
+        )
 
         relation_evaluations = []
         for relation in project.relation_expectation_set.relations:
@@ -624,6 +637,7 @@ class SnellsLawsCopyAnalyzer:
             tuple(protocol_evaluations),
             tuple(conclusion_evaluations),
             tuple(interpretation_response_evaluations),
+            tuple(interpretation_review_traces),
         )
 
 
