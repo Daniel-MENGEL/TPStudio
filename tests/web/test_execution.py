@@ -7,6 +7,7 @@ import pytest
 from tpstudio.batch import BatchCopyResult, BatchCopySource, BatchCopyStatus, BatchOptions, BatchRunResult, build_batch_plan
 from tpstudio.web.execution import can_run_batch, run_prepared_batch
 from tpstudio.web.identity import CopyIdentity, CopyIdentityStatus, StudentIdentity
+from tpstudio.web.presenters import identity_resolution_candidates
 from tpstudio.web.model import SelectedCopy
 
 
@@ -64,6 +65,28 @@ def test_real_partial_filename_keeps_confirmed_identity_and_canonical_stem(tmp_p
     assert can_run_batch((identified,), plan)[0]
     assert plan.planned_outputs[0].notebook_path.name == "Lois-de-Snell-Descartes-Jules-BERNARD-Daniel-MENGEL-correction.ipynb"
     assert plan.planned_outputs[0].html_path.name == "Lois-de-Snell-Descartes-Jules-BERNARD-Daniel-MENGEL-correction.html"
+
+
+def test_manual_identity_confirmation_unlocks_batch_and_candidates_are_deduplicated(tmp_path):
+    from tpstudio.web.identity import CopyIdentitySource, confirm_copy_identity
+    def plan_for(items):
+        return build_batch_plan(
+            tuple(BatchCopySource(item.source_id, item.workspace_path, item.original_filename) for item in items),
+            tmp_path / "out",
+        )
+    first = _copy(tmp_path, "copy-001", CopyIdentity(
+        (StudentIdentity("Jules BERNARD"), StudentIdentity("Daniel MENGEL")),
+        CopyIdentitySource.FILENAME, CopyIdentityStatus.TO_REVIEW,
+    ))
+    second = _copy(tmp_path, "copy-002", CopyIdentity(
+        (StudentIdentity("Jules BERNARD"),), CopyIdentitySource.FILENAME,
+        CopyIdentityStatus.TO_REVIEW,
+    ))
+    assert [student.display_name for student in identity_resolution_candidates((first, second))] == ["Daniel MENGEL", "Jules BERNARD"]
+    confirmed = confirm_copy_identity(first, (StudentIdentity("Jules BERNARD"), StudentIdentity("Daniel MENGEL")))
+    assert can_run_batch((confirmed, second), plan_for((confirmed, second)))[0] is False
+    confirmed_second = confirm_copy_identity(second, (StudentIdentity("Jules BERNARD"), StudentIdentity("Daniel MENGEL")))
+    assert can_run_batch((confirmed, confirmed_second), plan_for((confirmed, confirmed_second)))[0] is True
 
 
 def test_run_prepared_batch_real_vertical_preserves_source(tmp_path):

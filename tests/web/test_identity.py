@@ -6,7 +6,7 @@ import pytest
 from tpstudio.web.identity import (
     CopyIdentity, CopyIdentitySource, CopyIdentityStatus, StudentIdentity,
     build_canonical_copy_stem, canonical_tp_name, extract_copy_identity_from_notebook,
-    extract_identity_hint_from_filename, resolve_copy_identity,
+    confirm_copy_identity, extract_identity_hint_from_filename, resolve_copy_identity,
 )
 from tpstudio.web.model import SelectedCopy
 from tpstudio.web.planning import identify_selected_copy
@@ -89,3 +89,19 @@ def test_identify_selected_copy_enriches_without_writing(tmp_path):
     selected = SelectedCopy("copy-001", path.name, path, "0" * 64)
     enriched = identify_selected_copy(selected)
     assert enriched.identity is not None and enriched.identity.status is CopyIdentityStatus.CONFIRMED
+
+
+def test_manual_identity_confirmation_is_explicit_and_preserves_source(tmp_path):
+    path = tmp_path / "copy.ipynb"
+    before = _notebook("Noms : Paul DURAND et Marie MARTIN")
+    nbformat.write(before, path)
+    source_bytes = path.read_bytes()
+    selected = SelectedCopy("copy-001", path.name, path, "0" * 64, CopyIdentity(
+        (StudentIdentity("Paul DURAND"), StudentIdentity("Marie MARTIN")),
+        CopyIdentitySource.FILENAME, CopyIdentityStatus.TO_REVIEW,
+    ))
+    confirmed = confirm_copy_identity(selected, (StudentIdentity("Jules BERNARD"), StudentIdentity("Daniel MENGEL")))
+    assert confirmed.identity.status is CopyIdentityStatus.CONFIRMED
+    assert confirmed.identity.source is CopyIdentitySource.MANUAL
+    assert [student.display_name for student in confirmed.identity.students] == ["Jules BERNARD", "Daniel MENGEL"]
+    assert path.read_bytes() == source_bytes

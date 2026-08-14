@@ -9,9 +9,18 @@ from datetime import datetime, timezone
 from tpstudio.batch import BatchCopyStatus, render_batch_report_markdown
 from tpstudio.web.execution import can_run_batch, run_prepared_batch
 from tpstudio.web.model import WebBatchOptions
-from tpstudio.web.identity import identify_selected_copy
+from tpstudio.web.identity import (
+    CopyIdentityStatus, StudentIdentity, confirm_copy_identity,
+    identify_selected_copy,
+)
 from tpstudio.web.planning import WebInputError, build_batch_plan_from_web_selection, resolve_output_dir
-from tpstudio.web.presenters import batch_plan_rows, has_output_name_collision
+from tpstudio.web.presenters import (
+    batch_plan_rows, has_output_name_collision, identity_resolution_candidates,
+)
+from tpstudio.web.roster import (
+    default_roster_path, load_roster, parse_roster_csv, save_roster,
+    suggest_roster_students,
+)
 from tpstudio.web.presenters import review_prefill, select_interpretation_review_items
 from tpstudio.interpretation import InterpretationClassification
 from tpstudio.review_store import append_interpretation_review, review_store_path
@@ -147,6 +156,23 @@ def main() -> None:
         hide_code = st.checkbox("Masquer le code dans le HTML")
         hide_outputs = st.checkbox("Masquer les sorties dans le HTML")
         overwrite = st.checkbox("Autoriser le remplacement des fichiers existants")
+        try:
+            roster = load_roster()
+            st.caption(f"Étudiants : {len(roster)} chargés")
+        except ValueError:
+            roster = ()
+            st.warning("Le roster local est invalide.")
+        roster_upload = st.file_uploader(
+            "Importer une liste d'étudiants", type=["csv"], key="tpstudio_roster_upload",
+        )
+        if roster_upload is not None and st.button("Importer / mettre à jour la liste", key="tpstudio_roster_save"):
+            try:
+                imported_roster = parse_roster_csv(roster_upload.getvalue().decode("utf-8-sig"))
+                save_roster(imported_roster, default_roster_path())
+                st.success(f"Roster enregistré : {len(imported_roster)} étudiants.")
+                st.rerun()
+            except (UnicodeDecodeError, TypeError, ValueError, OSError):
+                st.error("Le fichier roster n'a pas pu être importé.")
     generation = st.session_state[UPLOADER_GENERATION_KEY]
     uploads = st.file_uploader("Sélectionner les notebooks (.ipynb)", type=["ipynb"], accept_multiple_files=True, key=f"tpstudio_web_uploads_{generation}")
     output_text = st.text_input("Dossier des corrections", value=str(default_output_dir()))
@@ -154,7 +180,18 @@ def main() -> None:
     if uploads:
         try:
             payload = tuple((upload.name, upload.getvalue()) for upload in uploads)
-            copies = [identify_selected_copy(item) for item in workspace.replace_selection(payload)]
+            previous = {
+                item.source_id: item
+                for item in st.session_state.get(SELECTION_KEY, ())
+                if item.identity is not None and item.identity.source.value == "manual"
+            }
+            copies = []
+            for item in workspace.replace_selection(payload):
+                identified = identify_selected_copy(item)
+                prior = previous.get(item.source_id)
+                if prior is not None and prior.content_sha256 == item.content_sha256:
+                    identified = replace(identified, identity=prior.identity)
+                copies.append(identified)
             st.session_state[SELECTION_KEY] = tuple(copies)
         except (TypeError, ValueError) as exc:
             st.error(web_error_message(exc))
@@ -209,6 +246,47 @@ def main() -> None:
         st.table(table_rows)
         if has_output_name_collision(plan):
             st.info("Des noms de fichiers identiques ont été détectés. TPStudio a préparé des noms de sortie distincts.")
+        unresolved = [item for item in copies if item.identity and item.identity.status is CopyIdentityStatus.TO_REVIEW]
+        if unresolved:
+            st.markdown("### Résolution des identités")
+            roster_candidates = identity_resolution_candidates(copies, roster)
+            roster_by_name = {student.display_name: student for student in roster_candidates}
+            options_names = tuple(roster_by_name)
+            for item in unresolved:
+                identity = item.identity
+                st.markdown(f"**Fichier :** {item.original_filename}")
+                if roster:
+                    suggested = suggest_roster_students(item.original_filename, roster)
+                    detected = tuple(student.to_identity().display_name for student in suggested)
+                else:
+                    detected = tuple(student.display_name for student in identity.students if student.display_name in roster_by_name)
+                if not options_names:
+                    st.warning("Aucun étudiant connu n'est disponible pour cette copie.")
+                    continue
+                chosen_names = st.multiselect(
+                    "Étudiants",
+                    options_names,
+                    default=detected,
+                    key=f"identity-choice-{item.source_id}",
+                )
+                if st.button("Confirmer l'identité", key=f"identity-confirm-{item.source_id}"):
+                    try:
+                        selected = confirm_copy_identity(
+                            item, tuple(roster_by_name[name] for name in chosen_names),
+                        )
+                        updated = tuple(
+                            selected if current.source_id == item.source_id else current
+                            for current in copies
+                        )
+                        new_signature = _input_signature(updated, output_dir, options)
+                        new_plan = build_batch_plan_from_web_selection(updated, output_dir, options)
+                        st.session_state[SELECTION_KEY] = updated
+                        set_prepared_batch(st.session_state, new_plan, new_signature)
+                        st.session_state[REVIEW_INDEX_KEY] = 0
+                        st.success("Identité confirmée.")
+                        st.rerun()
+                    except (TypeError, ValueError, FileNotFoundError, OSError) as exc:
+                        st.error(web_error_message(exc))
         can_run, reasons = can_run_batch(copies, plan)
         if not can_run:
             st.warning("Certaines identités doivent être vérifiées avant correction.")

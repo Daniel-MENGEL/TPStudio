@@ -46,6 +46,19 @@ def has_output_name_collision(plan: BatchPlan) -> bool:
     return len(source_names) != len(set(source_names))
 
 
+def identity_resolution_candidates(copies, roster=()) -> tuple:
+    """Return the deduplicated student identities known in the current lot."""
+    if roster:
+        return tuple(student.to_identity() for student in roster)
+    by_name = {
+        student.display_name: student
+        for item in copies
+        if getattr(item, "identity", None) is not None
+        for student in item.identity.students
+    }
+    return tuple(by_name[name] for name in sorted(by_name))
+
+
 @dataclass(frozen=True, slots=True)
 class BatchRunRow:
     copy_label: str

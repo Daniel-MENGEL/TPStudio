@@ -18,10 +18,15 @@ class StudentIdentity:
     display_name: str
     family_name: str | None = None
     given_names: str | None = None
+    email: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.display_name, str) or not self.display_name.strip():
             raise ValueError("Le nom étudiant ne peut pas être vide.")
+        if self.email is not None:
+            if not isinstance(self.email, str) or "@" not in self.email or self.email != self.email.strip():
+                raise ValueError("L'email étudiant est invalide.")
+            object.__setattr__(self, "email", self.email.casefold())
 
 
 class CopyIdentitySource(str, Enum):
@@ -125,6 +130,20 @@ def identify_selected_copy(selected: SelectedCopy) -> SelectedCopy:
     notebook_identity = extract_copy_identity_from_notebook(selected.workspace_path)
     resolved = resolve_copy_identity(notebook_identity, filename_hint=extract_identity_hint_from_filename(selected.original_filename))
     return replace(selected, identity=resolved)
+
+
+def confirm_copy_identity(selected: SelectedCopy, students: tuple[StudentIdentity, ...] | list[StudentIdentity]) -> SelectedCopy:
+    """Apply an explicit teacher choice without consulting filename evidence."""
+    chosen = tuple(students)
+    if not chosen:
+        raise ValueError("Au moins un étudiant doit être sélectionné.")
+    if any(type(student) is not StudentIdentity for student in chosen):
+        raise TypeError("La sélection d'étudiants est invalide.")
+    identity = CopyIdentity(
+        chosen, CopyIdentitySource.MANUAL, CopyIdentityStatus.CONFIRMED,
+        " & ".join(student.display_name for student in chosen),
+    )
+    return replace(selected, identity=identity)
 
 
 def canonical_tp_name(project_id: str) -> str:
