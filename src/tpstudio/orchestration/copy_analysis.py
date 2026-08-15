@@ -76,6 +76,7 @@ from tpstudio.interpretation import (
 from tpstudio.reasoning import extract_expected_quantity
 
 from .graph_adapter import GraphEvaluation, GraphSeriesData, evaluate_saved_graph, observe_saved_graph
+from tpstudio.graph_analysis import GraphAnalysis, analyze_graph_series_collection
 from .notebook_inspection import (
     NotebookCopySource,
     NotebookTechnicalInspection,
@@ -248,6 +249,7 @@ class CopyAnalysisResult:
     interpretation_response_evaluations: tuple[InterpretationEvaluation, ...] = ()
     interpretation_review_traces: tuple[InterpretationReviewTrace, ...] = ()
     graph_series_data: tuple[GraphSeriesData, ...] = ()
+    graph_analyses: tuple[GraphAnalysis, ...] = ()
 
     def __post_init__(self) -> None:
         detections = tuple(self.observed_value_detections)
@@ -257,6 +259,7 @@ class CopyAnalysisResult:
         object.__setattr__(self, "interpretation_response_evaluations", tuple(self.interpretation_response_evaluations))
         object.__setattr__(self, "interpretation_review_traces", tuple(self.interpretation_review_traces))
         object.__setattr__(self, "graph_series_data", tuple(self.graph_series_data))
+        object.__setattr__(self, "graph_analyses", tuple(self.graph_analyses))
         expected_ids = tuple(item.production_id for item in self.quantity_evaluations)
         observed_ids = tuple(item.production.id for item in detections)
         if observed_ids != expected_ids:
@@ -645,6 +648,11 @@ class SnellsLawsCopyAnalyzer:
                 for evaluation in graph_evaluations
                 for series in (evaluation.observation.series_data if evaluation.observation else ())
             ),
+            graph_analyses=analyze_graph_series_collection(tuple(
+                series
+                for evaluation in graph_evaluations
+                for series in (evaluation.observation.series_data if evaluation.observation else ())
+            )),
         )
 
 

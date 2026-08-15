@@ -18,6 +18,7 @@ from tpstudio.orchestration import (
     analyze_snells_laws_copy,
     summarize_copy_analysis,
 )
+from tpstudio.graph_analysis import GraphScientificClassification
 from tpstudio.projects import snells_laws_teacher_project
 from tpstudio.reporting import build_teacher_copy_report
 from tpstudio.protocol import (
@@ -104,6 +105,30 @@ def test_synthetic_copy_runs_all_declared_chains_read_only(tmp_path: Path) -> No
     assert result.final_conclusion.unique
     assert "Conclusion finale distincte" in result.final_conclusion.text
     assert "path=" not in repr(result)
+
+
+def test_multiple_measured_graph_series_reach_copy_analysis_result(tmp_path: Path) -> None:
+    notebook = _notebook()
+    graph_cell = _cell_with(notebook, "# Vérification graphique")
+    graph_cell.source = (
+        "# Vérification graphique\n"
+        "plt.plot([0, 1, 2, 3, 4, 5], [1, 3, 5, 7, 9, 11], label='Mesures')\n"
+        "plt.plot([0, 1, 2, 3, 4, 5], [0, 1, 4, 9, 16, 25], label='Mesures')\n"
+    )
+    result = _analyze(tmp_path, notebook)
+    assert len(result.graph_series_data) == 2
+    assert len(result.graph_analyses) == 2
+    assert [item.series_id for item in result.graph_series_data] == [
+        item.series_id for item in result.graph_analyses
+    ]
+    assert [item.cell_id for item in result.graph_series_data] == [
+        item.cell_id for item in result.graph_analyses
+    ]
+    assert [item.cell_index_snapshot for item in result.graph_series_data] == [
+        item.cell_index_snapshot for item in result.graph_analyses
+    ]
+    assert result.graph_analyses[0].scientific_classification is GraphScientificClassification.LINEAR_COMPATIBLE
+    assert result.graph_analyses[1].scientific_classification is GraphScientificClassification.CLEARLY_NONLINEAR
 
 
 def test_prepared_protocol_cells_are_evaluated_without_global_scan(tmp_path: Path) -> None:

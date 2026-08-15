@@ -14,6 +14,13 @@ from .copy_analysis import (
     summarize_copy_analysis,
 )
 from tpstudio.conclusion import ConclusionEvaluation
+from tpstudio.graph_analysis import (
+    GraphAnalysis,
+    GraphAnalysisTechnicalStatus,
+    GraphScientificClassification,
+    analyze_graph_series,
+    analyze_graph_series_collection,
+)
 from .graph_adapter import (
     GraphCheckStatus,
     GraphEvaluation,
