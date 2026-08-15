@@ -346,7 +346,7 @@ class CopyAnalysisResult:
     @property
     def has_interpretation_response_issues(self) -> bool:
         return any(
-            item.status is not ProtocolStatus.PRESENT
+            (item.status is not ProtocolStatus.PRESENT and item.classification is None)
             or item.requires_human_review
             for item in self.interpretation_response_evaluations
         )

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 
 from nbformat.notebooknode import NotebookNode
@@ -85,6 +85,13 @@ class InterpretationFeedbackItem:
     @property
     def message_key(self) -> str:
         return self.text
+
+
+def effective_review_feedback(teacher_feedback: str | None, tpstudio_feedback: str | None) -> str | None:
+    """Prefer human text only when it contains non-whitespace content."""
+    if isinstance(teacher_feedback, str) and teacher_feedback.strip():
+        return teacher_feedback
+    return tpstudio_feedback
 
 
 @dataclass(frozen=True, slots=True)
@@ -340,7 +347,7 @@ def build_interpretation_diagnostics(evaluations):
     for item in evaluations:
         if item.status is ProtocolStatus.MISSING:
             values.append(InterpretationDiagnostic(item.expectation_id, item.status, None, item.cell_index, "INTERPRETATION_MISSING", "L'interprétation n'est pas renseignée."))
-        elif item.status is ProtocolStatus.NOT_EVALUABLE:
+        elif item.status is ProtocolStatus.NOT_EVALUABLE and item.classification is None:
             values.append(InterpretationDiagnostic(item.expectation_id, item.status, None, item.cell_index, "INTERPRETATION_NOT_EVALUABLE", "L'interprétation ne peut pas être évaluée automatiquement."))
         elif item.classification is InterpretationClassification.AMBIGUOUS:
             values.append(InterpretationDiagnostic(item.expectation_id, item.status, item.classification, item.cell_index, "INTERPRETATION_AMBIGUOUS", "L'interprétation nécessite une revue humaine."))
@@ -352,7 +359,7 @@ def build_interpretation_diagnostics(evaluations):
 def build_interpretation_feedback(evaluations):
     values = []
     for item in evaluations:
-        if item.cell_index is None or item.status is not ProtocolStatus.PRESENT:
+        if item.cell_index is None or item.status not in {ProtocolStatus.PRESENT, ProtocolStatus.NOT_EVALUABLE}:
             continue
         if item.classification is InterpretationClassification.CLEARLY_SUFFICIENT:
             text = "Interprétation pertinente : le résultat est relié à son contexte scientifique."
@@ -362,3 +369,56 @@ def build_interpretation_feedback(evaluations):
             continue
         values.append(InterpretationFeedbackItem(item.expectation_id, text, item.cell_index))
     return tuple(values)
+
+
+def apply_interpretation_reviews(
+    evaluations: tuple[InterpretationEvaluation, ...],
+    traces: tuple[InterpretationReviewTrace, ...],
+    persisted_reviews: tuple[InterpretationReviewTrace, ...],
+) -> tuple[tuple[InterpretationEvaluation, ...], tuple[InterpretationReviewTrace, ...], tuple[InterpretationDiagnostic, ...], tuple[InterpretationFeedbackItem, ...]]:
+    """Resolve compatible teacher decisions without changing automatic proposals."""
+    from tpstudio.review_store import latest_interpretation_review
+
+    by_cell = {(trace.expectation_id, trace.cell_index_snapshot): trace for trace in traces}
+    effective: list[InterpretationEvaluation] = []
+    effective_traces: list[InterpretationReviewTrace] = []
+    for evaluation in evaluations:
+        trace = by_cell.get((evaluation.expectation_id, evaluation.cell_index))
+        review = None
+        if trace is not None:
+            review = latest_interpretation_review(
+                persisted_reviews,
+                copy_id=trace.copy_id,
+                copy_sha256=trace.copy_sha256,
+                expectation_id=trace.expectation_id,
+                cell_id=trace.cell_id,
+            )
+        if review is None:
+            effective.append(evaluation)
+            if trace is not None:
+                effective_traces.append(trace)
+            continue
+        effective.append(replace(evaluation, classification=review.teacher_decision, requires_human_review=False))
+        effective_traces.append(replace(
+            trace, teacher_decision=review.teacher_decision,
+            teacher_feedback=review.teacher_feedback, reviewed_at=review.reviewed_at,
+        ))
+    effective_evaluations = tuple(effective)
+    feedback = list(build_interpretation_feedback(effective_evaluations))
+    trace_by_cell = {
+        (trace.expectation_id, trace.cell_index_snapshot): trace
+        for trace in effective_traces
+        if trace.teacher_decision is not None
+    }
+    for index, item in enumerate(feedback):
+        trace = trace_by_cell.get((item.expectation_id, item.cell_index))
+        if trace is not None:
+            text = effective_review_feedback(trace.teacher_feedback, trace.tpstudio_feedback)
+            if text:
+                feedback[index] = replace(item, text=text)
+    return (
+        effective_evaluations,
+        tuple(effective_traces),
+        build_interpretation_diagnostics(effective_evaluations),
+        tuple(feedback),
+    )

@@ -6,6 +6,7 @@ from hashlib import sha256
 import os
 from pathlib import Path
 import tempfile
+from dataclasses import replace
 
 import nbformat
 
@@ -15,7 +16,10 @@ from tpstudio.annotation import (
 from tpstudio.orchestration import (
     NotebookCopySource, analyze_snells_laws_copy, load_notebook_copy,
 )
+from tpstudio.interpretation import apply_interpretation_reviews
+from tpstudio.interpretation import InterpretationDiagnostic, InterpretationFeedbackItem
 from tpstudio.reporting import build_teacher_copy_report
+from tpstudio.review_store import load_interpretation_reviews, review_store_path
 
 from .html import render_annotated_notebook_html
 from .model import CopyExportOptions, CopyExportResult, ExportArtifact, ExportArtifactKind
@@ -120,6 +124,27 @@ def export_snells_laws_copy(
     before = sha256(source_path.read_bytes()).digest()
     source = NotebookCopySource(source_id, source_path.name, source_path)
     analysis = analyze_snells_laws_copy(source)
+    persisted_reviews = load_interpretation_reviews(review_store_path(output_dir))
+    effective_evaluations, effective_traces, interpretation_diagnostics, interpretation_feedback = apply_interpretation_reviews(
+        analysis.interpretation_response_evaluations,
+        analysis.interpretation_review_traces,
+        persisted_reviews,
+    )
+    non_interpretation_diagnostics = tuple(
+        item for item in analysis.diagnostics
+        if not isinstance(item, InterpretationDiagnostic)
+    )
+    non_interpretation_feedback = tuple(
+        item for item in analysis.feedback
+        if not isinstance(item, InterpretationFeedbackItem)
+    )
+    analysis = replace(
+        analysis,
+        interpretation_response_evaluations=effective_evaluations,
+        interpretation_review_traces=effective_traces,
+        diagnostics=non_interpretation_diagnostics + interpretation_diagnostics,
+        feedback=non_interpretation_feedback + interpretation_feedback,
+    )
     report = build_teacher_copy_report(analysis)
     annotation_options = AnnotationOptions(
         include_teacher_feedback=options.include_teacher_feedback,

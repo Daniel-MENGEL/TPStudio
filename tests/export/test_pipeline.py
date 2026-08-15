@@ -1,5 +1,6 @@
 import importlib.util
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import nbformat
@@ -7,6 +8,9 @@ import pytest
 
 from tpstudio.export import CopyExportOptions, export_snells_laws_copy
 import tpstudio.export.pipeline as pipeline
+from tpstudio.interpretation import InterpretationClassification
+from tpstudio.orchestration import NotebookCopySource, analyze_snells_laws_copy
+from tpstudio.review_store import append_interpretation_review, review_store_path
 
 
 def _fixture():
@@ -45,6 +49,81 @@ def test_pipeline_renders_multiline_stream_output_as_text(tmp_path):
     assert "Les mesures sont cohérentes" in html
     assert "['Ecart normalisé" not in html
     assert source.read_bytes() == before
+
+
+def test_pipeline_applies_compatible_teacher_interpretation_review(tmp_path):
+    notebook = nbformat.v4.new_notebook(cells=[
+        nbformat.v4.new_markdown_cell("Le graphe est correct.", metadata={
+            "tpstudio": {"role": "interpretation_response", "expectation_id": "interp-1"}
+        })
+    ])
+    source = tmp_path / "copy.ipynb"
+    nbformat.write(notebook, source)
+    analysis = analyze_snells_laws_copy(NotebookCopySource("local-copy", source.name, source))
+    trace = analysis.interpretation_review_traces[0]
+    reviewed = __import__("dataclasses").replace(
+        trace,
+        teacher_decision=InterpretationClassification.CLEARLY_SUFFICIENT,
+        teacher_feedback="Retour enseignant prioritaire.",
+        reviewed_at="2026-08-15T12:00:00+00:00",
+    )
+    append_interpretation_review(review_store_path(tmp_path / "out"), reviewed)
+    result = export_snells_laws_copy(
+        source,
+        tmp_path / "out",
+        options=CopyExportOptions(include_teacher_feedback=True, include_diagnostics=True),
+    )
+    exported = nbformat.read(result.notebook_artifact.path, as_version=nbformat.NO_CONVERT)
+    text = "\n".join(cell.source for cell in exported.cells if cell.cell_type == "markdown")
+    html = result.html_artifact.path.read_text(encoding="utf-8")
+    assert "Retour enseignant prioritaire." in text
+    assert "Retour enseignant prioritaire." in html
+    assert "L'interprétation nécessite une revue humaine." not in text
+    assert "L'interprétation nécessite une revue humaine." not in html
+    for private_value in ("email", "copy_sha256", "interpretation_reviews.jsonl"):
+        assert private_value not in text
+        assert private_value not in html
+
+
+@pytest.mark.parametrize(
+    ("decision", "expected_text"),
+    [
+        (InterpretationClassification.CLEARLY_SUFFICIENT, "Retour enseignant prioritaire."),
+        (InterpretationClassification.CLEARLY_INSUFFICIENT, "Retour enseignant prioritaire."),
+        (InterpretationClassification.AMBIGUOUS, "L'interprétation nécessite une revue humaine."),
+    ],
+)
+def test_pipeline_notebook_and_html_share_effective_interpretation_state(tmp_path, decision, expected_text):
+    notebook = nbformat.v4.new_notebook(cells=[
+        nbformat.v4.new_markdown_cell("Le graphe est correct.", metadata={
+            "tpstudio": {"role": "interpretation_response", "expectation_id": "interp-1"}
+        })
+    ])
+    source = tmp_path / "copy.ipynb"
+    nbformat.write(notebook, source)
+    analysis = analyze_snells_laws_copy(NotebookCopySource("local-copy", source.name, source))
+    trace = analysis.interpretation_review_traces[0]
+    reviewed = replace(
+        trace,
+        teacher_decision=decision,
+        teacher_feedback="Retour enseignant prioritaire.",
+        reviewed_at="2026-08-15T12:00:00+00:00",
+    )
+    append_interpretation_review(review_store_path(tmp_path / "out"), reviewed)
+    result = export_snells_laws_copy(
+        source,
+        tmp_path / "out",
+        options=CopyExportOptions(include_teacher_feedback=True, include_diagnostics=True),
+    )
+    exported = nbformat.read(result.notebook_artifact.path, as_version=nbformat.NO_CONVERT)
+    notebook_text = "\n".join(cell.source for cell in exported.cells if cell.cell_type == "markdown")
+    html_text = result.html_artifact.path.read_text(encoding="utf-8")
+    if decision is InterpretationClassification.AMBIGUOUS:
+        assert expected_text not in notebook_text
+        assert expected_text not in html_text
+    else:
+        assert expected_text in notebook_text
+        assert expected_text in html_text
 
 
 def test_pipeline_refuses_existing_destination_transactionally(tmp_path):
