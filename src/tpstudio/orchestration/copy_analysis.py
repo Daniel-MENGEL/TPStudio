@@ -78,6 +78,7 @@ from tpstudio.reasoning import extract_expected_quantity
 from .graph_adapter import GraphEvaluation, GraphSeriesData, evaluate_saved_graph, observe_saved_graph
 from tpstudio.graph_analysis import GraphAnalysis, analyze_graph_series_collection
 from tpstudio.regression import RegressionObservation, extract_regression_observations
+from tpstudio.regression_matching import RegressionSeriesMatch, match_regressions_to_series
 from .notebook_inspection import (
     NotebookCopySource,
     NotebookTechnicalInspection,
@@ -252,6 +253,7 @@ class CopyAnalysisResult:
     graph_series_data: tuple[GraphSeriesData, ...] = ()
     graph_analyses: tuple[GraphAnalysis, ...] = ()
     regression_observations: tuple[RegressionObservation, ...] = ()
+    regression_series_matches: tuple[RegressionSeriesMatch, ...] = ()
 
     def __post_init__(self) -> None:
         detections = tuple(self.observed_value_detections)
@@ -263,6 +265,7 @@ class CopyAnalysisResult:
         object.__setattr__(self, "graph_series_data", tuple(self.graph_series_data))
         object.__setattr__(self, "graph_analyses", tuple(self.graph_analyses))
         object.__setattr__(self, "regression_observations", tuple(self.regression_observations))
+        object.__setattr__(self, "regression_series_matches", tuple(self.regression_series_matches))
         expected_ids = tuple(item.production_id for item in self.quantity_evaluations)
         observed_ids = tuple(item.production.id for item in detections)
         if observed_ids != expected_ids:
@@ -644,6 +647,15 @@ class SnellsLawsCopyAnalyzer:
             "La conclusion finale est conservée séparément des comparaisons.",
             "A70b exige actuellement une unité observée, y compris pour les indices sans dimension configurés sans unité.",
         ]
+        graph_series_data = tuple(
+            series
+            for evaluation in graph_evaluations
+            for series in (evaluation.observation.series_data if evaluation.observation else ())
+        )
+        graph_analyses = analyze_graph_series_collection(graph_series_data)
+        regression_series_matches = match_regressions_to_series(
+            notebook, regression_observations, graph_series_data
+        )
         return CopyAnalysisResult(
             project, source, options, technical, production_resolutions,
             tuple(value_detections), quantity_set, uncertainty_evaluations,
@@ -654,17 +666,10 @@ class SnellsLawsCopyAnalyzer:
             tuple(conclusion_evaluations),
             tuple(interpretation_response_evaluations),
             tuple(interpretation_review_traces),
-            graph_series_data=tuple(
-                series
-                for evaluation in graph_evaluations
-                for series in (evaluation.observation.series_data if evaluation.observation else ())
-            ),
-            graph_analyses=analyze_graph_series_collection(tuple(
-                series
-                for evaluation in graph_evaluations
-                for series in (evaluation.observation.series_data if evaluation.observation else ())
-            )),
+            graph_series_data=graph_series_data,
+            graph_analyses=graph_analyses,
             regression_observations=regression_observations,
+            regression_series_matches=regression_series_matches,
         )
 
 

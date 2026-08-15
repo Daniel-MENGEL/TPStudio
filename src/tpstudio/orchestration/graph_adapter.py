@@ -305,21 +305,10 @@ def _extract_series(
     return tuple(result)
 
 
-def observe_saved_graph(
-    notebook: NotebookNode,
-    resolution: NotebookBindingResolution,
-) -> GraphObservation | None:
-    if not resolution.resolved or resolution.cell is None:
-        return None
-    cell = notebook.cells[resolution.cell.index]
-    if cell.cell_type != "code":
-        return None
-    source = cell.source
+def _bindings_before_cell(notebook: NotebookNode, cell_index: int) -> dict[str, object]:
+    """Rebuild the safe binding environment before a cell, chronologically."""
     bindings: dict[str, object] = {}
-    # Reconstruct only simple assignments from cells preceding the graph.  The
-    # walk is deliberately chronological: a later reassignment cannot affect
-    # an earlier graph cell.
-    for previous in notebook.cells[: resolution.cell.index]:
+    for previous in notebook.cells[:cell_index]:
         if previous.cell_type != "code":
             continue
         try:
@@ -337,6 +326,205 @@ def observe_saved_graph(
                 bindings.pop(target.id, None)
             else:
                 bindings[target.id] = value
+    return bindings
+
+
+def _statement_before(position: tuple[int, int], statement: ast.stmt) -> bool:
+    return (getattr(statement, "lineno", 0), getattr(statement, "col_offset", 0)) < position
+
+
+def _bindings_at_position(
+    notebook: NotebookNode, cell_index: int, position: tuple[int, int]
+) -> dict[str, object]:
+    bindings = _bindings_before_cell(notebook, cell_index)
+    cell = notebook.cells[cell_index]
+    try:
+        tree = ast.parse(cell.source)
+    except SyntaxError:
+        return bindings
+    for statement in tree.body:
+        if not _statement_before(position, statement):
+            break
+        if not isinstance(statement, ast.Assign) or len(statement.targets) != 1:
+            continue
+        target = statement.targets[0]
+        if not isinstance(target, ast.Name):
+            continue
+        value = _safe_value(statement.value, bindings)
+        if value is None:
+            bindings.pop(target.id, None)
+        else:
+            bindings[target.id] = value
+    return bindings
+
+
+def resolve_expression_at_position(
+    notebook: NotebookNode,
+    cell_index: int,
+    position: tuple[int, int],
+    expression: str,
+) -> tuple[float, ...] | None:
+    """Resolve one expression with the A74a1 environment at a source position."""
+    try:
+        node = ast.parse(expression, mode="eval").body
+    except SyntaxError:
+        return None
+    value = _safe_value(node, _bindings_at_position(notebook, cell_index, position))
+    return _as_array(value)
+
+
+def _target_names(target: ast.AST) -> tuple[str, ...]:
+    if isinstance(target, ast.Name):
+        return (target.id,)
+    if isinstance(target, (ast.Tuple, ast.List)):
+        return tuple(name for item in target.elts for name in _target_names(item))
+    if isinstance(target, (ast.Subscript, ast.Attribute)):
+        root = target.value
+        while isinstance(root, (ast.Subscript, ast.Attribute)):
+            root = root.value
+        return (root.id,) if isinstance(root, ast.Name) else ()
+    return ()
+
+
+def _loaded_names(node: ast.AST) -> set[str]:
+    return {item.id for item in ast.walk(node) if isinstance(item, ast.Name) and isinstance(item.ctx, ast.Load)}
+
+
+def _state_before_cell(
+    notebook: NotebookNode, cell_index: int
+) -> tuple[dict[str, object], set[str]]:
+    bindings: dict[str, object] = {}
+    tainted: set[str] = set()
+    for previous in notebook.cells[:cell_index]:
+        if previous.cell_type != "code":
+            continue
+        try:
+            tree = ast.parse(previous.source)
+        except SyntaxError:
+            continue
+        for statement in tree.body:
+            _apply_taint_statement(statement, bindings, tainted)
+    return bindings, tainted
+
+
+def _apply_taint_statement(
+    statement: ast.stmt, bindings: dict[str, object], tainted: set[str]
+) -> None:
+    targets: tuple[ast.AST, ...] = ()
+    value: ast.AST | None = None
+    if isinstance(statement, ast.Assign):
+        targets, value = tuple(statement.targets), statement.value
+    elif isinstance(statement, ast.AnnAssign):
+        targets, value = (statement.target,), statement.value
+    elif isinstance(statement, ast.AugAssign):
+        targets = (statement.target,)
+    else:
+        return
+    names = tuple(name for target in targets for name in _target_names(target))
+    if isinstance(statement, ast.AugAssign) or any(not isinstance(target, ast.Name) for target in targets):
+        for name in names:
+            bindings.pop(name, None)
+            tainted.add(name)
+        return
+    assert value is not None
+    if _loaded_names(value) & tainted:
+        for name in names:
+            bindings.pop(name, None)
+            tainted.add(name)
+        return
+    resolved = _safe_value(value, bindings)
+    for name in names:
+        if resolved is None:
+            bindings.pop(name, None)
+            tainted.add(name)
+        else:
+            bindings[name] = resolved
+            tainted.discard(name)
+
+
+def _state_at_position(
+    notebook: NotebookNode, cell_index: int, position: tuple[int, int]
+) -> tuple[dict[str, object], set[str]]:
+    bindings, tainted = _state_before_cell(notebook, cell_index)
+    cell = notebook.cells[cell_index]
+    try:
+        tree = ast.parse(cell.source)
+    except SyntaxError:
+        return bindings, tainted
+    for statement in tree.body:
+        if not _statement_before(position, statement):
+            break
+        _apply_taint_statement(statement, bindings, tainted)
+    return bindings, tainted
+
+
+def resolve_expression_at_position_with_status(
+    notebook: NotebookNode,
+    cell_index: int,
+    position: tuple[int, int],
+    expression: str,
+) -> tuple[tuple[float, ...] | None, bool]:
+    """Return safe values and whether an unsupported mutation taints them."""
+    values, tainted_names = resolve_expression_at_position_with_details(
+        notebook, cell_index, position, expression
+    )
+    return values, bool(tainted_names)
+
+
+def resolve_expression_at_position_with_details(
+    notebook: NotebookNode,
+    cell_index: int,
+    position: tuple[int, int],
+    expression: str,
+) -> tuple[tuple[float, ...] | None, tuple[str, ...]]:
+    """Return safe values and the names invalidated by unsupported mutations."""
+    try:
+        node = ast.parse(expression, mode="eval").body
+    except SyntaxError:
+        return None, ()
+    bindings, tainted = _state_at_position(notebook, cell_index, position)
+    tainted_names = tuple(sorted(_loaded_names(node) & tainted))
+    if tainted_names:
+        return None, tainted_names
+    return _as_array(_safe_value(node, bindings)), ()
+
+
+def _plot_positions(source: str) -> tuple[tuple[int, int], ...]:
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return ()
+    positions: list[tuple[int, int]] = []
+    for statement in tree.body:
+        call = statement.value if isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call) else None
+        if call is not None and _plot_call_name(call) and len(call.args) >= 2:
+            positions.append((getattr(statement, "lineno", 0), getattr(statement, "col_offset", 0)))
+    return tuple(positions)
+
+
+def series_source_position(notebook: NotebookNode, series: GraphSeriesData) -> tuple[int, int] | None:
+    """Recover the top-level plot position encoded by a series id."""
+    if series.cell_index_snapshot >= len(notebook.cells):
+        return None
+    try:
+        ordinal = int(series.series_id.rsplit("-", 1)[1]) - 1
+    except (ValueError, IndexError):
+        return None
+    positions = _plot_positions(notebook.cells[series.cell_index_snapshot].source)
+    return positions[ordinal] if 0 <= ordinal < len(positions) else None
+
+
+def observe_saved_graph(
+    notebook: NotebookNode,
+    resolution: NotebookBindingResolution,
+) -> GraphObservation | None:
+    if not resolution.resolved or resolution.cell is None:
+        return None
+    cell = notebook.cells[resolution.cell.index]
+    if cell.cell_type != "code":
+        return None
+    source = cell.source
+    bindings = _bindings_before_cell(notebook, resolution.cell.index)
     try:
         tree = ast.parse(source)
     except SyntaxError:

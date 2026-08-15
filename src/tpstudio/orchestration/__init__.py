@@ -21,6 +21,12 @@ from tpstudio.regression import (
     RegressionTechnicalStatus,
     extract_regression_observations,
 )
+from tpstudio.regression_matching import (
+    RegressionSeriesMatch,
+    RegressionSeriesMatchStatus,
+    match_regression_to_series,
+    match_regressions_to_series,
+)
 from tpstudio.graph_analysis import (
     GraphAnalysis,
     GraphAnalysisTechnicalStatus,
