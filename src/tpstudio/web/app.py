@@ -24,6 +24,11 @@ from tpstudio.web.roster import (
 from tpstudio.web.presenters import review_prefill, select_interpretation_review_items
 from tpstudio.interpretation import InterpretationClassification
 from tpstudio.review_store import append_interpretation_review, review_store_path
+from tpstudio.review_store import load_interpretation_reviews
+from tpstudio.review_corpus import (
+    build_interpretation_review_corpus, interpretation_review_corpus_jsonl,
+    load_or_create_corpus_pseudonym_key, summarize_interpretation_review_corpus,
+)
 from tpstudio.web.state import (
     PLAN_KEY, SELECTION_KEY, SIGNATURE_KEY, WORKSPACE_KEY,
     UPLOADER_GENERATION_KEY, clear_prepared_batch, initialize_session_state,
@@ -135,6 +140,44 @@ def _render_interpretation_review(st, batch_result, output_dir: Path, copy_label
         else:
             st.session_state[REVIEW_MESSAGE_KEY] = "Décision enregistrée."
             st.rerun()
+
+
+def _render_review_corpus(st, batch_result, output_dir: Path) -> None:
+    """Offer an explicit, pseudonymized download of human decisions."""
+    try:
+        history = load_interpretation_reviews(review_store_path(output_dir))
+        pseudonym_key = load_or_create_corpus_pseudonym_key()
+        current = tuple(
+            trace
+            for copy_result in batch_result.results
+            for trace in copy_result.interpretation_review_traces
+        )
+        rows = build_interpretation_review_corpus(history, pseudonym_key=pseudonym_key, current_traces=current)
+    except (OSError, TypeError, ValueError):
+        st.warning("Le corpus de revues ne peut pas être préparé.")
+        return
+    stats = summarize_interpretation_review_corpus(rows)
+    st.subheader("Corpus de revues")
+    st.write(f"Historique des revues humaines : {stats['total']} décisions")
+    if not rows:
+        st.info("Aucune décision humaine à exporter.")
+        return
+    st.caption(
+        "Le corpus ne contient pas les identifiants directs du roster (nom, email, etc.). "
+        "Les copies et cellules reçoivent des pseudonymes locaux stables. "
+        "Les textes libres peuvent toutefois contenir des noms saisis manuellement."
+    )
+    st.caption(
+        f"Confirmées : {stats['confirmed']} · Remplacées : {stats['replaced']} · "
+        f"Accords : {stats['agreement']} · Désaccords : {stats['disagreement']}"
+    )
+    st.download_button(
+        "Exporter le corpus pseudonymisé",
+        data=interpretation_review_corpus_jsonl(rows).encode("utf-8"),
+        file_name="tpstudio-interpretation-reviews-a73c2d.jsonl",
+        mime="application/x-ndjson",
+        key="export-interpretation-review-corpus",
+    )
 
 
 def main() -> None:
@@ -344,6 +387,7 @@ def main() -> None:
                     students = " · ".join(student.display_name for student in getattr(selected.identity, "students", ()))
                     review_labels[selected.source_id] = f"{selected.original_filename} · {students or '—'}"
                 _render_interpretation_review(st, result, plan.output_dir, review_labels)
+                _render_review_corpus(st, result, plan.output_dir)
     if st.button("Réinitialiser"):
         workspace.reset()
         reset_web_session(st.session_state)
