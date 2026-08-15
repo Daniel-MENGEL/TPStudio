@@ -18,6 +18,10 @@ from .graph_adapter import (
     GraphCheckStatus,
     GraphEvaluation,
     GraphObservation,
+    GraphSeriesData,
+    GraphSeriesRole,
+    GraphSeriesSource,
+    GraphSeriesStatus,
     evaluate_saved_graph,
     observe_saved_graph,
 )
