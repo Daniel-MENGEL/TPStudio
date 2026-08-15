@@ -77,6 +77,7 @@ from tpstudio.reasoning import extract_expected_quantity
 
 from .graph_adapter import GraphEvaluation, GraphSeriesData, evaluate_saved_graph, observe_saved_graph
 from tpstudio.graph_analysis import GraphAnalysis, analyze_graph_series_collection
+from tpstudio.regression import RegressionObservation, extract_regression_observations
 from .notebook_inspection import (
     NotebookCopySource,
     NotebookTechnicalInspection,
@@ -250,6 +251,7 @@ class CopyAnalysisResult:
     interpretation_review_traces: tuple[InterpretationReviewTrace, ...] = ()
     graph_series_data: tuple[GraphSeriesData, ...] = ()
     graph_analyses: tuple[GraphAnalysis, ...] = ()
+    regression_observations: tuple[RegressionObservation, ...] = ()
 
     def __post_init__(self) -> None:
         detections = tuple(self.observed_value_detections)
@@ -260,6 +262,7 @@ class CopyAnalysisResult:
         object.__setattr__(self, "interpretation_review_traces", tuple(self.interpretation_review_traces))
         object.__setattr__(self, "graph_series_data", tuple(self.graph_series_data))
         object.__setattr__(self, "graph_analyses", tuple(self.graph_analyses))
+        object.__setattr__(self, "regression_observations", tuple(self.regression_observations))
         expected_ids = tuple(item.production_id for item in self.quantity_evaluations)
         observed_ids = tuple(item.production.id for item in detections)
         if observed_ids != expected_ids:
@@ -476,6 +479,14 @@ class SnellsLawsCopyAnalyzer:
         interpretation_response_evaluations = evaluate_interpretation_cells(
             notebook, contexts=interpretation_contexts
         )
+        regression_observations = tuple(
+            observation
+            for cell_index, cell in enumerate(notebook.cells)
+            if cell.cell_type == "code"
+            for observation in extract_regression_observations(
+                cell.source, cell_index, cell.get("id")
+            )
+        )
         quantity_catalog = (
             _catalog(project, QuantityFeedbackCatalog)
             if options.build_diagnostics and options.render_feedback else None
@@ -653,6 +664,7 @@ class SnellsLawsCopyAnalyzer:
                 for evaluation in graph_evaluations
                 for series in (evaluation.observation.series_data if evaluation.observation else ())
             )),
+            regression_observations=regression_observations,
         )
 
 

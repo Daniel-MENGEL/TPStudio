@@ -19,6 +19,7 @@ from tpstudio.orchestration import (
     summarize_copy_analysis,
 )
 from tpstudio.graph_analysis import GraphScientificClassification
+from tpstudio.regression import RegressionTargetKind
 from tpstudio.projects import snells_laws_teacher_project
 from tpstudio.reporting import build_teacher_copy_report
 from tpstudio.protocol import (
@@ -104,6 +105,10 @@ def test_synthetic_copy_runs_all_declared_chains_read_only(tmp_path: Path) -> No
     assert len(result.comparison_justification_evaluations) == 2
     assert result.final_conclusion.unique
     assert "Conclusion finale distincte" in result.final_conclusion.text
+    assert len(result.regression_observations) == 1
+    assert result.regression_observations[0].method.value == "numpy_polyfit"
+    assert result.regression_observations[0].x_expression == "np.sin(i2)"
+    assert result.regression_observations[0].y_expression == "np.sin(i1)"
     assert "path=" not in repr(result)
 
 
@@ -129,6 +134,50 @@ def test_multiple_measured_graph_series_reach_copy_analysis_result(tmp_path: Pat
     ]
     assert result.graph_analyses[0].scientific_classification is GraphScientificClassification.LINEAR_COMPATIBLE
     assert result.graph_analyses[1].scientific_classification is GraphScientificClassification.CLEARLY_NONLINEAR
+
+
+def test_regression_without_graph_expectation_reaches_copy_result(tmp_path: Path) -> None:
+    notebook = _notebook()
+    graph_cell = _cell_with(notebook, "# Vérification graphique")
+    graph_cell.source = "# Vérification graphique"
+    notebook.cells.append(nbformat.v4.new_code_cell("p = np.polyfit(x, y, 1)"))
+    result = _analyze(tmp_path, notebook)
+    assert len(result.regression_observations) == 1
+    assert result.regression_observations[0].target_kind is RegressionTargetKind.SINGLE
+    assert result.regression_observations[0].x_expression == "x"
+    assert result.graph_series_data == ()
+
+
+def test_regressions_in_several_cells_keep_global_order(tmp_path: Path) -> None:
+    notebook = _notebook()
+    graph_cell = _cell_with(notebook, "# Vérification graphique")
+    graph_cell.source = "# Vérification graphique"
+    notebook.cells.extend([
+        nbformat.v4.new_code_cell("p1 = np.polyfit(x1, y1, 1)"),
+        nbformat.v4.new_code_cell("np.polyfit(x2, y2, 2)"),
+        nbformat.v4.new_code_cell("r = linregress(x3, y3)"),
+    ])
+    result = _analyze(tmp_path, notebook)
+    observations = result.regression_observations
+    assert len(observations) == 3
+    assert [item.degree for item in observations] == [1, 2, 1]
+    assert [item.target_kind for item in observations] == [
+        RegressionTargetKind.SINGLE, RegressionTargetKind.NONE, RegressionTargetKind.SINGLE,
+    ]
+    assert [item.cell_index_snapshot for item in observations] == sorted(
+        item.cell_index_snapshot for item in observations
+    )
+
+
+def test_regression_and_graph_in_separate_cells_are_kept_separate(tmp_path: Path) -> None:
+    notebook = _notebook()
+    graph_cell = _cell_with(notebook, "# Vérification graphique")
+    graph_cell.source = "# Vérification graphique\nplt.plot(t, z, 'o')"
+    notebook.cells.append(nbformat.v4.new_code_cell("a, b, c = np.polyfit(t, z, 2)"))
+    result = _analyze(tmp_path, notebook)
+    assert len(result.regression_observations) == 1
+    assert result.regression_observations[0].degree == 2
+    assert len(result.graph_series_data) == 1
 
 
 def test_prepared_protocol_cells_are_evaluated_without_global_scan(tmp_path: Path) -> None:

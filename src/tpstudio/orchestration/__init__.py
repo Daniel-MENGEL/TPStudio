@@ -14,6 +14,13 @@ from .copy_analysis import (
     summarize_copy_analysis,
 )
 from tpstudio.conclusion import ConclusionEvaluation
+from tpstudio.regression import (
+    RegressionMethod,
+    RegressionObservation,
+    RegressionTargetKind,
+    RegressionTechnicalStatus,
+    extract_regression_observations,
+)
 from tpstudio.graph_analysis import (
     GraphAnalysis,
     GraphAnalysisTechnicalStatus,

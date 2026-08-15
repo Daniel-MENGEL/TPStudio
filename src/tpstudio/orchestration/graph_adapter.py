@@ -12,6 +12,7 @@ from nbformat.notebooknode import NotebookNode
 
 from tpstudio.projects import GraphExpectation
 from tpstudio.notebooks import NotebookBindingResolution
+from tpstudio.regression import extract_regression_observations
 
 
 MAX_SERIES_POINTS = 10_000
@@ -344,11 +345,16 @@ def observe_saved_graph(
             False, None, None, None, bool(cell.get("outputs")), ("syntaxe_non_reconnue",), (),
         )
     x = y = x_label = y_label = regression_x = regression_y = slope = None
-    regression = False
+    regression_observations = extract_regression_observations(
+        source, resolution.cell.index, cell.get("id")
+    )
+    regression = bool(regression_observations)
+    if regression_observations:
+        first_regression = regression_observations[0]
+        regression_x = first_regression.x_expression
+        regression_y = first_regression.y_expression
+        slope = first_regression.target_names[0] if first_regression.target_names else None
     for node in ast.walk(tree):
-        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
-            if isinstance(node.value, ast.Call) and _call_name(node.value) in ("polyfit", "linregress"):
-                slope = node.targets[0].id
         if not isinstance(node, ast.Call):
             continue
         name = _call_name(node)
@@ -358,10 +364,6 @@ def observe_saved_graph(
             x_label = node.args[0].value if isinstance(node.args[0].value, str) else None
         elif name == "ylabel" and node.args and isinstance(node.args[0], ast.Constant):
             y_label = node.args[0].value if isinstance(node.args[0].value, str) else None
-        elif name in ("polyfit", "linregress"):
-            regression = True
-            if len(node.args) >= 2:
-                regression_x, regression_y = _text(node.args[0], source), _text(node.args[1], source)
     figure = any(
         output.get("output_type") in ("display_data", "execute_result")
         and any(key.startswith("image/") for key in output.get("data", {}))
