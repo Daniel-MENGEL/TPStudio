@@ -140,12 +140,32 @@ def test_regression_without_graph_expectation_reaches_copy_result(tmp_path: Path
     notebook = _notebook()
     graph_cell = _cell_with(notebook, "# Vérification graphique")
     graph_cell.source = "# Vérification graphique"
-    notebook.cells.append(nbformat.v4.new_code_cell("p = np.polyfit(x, y, 1)"))
+    notebook.cells.append(nbformat.v4.new_code_cell(
+        "plt.plot(x, y, 'o', label='Mesures')\na, b = np.polyfit(x, y, 1)"
+    ))
     result = _analyze(tmp_path, notebook)
     assert len(result.regression_observations) == 1
-    assert result.regression_observations[0].target_kind is RegressionTargetKind.SINGLE
+    assert result.regression_observations[0].target_kind is RegressionTargetKind.TUPLE
     assert result.regression_observations[0].x_expression == "x"
     assert result.graph_series_data == ()
+    assert len(result.all_graph_series_data) == 1
+    assert result.all_graph_series_data[0].role.value == "measured"
+    assert result.regression_series_matches[0].status.value == "exact"
+    assert result.regression_series_matches[0].matched_series_id == result.all_graph_series_data[0].series_id
+
+
+def test_snell_like_global_series_matches_structurally_without_expectation(tmp_path: Path) -> None:
+    notebook = _notebook()
+    graph_cell = _cell_with(notebook, "# Vérification graphique")
+    graph_cell.source = "# Vérification graphique"
+    notebook.cells.append(nbformat.v4.new_code_cell(
+        "plt.plot(np.sin(i2), np.sin(i1), 'bo', label='Points experimentaux')\n"
+        "a, b = np.polyfit(np.sin(i2), np.sin(i1), 1)"
+    ))
+    result = _analyze(tmp_path, notebook)
+    assert result.graph_series_data == ()
+    assert result.all_graph_series_data[0].role.value == "measured"
+    assert result.regression_series_matches[0].status.value == "exact"
 
 
 def test_regressions_in_several_cells_keep_global_order(tmp_path: Path) -> None:

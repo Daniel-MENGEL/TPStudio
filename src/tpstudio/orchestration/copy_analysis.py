@@ -667,13 +667,13 @@ class SnellsLawsCopyAnalyzer:
             for series in (evaluation.observation.series_data if evaluation.observation else ())
         )
         graph_analyses = analyze_graph_series_collection(graph_series_data)
+        all_graph_series_data = extract_all_graph_series_data(notebook)
         regression_series_matches = match_regressions_to_series(
-            notebook, regression_observations, graph_series_data
+            notebook, regression_observations, all_graph_series_data
         )
         regression_model_analyses = analyze_regression_models(
             regression_observations, regression_series_matches, graph_series_data
         )
-        all_graph_series_data = extract_all_graph_series_data(notebook)
         regression_plot_matches = match_regressions_to_plots(
             notebook, regression_observations, regression_model_analyses, all_graph_series_data
         )
