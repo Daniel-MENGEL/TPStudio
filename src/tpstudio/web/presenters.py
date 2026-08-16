@@ -9,6 +9,7 @@ from pathlib import Path
 from tpstudio.batch import BatchPlan
 from tpstudio.batch import BatchCopyStatus, BatchRunResult
 from tpstudio.interpretation import InterpretationClassification, InterpretationReviewTrace
+from tpstudio.reporting import TeacherCopyReport, TeacherGraphHeadlineStatus
 from tpstudio.review_store import (
     latest_interpretation_review, load_interpretation_reviews, review_store_path,
 )
@@ -72,6 +73,54 @@ class BatchRunRow:
     limitations: str
     error: str
     problem: str
+
+
+@dataclass(frozen=True, slots=True)
+class GraphSummaryRow:
+    """Streamlit-ready view of one teacher graph summary."""
+
+    icon: str
+    headline: str
+    summary_lines: tuple[str, ...]
+    technical_details: tuple[str, ...]
+    requires_human_review: bool
+    stable_key: str
+
+
+_GRAPH_HEADLINE_ICONS = {
+    TeacherGraphHeadlineStatus.OK: "✅",
+    TeacherGraphHeadlineStatus.PROBLEM: "❌",
+    TeacherGraphHeadlineStatus.REVIEW: "⚠️",
+    TeacherGraphHeadlineStatus.INFO: "ℹ️",
+}
+
+
+def _stable_graph_key(regression_id: str, key_prefix: str = "") -> str:
+    import re
+
+    value = re.sub(r"[^a-zA-Z0-9_-]+", "-", f"{key_prefix}-{regression_id}").strip("-")
+    return f"graph-summary-{value or 'regression'}"
+
+
+def graph_summary_rows(
+    report: TeacherCopyReport | None,
+    *,
+    key_prefix: str = "",
+) -> tuple[GraphSummaryRow, ...]:
+    """Convert teacher graph summaries into pure, UI-independent rows."""
+    if report is None:
+        return ()
+    return tuple(
+        GraphSummaryRow(
+            _GRAPH_HEADLINE_ICONS[summary.headline_status],
+            summary.headline_text,
+            tuple(summary.summary_lines),
+            tuple(summary.technical_details),
+            summary.requires_human_review,
+            _stable_graph_key(summary.regression_id, key_prefix),
+        )
+        for summary in report.regression_graphs
+    )
 
 
 def _review_label(value: bool | None) -> str:

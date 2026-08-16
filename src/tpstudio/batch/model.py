@@ -8,6 +8,10 @@ from pathlib import Path
 
 from tpstudio.export import CopyExportOptions
 from tpstudio.interpretation import InterpretationReviewTrace
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from tpstudio.reporting import TeacherCopyReport
 
 
 def validate_output_stem(output_stem: str) -> str:
@@ -81,6 +85,7 @@ class BatchCopyResult:
     error_type: str | None = None
     error_message: str | None = None
     interpretation_review_traces: tuple[InterpretationReviewTrace, ...] = ()
+    teacher_report: TeacherCopyReport | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.source_id, str) or not self.source_id.strip():

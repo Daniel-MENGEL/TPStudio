@@ -7,6 +7,10 @@ from enum import Enum
 from pathlib import Path
 
 from tpstudio.interpretation import InterpretationReviewTrace
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from tpstudio.reporting import TeacherCopyReport
 
 
 class ExportArtifactKind(str, Enum):
@@ -81,6 +85,7 @@ class CopyExportResult:
     html_generated: bool
     limitations: tuple[str, ...] = ()
     interpretation_review_traces: tuple[InterpretationReviewTrace, ...] = ()
+    teacher_report: TeacherCopyReport | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "limitations", tuple(self.limitations))

@@ -184,6 +184,7 @@ def export_snells_laws_copy(
         ExportArtifact(ExportArtifactKind.HTML, html_path, True, options.overwrite and html_existed, "text/html", analysis.source_id),
         plan.count, student, teacher, before == after, True, True,
         tuple(analysis.limitations), analysis.interpretation_review_traces,
+        report,
     )
 
 

@@ -66,6 +66,7 @@ def run_snells_laws_batch(plan: BatchPlan) -> BatchRunResult:
                 exported.annotation_count,
                 any(trace.requires_human_review for trace in review_traces),
                 exported.limitations, None, None, review_traces,
+                getattr(exported, "teacher_report", None),
             )
         except Exception as exc:
             result = BatchCopyResult(

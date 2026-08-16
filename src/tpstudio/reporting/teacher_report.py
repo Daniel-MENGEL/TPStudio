@@ -14,6 +14,7 @@ from .priorities import (
     TeacherReportSeverity,
     order_teacher_report_priorities,
 )
+from .graph_teacher_summary import GraphTeacherSummary, build_graph_teacher_summaries
 
 
 def _value(value: object) -> str:
@@ -214,11 +215,12 @@ class TeacherCopyReport:
     feedback: tuple[TeacherFeedbackReportItem, ...]
     limitations: tuple[str, ...]
     human_review: TeacherHumanReviewReport
+    regression_graphs: tuple[GraphTeacherSummary, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.project_id.strip() or not self.source_id.strip() or not self.title.strip():
             raise ValueError("L'identité du rapport ne peut pas être vide.")
-        for name in ("priorities", "productions", "values", "quantities", "relations", "graph", "comparisons", "diagnostics", "feedback", "limitations"):
+        for name in ("priorities", "productions", "values", "quantities", "relations", "graph", "comparisons", "diagnostics", "feedback", "limitations", "regression_graphs"):
             object.__setattr__(self, name, tuple(getattr(self, name)))
         production_ids = {item.production_id for item in self.productions}
         if any(item.production_id not in production_ids for item in self.values):
@@ -447,6 +449,7 @@ def build_teacher_copy_report(result: CopyAnalysisResult) -> TeacherCopyReport:
     review_reasons = tuple(dict.fromkeys(item.title for item in priorities if item.requires_human_review))
     review_categories = tuple(dict.fromkeys(item.category for item in priorities if item.requires_human_review))
     human = TeacherHumanReviewReport(result.requires_human_review, review_reasons, review_categories)
+    regression_graphs = build_graph_teacher_summaries(result)
     teacher_count = sum(item.audience is FeedbackAudience.TEACHER for item in feedback)
     student_count = sum(item.audience is FeedbackAudience.STUDENT for item in feedback)
     evaluable_quantities = sum(item.evaluable for item in quantities)
@@ -468,4 +471,5 @@ def build_teacher_copy_report(result: CopyAnalysisResult) -> TeacherCopyReport:
         result.project_id, result.source_id, result.project.identity.title, overview,
         priorities, technical, productions, values, tuple(quantities), relations, graphs,
         tuple(comparisons), final, diagnostics, feedback, tuple(result.limitations), human,
+        regression_graphs,
     )

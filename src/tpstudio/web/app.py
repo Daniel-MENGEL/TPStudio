@@ -15,7 +15,8 @@ from tpstudio.web.identity import (
 )
 from tpstudio.web.planning import WebInputError, build_batch_plan_from_web_selection, resolve_output_dir
 from tpstudio.web.presenters import (
-    batch_plan_rows, has_output_name_collision, identity_resolution_candidates,
+    batch_plan_rows, graph_summary_rows, has_output_name_collision,
+    identity_resolution_candidates,
 )
 from tpstudio.web.roster import (
     default_roster_path, load_roster, parse_roster_csv, save_roster,
@@ -60,6 +61,12 @@ def web_error_message(exc: BaseException) -> str:
     if isinstance(exc, ValueError) and text in safe_messages:
         return text
     return "Impossible de préparer le lot."
+
+
+def _graph_detail_label(source_id: str, regression_index: int) -> str:
+    """Return a readable, deterministic popover label unique across copies."""
+    suffix = source_id[-8:] or "copie"
+    return f"Détails {regression_index} · {suffix}"
 
 
 def _render_interpretation_review(st, batch_result, output_dir: Path, copy_labels=None) -> None:
@@ -378,6 +385,17 @@ def main() -> None:
                                 st.download_button(label, data=path.read_bytes(), file_name=filename, mime=mime, key=f"download-{item.source_id}-{kind}")
                             except (FileNotFoundError, ValueError):
                                 st.warning("Artefact indisponible.")
+                        graph_rows = graph_summary_rows(item.teacher_report, key_prefix=item.source_id)
+                        if graph_rows:
+                            st.markdown("#### Graphes et régressions")
+                            for graph_index, graph_row in enumerate(graph_rows, 1):
+                                st.markdown(f"{graph_row.icon} **{graph_row.headline}**")
+                                for line in graph_row.summary_lines:
+                                    st.caption(line)
+                                if graph_row.technical_details:
+                                    with st.popover(_graph_detail_label(item.source_id, graph_index)):
+                                        for detail in graph_row.technical_details:
+                                            st.caption(detail)
             with st.expander("Rapport du lot"):
                 st.markdown(render_batch_report_markdown(result))
             if any(item.interpretation_review_traces for item in result.results):

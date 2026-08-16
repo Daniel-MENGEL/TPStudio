@@ -1,5 +1,7 @@
 from streamlit.testing.v1 import AppTest
 
+from tpstudio.web.app import _graph_detail_label
+
 
 def test_streamlit_app_smoke_without_network():
     app = AppTest.from_file("src/tpstudio/web/app.py").run()
@@ -9,3 +11,16 @@ def test_streamlit_app_smoke_without_network():
     assert any("Dossier des corrections" in item.label for item in app.text_input)
     assert any("Vérifier le lot" in button.label for button in app.button)
     assert any("Réinitialiser" in button.label for button in app.button)
+
+
+def test_graph_detail_labels_are_stable_and_unique_per_copy():
+    labels = {
+        _graph_detail_label(source, index)
+        for source in ("review-copy-a-12345678", "review-copy-b-87654321")
+        for index in (1, 2)
+    }
+    assert labels == {
+        "Détails 1 · 12345678", "Détails 2 · 12345678",
+        "Détails 1 · 87654321", "Détails 2 · 87654321",
+    }
+    assert _graph_detail_label("review-copy-a-12345678", 1) == _graph_detail_label("review-copy-a-12345678", 1)

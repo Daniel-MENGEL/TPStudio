@@ -1,8 +1,12 @@
 from pathlib import Path
+from dataclasses import replace
+import importlib.util
 import pytest
 
 from tpstudio.batch import BatchCopyResult, BatchCopySource, BatchCopyStatus, BatchOptions, BatchRunResult, build_batch_plan
 from tpstudio.web.presenters import artifact_download_info, batch_plan_rows, batch_run_rows, has_output_name_collision
+from tpstudio.reporting import TeacherGraphHeadlineStatus, build_teacher_copy_report
+from tpstudio.web.presenters import graph_summary_rows
 
 
 def test_presenters_use_planned_basenames_only(tmp_path):
@@ -34,3 +38,40 @@ def test_batch_run_rows_and_download_info_are_safe(tmp_path):
     assert artifact_download_info(result.results[0], tmp_path, "notebook") == ("copy-correction.ipynb", "application/x-ipynb+json", notebook)
     with pytest.raises(ValueError):
         artifact_download_info(BatchCopyResult("x", BatchCopyStatus.SUCCESS, Path("/private/out.ipynb"), html), tmp_path, "notebook")
+
+
+def _teacher_report(tmp_path):
+    path = Path("tests/orchestration/test_copy_analysis.py")
+    spec = importlib.util.spec_from_file_location("copy_fixture_for_presenters", path)
+    module = importlib.util.module_from_spec(spec); assert spec.loader; spec.loader.exec_module(module)
+    return build_teacher_copy_report(module._analyze(tmp_path))
+
+
+def test_graph_summary_rows_are_pure_and_map_icons(tmp_path):
+    report = _teacher_report(tmp_path)
+    base = report.regression_graphs[0]
+    summaries = tuple(
+        replace(base, regression_id=f"regression-{index}", headline_status=status,
+                headline_text=f"Titre {status.value}", summary_lines=(f"Ligne {index}",),
+                technical_details=(f"Détail {index}",), requires_human_review=status is TeacherGraphHeadlineStatus.REVIEW)
+        for index, status in enumerate(TeacherGraphHeadlineStatus, 1)
+    )
+    rows = graph_summary_rows(replace(report, regression_graphs=summaries), key_prefix="copy-a")
+    assert [row.icon for row in rows] == ["✅", "⚠️", "❌", "ℹ️"]
+    assert [row.headline for row in rows] == [f"Titre {status.value}" for status in TeacherGraphHeadlineStatus]
+    assert rows[1].requires_human_review is True
+    assert rows[0].summary_lines == ("Ligne 1",)
+    assert rows[0].technical_details == ("Détail 1",)
+    assert len({row.stable_key for row in rows}) == 4
+    assert all("CONSISTENT" not in row.headline for row in rows)
+    assert report.regression_graphs == (base,)
+
+
+def test_graph_summary_rows_none_empty_order_and_prefix(tmp_path):
+    report = _teacher_report(tmp_path)
+    assert graph_summary_rows(None) == ()
+    assert graph_summary_rows(replace(report, regression_graphs=())) == ()
+    first = graph_summary_rows(report, key_prefix="copy-a")[0]
+    second = graph_summary_rows(report, key_prefix="copy-b")[0]
+    assert first.stable_key != second.stable_key
+    assert first.stable_key.startswith("graph-summary-copy-a-")

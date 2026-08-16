@@ -6,6 +6,7 @@ def test_models_and_invariants():
     source = BatchCopySource("copy-001", Path("copy.ipynb"))
     assert source.source_id == "copy-001" and BatchOptions().continue_on_error
     success = BatchCopyResult("copy-001", BatchCopyStatus.SUCCESS, Path("a.ipynb"), Path("a.html"))
+    assert success.teacher_report is None
     run = BatchRunResult("project", (success,), Path("out"), 1, 1, 0, 0, 0, 0)
     assert run.success and run.get("copy-001") is success
     with pytest.raises(ValueError): BatchCopyResult("copy", BatchCopyStatus.FAILED)

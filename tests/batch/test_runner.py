@@ -17,6 +17,10 @@ def test_two_valid_copies_are_isolated_and_sources_preserved(tmp_path):
     plan = build_batch_plan(tuple(BatchCopySource(f"copy-{i:03d}", path) for i, path in enumerate(paths, 1)), tmp_path / "out")
     result = run_snells_laws_batch(plan)
     assert result.success_count == 2 and all(item.status is BatchCopyStatus.SUCCESS for item in result.results)
+    reports = tuple(item.teacher_report for item in result.results)
+    assert all(report is not None for report in reports)
+    assert all(report.regression_graphs for report in reports)
+    assert len({report.source_id for report in reports}) == 2
     assert tuple(path.read_bytes() for path in paths) == before
 
 def test_invalid_notebook_does_not_stop_following_copy(tmp_path):
@@ -25,6 +29,9 @@ def test_invalid_notebook_does_not_stop_following_copy(tmp_path):
     plan = build_batch_plan((BatchCopySource("copy-001", good), BatchCopySource("copy-002", bad), BatchCopySource("copy-003", third)), tmp_path / "out")
     result = run_snells_laws_batch(plan)
     assert [item.status for item in result.results] == [BatchCopyStatus.SUCCESS, BatchCopyStatus.FAILED, BatchCopyStatus.SUCCESS]
+    assert result.results[0].teacher_report is not None
+    assert result.results[1].teacher_report is None
+    assert result.results[2].teacher_report is not None
 
 def test_collision_plan_destinations_are_used_end_to_end(tmp_path):
     module = _fixture(); first_dir = tmp_path / "a"; second_dir = tmp_path / "b"
