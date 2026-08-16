@@ -79,6 +79,7 @@ from .graph_adapter import GraphEvaluation, GraphSeriesData, evaluate_saved_grap
 from tpstudio.graph_analysis import GraphAnalysis, analyze_graph_series_collection
 from tpstudio.regression import RegressionObservation, extract_regression_observations
 from tpstudio.regression_matching import RegressionSeriesMatch, match_regressions_to_series
+from tpstudio.regression_model import RegressionModelAnalysis, analyze_regression_models
 from .notebook_inspection import (
     NotebookCopySource,
     NotebookTechnicalInspection,
@@ -254,6 +255,7 @@ class CopyAnalysisResult:
     graph_analyses: tuple[GraphAnalysis, ...] = ()
     regression_observations: tuple[RegressionObservation, ...] = ()
     regression_series_matches: tuple[RegressionSeriesMatch, ...] = ()
+    regression_model_analyses: tuple[RegressionModelAnalysis, ...] = ()
 
     def __post_init__(self) -> None:
         detections = tuple(self.observed_value_detections)
@@ -266,6 +268,7 @@ class CopyAnalysisResult:
         object.__setattr__(self, "graph_analyses", tuple(self.graph_analyses))
         object.__setattr__(self, "regression_observations", tuple(self.regression_observations))
         object.__setattr__(self, "regression_series_matches", tuple(self.regression_series_matches))
+        object.__setattr__(self, "regression_model_analyses", tuple(self.regression_model_analyses))
         expected_ids = tuple(item.production_id for item in self.quantity_evaluations)
         observed_ids = tuple(item.production.id for item in detections)
         if observed_ids != expected_ids:
@@ -656,6 +659,9 @@ class SnellsLawsCopyAnalyzer:
         regression_series_matches = match_regressions_to_series(
             notebook, regression_observations, graph_series_data
         )
+        regression_model_analyses = analyze_regression_models(
+            regression_observations, regression_series_matches, graph_series_data
+        )
         return CopyAnalysisResult(
             project, source, options, technical, production_resolutions,
             tuple(value_detections), quantity_set, uncertainty_evaluations,
@@ -670,6 +676,7 @@ class SnellsLawsCopyAnalyzer:
             graph_analyses=graph_analyses,
             regression_observations=regression_observations,
             regression_series_matches=regression_series_matches,
+            regression_model_analyses=regression_model_analyses,
         )
 
 
