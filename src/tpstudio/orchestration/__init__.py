@@ -40,6 +40,13 @@ from tpstudio.regression_plot_matching import (
     match_regression_to_plots,
     match_regressions_to_plots,
 )
+from tpstudio.regression_plot_consistency import (
+    RegressionPlotConsistencyAnalysis,
+    RegressionPlotConsistencyStatus,
+    RegressionPlotConsistencyTechnicalStatus,
+    compare_regression_plot,
+    compare_regression_plots,
+)
 from tpstudio.graph_analysis import (
     GraphAnalysis,
     GraphAnalysisTechnicalStatus,

@@ -8,6 +8,7 @@ from enum import Enum
 import math
 from numbers import Real
 
+import numpy as np
 from nbformat.notebooknode import NotebookNode
 
 from tpstudio.projects import GraphExpectation
@@ -18,6 +19,13 @@ from tpstudio.regression import extract_regression_observations
 MAX_SERIES_POINTS = 10_000
 MAX_INTEGER_BITS = 1_024
 MAX_EXPONENT = 1_000
+
+
+class _SafeInteger(float):
+    """Integer literal/binding marker retained for strict linspace counts."""
+
+
+_SHADOWED_BUILTIN = object()
 
 
 class GraphCheckStatus(str, Enum):
@@ -191,9 +199,21 @@ def _apply_binary(left: object, right: object, operator: ast.operator) -> object
 
 def _safe_value(node: ast.AST, bindings: dict[str, object]) -> object | None:
     if isinstance(node, ast.Constant):
+        if type(node.value) is int:
+            return _SafeInteger(node.value)
         return _number(node.value)
     if isinstance(node, ast.Name):
         return bindings.get(node.id)
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in ("min", "max"):
+        if node.func.id in bindings:
+            return None
+        if len(node.args) != 1 or node.keywords:
+            return None
+        value = _safe_value(node.args[0], bindings)
+        values = _as_array(value)
+        if values is None:
+            return None
+        return min(values) if node.func.id == "min" else max(values)
     if isinstance(node, (ast.List, ast.Tuple)):
         if len(node.elts) > MAX_SERIES_POINTS:
             return None
@@ -217,6 +237,23 @@ def _safe_value(node: ast.AST, bindings: dict[str, object]) -> object | None:
         if not isinstance(node.func.value, ast.Name) or node.func.value.id != "np":
             return None
         name = node.func.attr
+        if name == "linspace":
+            if len(node.args) != 3 or node.keywords:
+                return None
+            start = _number(_safe_value(node.args[0], bindings))
+            stop = _number(_safe_value(node.args[1], bindings))
+            count = _safe_value(node.args[2], bindings)
+            if start is None or stop is None or not isinstance(count, _SafeInteger):
+                return None
+            count_int = int(count)
+            if count_int < 2 or count_int > MAX_SERIES_POINTS:
+                return None
+            try:
+                values = np.linspace(start, stop, count_int, endpoint=True)
+            except (ArithmeticError, ValueError, OverflowError):
+                return None
+            result = tuple(float(value) for value in values)
+            return result if all(math.isfinite(value) for value in result) else None
         if name == "array" and len(node.args) == 1 and not node.keywords:
             value = _safe_value(node.args[0], bindings)
             return value if _as_array(value) is not None else None
@@ -268,9 +305,21 @@ def _extract_series(
             if isinstance(statement, ast.Assign) and len(statement.targets) == 1 and isinstance(statement.targets[0], ast.Name):
                 value = _safe_value(statement.value, bindings)
                 if value is None:
-                    bindings.pop(statement.targets[0].id, None)
+                    if statement.targets[0].id in ("min", "max"):
+                        bindings[statement.targets[0].id] = _SHADOWED_BUILTIN
+                    else:
+                        bindings.pop(statement.targets[0].id, None)
                 else:
                     bindings[statement.targets[0].id] = value
+            elif isinstance(statement, ast.AugAssign):
+                for name in _target_names(statement.target):
+                    if name in ("min", "max"):
+                        bindings[name] = _SHADOWED_BUILTIN
+            elif isinstance(statement, ast.Assign):
+                for target in statement.targets:
+                    for name in _target_names(target):
+                        if name in ("min", "max"):
+                            bindings[name] = _SHADOWED_BUILTIN
             continue
         x_expression = _text(call.args[0], source)
         y_expression = _text(call.args[1], source)
@@ -331,14 +380,26 @@ def _bindings_before_cell(notebook: NotebookNode, cell_index: int) -> dict[str, 
         except SyntaxError:
             continue
         for statement in previous_tree.body:
+            if isinstance(statement, ast.AugAssign):
+                for name in _target_names(statement.target):
+                    if name in ("min", "max"):
+                        bindings[name] = _SHADOWED_BUILTIN
+                continue
             if not isinstance(statement, ast.Assign) or len(statement.targets) != 1:
+                if isinstance(statement, ast.Assign):
+                    for name in _target_names(statement.targets[0]):
+                        if name in ("min", "max"):
+                            bindings[name] = _SHADOWED_BUILTIN
                 continue
             target = statement.targets[0]
             if not isinstance(target, ast.Name):
                 continue
             value = _safe_value(statement.value, bindings)
             if value is None:
-                bindings.pop(target.id, None)
+                if target.id in ("min", "max"):
+                    bindings[target.id] = _SHADOWED_BUILTIN
+                else:
+                    bindings.pop(target.id, None)
             else:
                 bindings[target.id] = value
     return bindings
@@ -360,14 +421,26 @@ def _bindings_at_position(
     for statement in tree.body:
         if not _statement_before(position, statement):
             break
+        if isinstance(statement, ast.AugAssign):
+            for name in _target_names(statement.target):
+                if name in ("min", "max"):
+                    bindings[name] = _SHADOWED_BUILTIN
+            continue
         if not isinstance(statement, ast.Assign) or len(statement.targets) != 1:
+            if isinstance(statement, ast.Assign):
+                for name in _target_names(statement.targets[0]):
+                    if name in ("min", "max"):
+                        bindings[name] = _SHADOWED_BUILTIN
             continue
         target = statement.targets[0]
         if not isinstance(target, ast.Name):
             continue
         value = _safe_value(statement.value, bindings)
         if value is None:
-            bindings.pop(target.id, None)
+            if target.id in ("min", "max"):
+                bindings[target.id] = _SHADOWED_BUILTIN
+            else:
+                bindings.pop(target.id, None)
         else:
             bindings[target.id] = value
     return bindings

@@ -81,6 +81,10 @@ from tpstudio.regression import RegressionObservation, extract_regression_observ
 from tpstudio.regression_matching import RegressionSeriesMatch, match_regressions_to_series
 from tpstudio.regression_model import RegressionModelAnalysis, analyze_regression_models
 from tpstudio.regression_plot_matching import RegressionPlotMatch, match_regressions_to_plots
+from tpstudio.regression_plot_consistency import (
+    RegressionPlotConsistencyAnalysis,
+    compare_regression_plots,
+)
 from .notebook_inspection import (
     NotebookCopySource,
     NotebookTechnicalInspection,
@@ -259,6 +263,7 @@ class CopyAnalysisResult:
     regression_model_analyses: tuple[RegressionModelAnalysis, ...] = ()
     all_graph_series_data: tuple[GraphSeriesData, ...] = ()
     regression_plot_matches: tuple[RegressionPlotMatch, ...] = ()
+    regression_plot_consistency_analyses: tuple[RegressionPlotConsistencyAnalysis, ...] = ()
 
     def __post_init__(self) -> None:
         detections = tuple(self.observed_value_detections)
@@ -274,6 +279,7 @@ class CopyAnalysisResult:
         object.__setattr__(self, "regression_model_analyses", tuple(self.regression_model_analyses))
         object.__setattr__(self, "all_graph_series_data", tuple(self.all_graph_series_data))
         object.__setattr__(self, "regression_plot_matches", tuple(self.regression_plot_matches))
+        object.__setattr__(self, "regression_plot_consistency_analyses", tuple(self.regression_plot_consistency_analyses))
         expected_ids = tuple(item.production_id for item in self.quantity_evaluations)
         observed_ids = tuple(item.production.id for item in detections)
         if observed_ids != expected_ids:
@@ -671,6 +677,10 @@ class SnellsLawsCopyAnalyzer:
         regression_plot_matches = match_regressions_to_plots(
             notebook, regression_observations, regression_model_analyses, all_graph_series_data
         )
+        regression_plot_consistency_analyses = compare_regression_plots(
+            regression_model_analyses, regression_plot_matches, all_graph_series_data,
+            regression_observations, notebook,
+        )
         return CopyAnalysisResult(
             project, source, options, technical, production_resolutions,
             tuple(value_detections), quantity_set, uncertainty_evaluations,
@@ -688,6 +698,7 @@ class SnellsLawsCopyAnalyzer:
             regression_model_analyses=regression_model_analyses,
             all_graph_series_data=all_graph_series_data,
             regression_plot_matches=regression_plot_matches,
+            regression_plot_consistency_analyses=regression_plot_consistency_analyses,
         )
 
 
