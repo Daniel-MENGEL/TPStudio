@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import nbformat
+import pytest
 
 from tpstudio.notebooks import resolve_notebook_bindings
 from tpstudio.orchestration import (
@@ -36,6 +37,59 @@ def test_extracts_small_numeric_series_without_execution() -> None:
     assert series.y_values == (2.0, 4.0, 6.0, 8.0)
     assert series.n_points == 4
     assert series.role is GraphSeriesRole.UNKNOWN
+
+
+def test_extracts_array_with_whitelisted_float_dtype() -> None:
+    observation = _observe([
+        nbformat.v4.new_code_cell(
+            "# Vérification graphique\n"
+            "x = np.array([1, 2, 3, 4], dtype=float)\n"
+            "y = np.array([2, 4, 6, 8], dtype=float)\n"
+            "plt.plot(x, y, 'o', label='Mesures')\n"
+        )
+    ])
+    assert observation is not None
+    series = observation.series_data[0]
+    assert series.technical_status is GraphSeriesStatus.EXTRACTED
+    assert series.n_points == 4
+    assert series.x_values == (1.0, 2.0, 3.0, 4.0)
+    assert series.y_values == (2.0, 4.0, 6.0, 8.0)
+
+
+@pytest.mark.parametrize(
+    "array_call",
+    (
+        "np.array([1, 2], dtype=object)",
+        "np.array([1, 2], dtype=mytype)",
+        "np.array([1, 2], dtype=f())",
+        "np.array([1, 2], copy=True)",
+        "np.array([1, 2], dtype=float, copy=True)",
+        "np.array([[1, 2], [3, 4]], dtype=float)",
+    ),
+)
+def test_array_dtype_whitelist_rejects_unsupported_forms(array_call: str) -> None:
+    observation = _observe([
+        nbformat.v4.new_code_cell(
+            "# Vérification graphique\n"
+            f"x = {array_call}\n"
+            "plt.plot(x, x, 'o', label='Mesures')\n"
+        )
+    ])
+    assert observation is not None
+    assert observation.series_data[0].technical_status is GraphSeriesStatus.NOT_EVALUABLE
+
+
+def test_array_float_dtype_is_rejected_when_float_is_shadowed() -> None:
+    observation = _observe([
+        nbformat.v4.new_code_cell(
+            "# Vérification graphique\n"
+            "float = object()\n"
+            "x = np.array([1, 2], dtype=float)\n"
+            "plt.plot(x, x, 'o', label='Mesures')\n"
+        )
+    ])
+    assert observation is not None
+    assert observation.series_data[0].technical_status is GraphSeriesStatus.NOT_EVALUABLE
 
 
 def test_extracts_numpy_transformation_and_snell_like_series() -> None:

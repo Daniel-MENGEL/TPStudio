@@ -168,6 +168,28 @@ def test_snell_like_global_series_matches_structurally_without_expectation(tmp_p
     assert result.regression_series_matches[0].status.value == "exact"
 
 
+def test_snell_like_dtype_float_pipeline_is_evaluable(tmp_path: Path) -> None:
+    notebook = _notebook()
+    graph_cell = _cell_with(notebook, "# Vérification graphique")
+    graph_cell.source = (
+        "# Vérification graphique\n"
+        "i1 = np.array([0.0, 5.0, 10.0, 15.0, 20.0], dtype=float)\n"
+        "i2 = np.array([0.0, 3.5, 7.0, 10.0, 13.0], dtype=float)\n"
+        "i1 = i1*np.pi/180\n"
+        "i2 = i2*np.pi/180\n"
+        "sini1 = np.sin(i1)\n"
+        "sini2 = np.sin(i2)\n"
+        "plt.plot(sini2, sini1, 'bo', label='Points experimentaux')\n"
+        "a, b = np.polyfit(sini2, sini1, 1)\n"
+    )
+    result = _analyze(tmp_path, notebook)
+    measured = result.all_graph_series_data[0]
+    assert measured.technical_status.value == "extracted"
+    assert measured.n_points == 5
+    assert result.regression_series_matches[0].status.value == "exact"
+    assert result.regression_model_analyses[0].technical_status.value == "evaluable"
+
+
 def test_regressions_in_several_cells_keep_global_order(tmp_path: Path) -> None:
     notebook = _notebook()
     graph_cell = _cell_with(notebook, "# Vérification graphique")

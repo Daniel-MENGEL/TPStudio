@@ -254,7 +254,15 @@ def _safe_value(node: ast.AST, bindings: dict[str, object]) -> object | None:
                 return None
             result = tuple(float(value) for value in values)
             return result if all(math.isfinite(value) for value in result) else None
-        if name == "array" and len(node.args) == 1 and not node.keywords:
+        if name == "array":
+            if len(node.args) != 1:
+                return None
+            if node.keywords:
+                if len(node.keywords) != 1 or node.keywords[0].arg != "dtype":
+                    return None
+                dtype = node.keywords[0].value
+                if not isinstance(dtype, ast.Name) or dtype.id != "float" or "float" in bindings:
+                    return None
             value = _safe_value(node.args[0], bindings)
             return value if _as_array(value) is not None else None
         function = _SAFE_FUNCTIONS.get(name)
@@ -305,7 +313,7 @@ def _extract_series(
             if isinstance(statement, ast.Assign) and len(statement.targets) == 1 and isinstance(statement.targets[0], ast.Name):
                 value = _safe_value(statement.value, bindings)
                 if value is None:
-                    if statement.targets[0].id in ("min", "max"):
+                    if statement.targets[0].id in ("min", "max", "float"):
                         bindings[statement.targets[0].id] = _SHADOWED_BUILTIN
                     else:
                         bindings.pop(statement.targets[0].id, None)
@@ -313,12 +321,12 @@ def _extract_series(
                     bindings[statement.targets[0].id] = value
             elif isinstance(statement, ast.AugAssign):
                 for name in _target_names(statement.target):
-                    if name in ("min", "max"):
+                    if name in ("min", "max", "float"):
                         bindings[name] = _SHADOWED_BUILTIN
             elif isinstance(statement, ast.Assign):
                 for target in statement.targets:
                     for name in _target_names(target):
-                        if name in ("min", "max"):
+                        if name in ("min", "max", "float"):
                             bindings[name] = _SHADOWED_BUILTIN
             continue
         x_expression = _text(call.args[0], source)
@@ -382,13 +390,13 @@ def _bindings_before_cell(notebook: NotebookNode, cell_index: int) -> dict[str, 
         for statement in previous_tree.body:
             if isinstance(statement, ast.AugAssign):
                 for name in _target_names(statement.target):
-                    if name in ("min", "max"):
+                    if name in ("min", "max", "float"):
                         bindings[name] = _SHADOWED_BUILTIN
                 continue
             if not isinstance(statement, ast.Assign) or len(statement.targets) != 1:
                 if isinstance(statement, ast.Assign):
                     for name in _target_names(statement.targets[0]):
-                        if name in ("min", "max"):
+                        if name in ("min", "max", "float"):
                             bindings[name] = _SHADOWED_BUILTIN
                 continue
             target = statement.targets[0]
@@ -396,7 +404,7 @@ def _bindings_before_cell(notebook: NotebookNode, cell_index: int) -> dict[str, 
                 continue
             value = _safe_value(statement.value, bindings)
             if value is None:
-                if target.id in ("min", "max"):
+                if target.id in ("min", "max", "float"):
                     bindings[target.id] = _SHADOWED_BUILTIN
                 else:
                     bindings.pop(target.id, None)
@@ -423,13 +431,13 @@ def _bindings_at_position(
             break
         if isinstance(statement, ast.AugAssign):
             for name in _target_names(statement.target):
-                if name in ("min", "max"):
+                if name in ("min", "max", "float"):
                     bindings[name] = _SHADOWED_BUILTIN
             continue
         if not isinstance(statement, ast.Assign) or len(statement.targets) != 1:
             if isinstance(statement, ast.Assign):
                 for name in _target_names(statement.targets[0]):
-                    if name in ("min", "max"):
+                    if name in ("min", "max", "float"):
                         bindings[name] = _SHADOWED_BUILTIN
             continue
         target = statement.targets[0]
@@ -437,7 +445,7 @@ def _bindings_at_position(
             continue
         value = _safe_value(statement.value, bindings)
         if value is None:
-            if target.id in ("min", "max"):
+            if target.id in ("min", "max", "float"):
                 bindings[target.id] = _SHADOWED_BUILTIN
             else:
                 bindings.pop(target.id, None)
