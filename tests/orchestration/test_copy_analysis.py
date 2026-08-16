@@ -180,6 +180,18 @@ def test_regression_and_graph_in_separate_cells_are_kept_separate(tmp_path: Path
     assert len(result.graph_series_data) == 1
 
 
+def test_global_plotted_series_include_cells_without_graph_expectation(tmp_path: Path) -> None:
+    notebook = _notebook()
+    graph_cell = _cell_with(notebook, "# Vérification graphique")
+    graph_cell.source = "# Vérification graphique\nplt.plot([0, 1, 2], [1, 2, 3], label='Mesures')"
+    notebook.cells.append(nbformat.v4.new_code_cell("plt.plot([0, 1, 2], [1, 2, 3], label='fit')"))
+    result = _analyze(tmp_path, notebook)
+    assert len(result.graph_series_data) == 1
+    assert len(result.all_graph_series_data) == 2
+    assert result.all_graph_series_data[1].role.value == "fit"
+    assert result.all_graph_series_data[1].cell_index_snapshot == len(notebook.cells) - 1
+
+
 def test_prepared_protocol_cells_are_evaluated_without_global_scan(tmp_path: Path) -> None:
     notebook = prepare_notebook_with_protocol_cells(_notebook(), snells_laws_manipulations())
     for cell in notebook.cells:

@@ -47,6 +47,7 @@ class RegressionModelAnalysis:
     technical_status: RegressionModelTechnicalStatus
     diagnostics: tuple[str, ...]
     requires_human_review: bool
+    normalized_coefficients: tuple[float, ...] | None = None
 
 
 def _empty(
@@ -120,6 +121,37 @@ def _predictions(matrix: np.ndarray, normalized: np.ndarray) -> tuple[float, ...
     except (FloatingPointError, ValueError, OverflowError):
         return None
     return values if all(math.isfinite(value) for value in values) else None
+
+
+def evaluate_regression_model(
+    model: RegressionModelAnalysis,
+    x_values: tuple[float, ...] | list[float],
+) -> tuple[float, ...] | None:
+    """Evaluate an already reconstructed model without fitting or reparsing."""
+    if model.normalized_coefficients is None or model.x_center is None or model.x_scale is None:
+        return None
+    try:
+        values = np.asarray(tuple(float(value) for value in x_values), dtype=float)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if values.size == 0 or not np.all(np.isfinite(values)):
+        return None
+    if not math.isfinite(model.x_center) or not math.isfinite(model.x_scale) or model.x_scale <= 0:
+        return None
+    with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
+        z = (values - model.x_center) / model.x_scale
+        if model.degree == 1 and len(model.normalized_coefficients) == 2:
+            predictions = model.normalized_coefficients[0] * z + model.normalized_coefficients[1]
+        elif model.degree == 2 and len(model.normalized_coefficients) == 3:
+            predictions = (
+                model.normalized_coefficients[0] * z * z
+                + model.normalized_coefficients[1] * z
+                + model.normalized_coefficients[2]
+            )
+        else:
+            return None
+    result = tuple(float(value) for value in predictions)
+    return result if all(math.isfinite(value) for value in result) else None
 
 
 def analyze_regression_model(
@@ -218,6 +250,7 @@ def analyze_regression_model(
             match.status, None, predictions, center, scale, rank, condition,
             RegressionModelTechnicalStatus.NONFINITE_DATA,
             ("coefficients_originaux_non_representables_de_facon_finie",), True,
+            tuple(float(value) for value in normalized),
         )
     return RegressionModelAnalysis(
         regression.regression_id, series.series_id, regression.method, regression.degree,
@@ -225,6 +258,7 @@ def analyze_regression_model(
         RegressionModelTechnicalStatus.EVALUABLE,
         ("modele_affine_reconstruit" if regression.degree == 1 else "modele_quadratique_reconstruit",),
         False,
+        tuple(float(value) for value in normalized),
     )
 
 

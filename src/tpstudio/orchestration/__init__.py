@@ -32,6 +32,13 @@ from tpstudio.regression_model import (
     RegressionModelTechnicalStatus,
     analyze_regression_model,
     analyze_regression_models,
+    evaluate_regression_model,
+)
+from tpstudio.regression_plot_matching import (
+    RegressionPlotMatch,
+    RegressionPlotMatchStatus,
+    match_regression_to_plots,
+    match_regressions_to_plots,
 )
 from tpstudio.graph_analysis import (
     GraphAnalysis,
@@ -50,6 +57,7 @@ from .graph_adapter import (
     GraphSeriesStatus,
     evaluate_saved_graph,
     observe_saved_graph,
+    extract_all_graph_series_data,
 )
 from .notebook_inspection import (
     NotebookCopySource,

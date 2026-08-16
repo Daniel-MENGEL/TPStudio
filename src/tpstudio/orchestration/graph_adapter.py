@@ -305,6 +305,21 @@ def _extract_series(
     return tuple(result)
 
 
+def extract_all_graph_series_data(notebook: NotebookNode) -> tuple[GraphSeriesData, ...]:
+    """Collect every top-level plotted series without requiring expectations."""
+    collected: list[GraphSeriesData] = []
+    for cell_index, cell in enumerate(notebook.cells):
+        if cell.cell_type != "code":
+            continue
+        try:
+            tree = ast.parse(cell.source)
+        except SyntaxError:
+            continue
+        bindings = _bindings_before_cell(notebook, cell_index)
+        collected.extend(_extract_series(tree, cell.source, bindings, cell_index, cell.get("id")))
+    return tuple(collected)
+
+
 def _bindings_before_cell(notebook: NotebookNode, cell_index: int) -> dict[str, object]:
     """Rebuild the safe binding environment before a cell, chronologically."""
     bindings: dict[str, object] = {}
