@@ -672,7 +672,7 @@ class SnellsLawsCopyAnalyzer:
             notebook, regression_observations, all_graph_series_data
         )
         regression_model_analyses = analyze_regression_models(
-            regression_observations, regression_series_matches, graph_series_data
+            regression_observations, regression_series_matches, all_graph_series_data
         )
         regression_plot_matches = match_regressions_to_plots(
             notebook, regression_observations, regression_model_analyses, all_graph_series_data

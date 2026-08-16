@@ -190,6 +190,30 @@ def test_snell_like_dtype_float_pipeline_is_evaluable(tmp_path: Path) -> None:
     assert result.regression_model_analyses[0].technical_status.value == "evaluable"
 
 
+def test_global_series_match_is_reused_by_model_analysis_without_expectation(tmp_path: Path) -> None:
+    notebook = _notebook()
+    graph_cell = _cell_with(notebook, "# Vérification graphique")
+    graph_cell.source = "# Vérification graphique"
+    notebook.cells.append(nbformat.v4.new_code_cell(
+        "x = [0.0, 1.0, 2.0]\n"
+        "y = [1.0, 3.0, 5.0]\n"
+        "plt.plot(x, y, 'o', label='Mesures')\n"
+        "a, b = np.polyfit(x, y, 1)"
+    ))
+    result = _analyze(tmp_path, notebook)
+    assert result.graph_series_data == ()
+    global_series = result.all_graph_series_data[0]
+    match = result.regression_series_matches[0]
+    model = result.regression_model_analyses[0]
+    assert match.status.value == "exact"
+    assert match.matched_series_id == global_series.series_id
+    assert model.technical_status.value == "evaluable"
+    assert model.series_id == global_series.series_id
+    assert model.coefficients is not None
+    assert model.predicted_y_values is not None
+    assert "serie_appariee_absente" not in model.diagnostics
+
+
 def test_regressions_in_several_cells_keep_global_order(tmp_path: Path) -> None:
     notebook = _notebook()
     graph_cell = _cell_with(notebook, "# Vérification graphique")
