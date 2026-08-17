@@ -8,9 +8,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from collections.abc import Mapping
 
 from tpstudio.graph_analysis import GraphScientificClassification
 from tpstudio.orchestration import CopyAnalysisResult
+from tpstudio.projects import ExpectedGraphModel
 from tpstudio.regression_model import RegressionModelTechnicalStatus
 from tpstudio.regression_plot_consistency import (
     RegressionPlotConsistencyStatus,
@@ -44,6 +46,7 @@ class TeacherGraphDiagnostic:
     summary_lines: tuple[str, ...]
     technical_details: tuple[str, ...]
     requires_human_review: bool
+    expected_model: ExpectedGraphModel | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "motifs", tuple(self.motifs))
@@ -163,24 +166,66 @@ def _headline(
 def build_teacher_graph_diagnostics(
     result: CopyAnalysisResult,
     *,
-    expected_model: str | None = None,
+    expected_model: ExpectedGraphModel | None = None,
+    expected_models_by_series: Mapping[str, ExpectedGraphModel] | None = None,
 ) -> tuple[TeacherGraphDiagnostic, ...]:
     """Build cautious teacher motifs from existing scientific projections.
 
-    ``expected_model`` is intentionally reserved for a future expectation
-    contract.  Until one is supplied by the project, no constrained-origin
-    offset motif is inferred from residuals alone.
+    The per-series mapping is resolved from the project's graph expectations.
+    ``expected_model`` remains a compatibility fallback for callers that have
+    one explicitly resolved contract; it never changes the diagnostic rules.
     """
 
     if type(result) is not CopyAnalysisResult:
         raise TypeError("Le diagnostic graphique exige exactement un CopyAnalysisResult.")
     summaries = build_graph_teacher_summaries(result)
+    if expected_model is not None and type(expected_model) is not ExpectedGraphModel:
+        raise TypeError("expected_model doit être un ExpectedGraphModel ou None.")
+    if expected_models_by_series is not None:
+        expected_models_by_series = dict(expected_models_by_series)
+        if any(
+            not isinstance(series_id, str) or type(model) is not ExpectedGraphModel
+            for series_id, model in expected_models_by_series.items()
+        ):
+            raise TypeError("La table des modèles attendus est invalide.")
+    resolved_models: dict[str, ExpectedGraphModel] = {}
+    conflicted_series: set[str] = set()
+    for evaluation in result.graph_evaluations:
+        model = evaluation.expectation.expected_model
+        if model is None or evaluation.observation is None:
+            continue
+        for series in evaluation.observation.series_data:
+            previous = resolved_models.get(series.series_id)
+            if previous is not None and previous is not model:
+                conflicted_series.add(series.series_id)
+            else:
+                resolved_models[series.series_id] = model
+    for series_id in conflicted_series:
+        resolved_models.pop(series_id, None)
+    if expected_models_by_series is not None:
+        resolved_models.update(expected_models_by_series)
     geometries = {item.series_id: item for item in result.all_graph_analyses}
     models = {item.regression_id: item for item in result.regression_model_analyses}
     diagnostics: list[TeacherGraphDiagnostic] = []
     for summary in summaries:
         model = models.get(summary.regression_id)
         geometry = geometries.get(model.series_id) if model and model.series_id else None
+        series_id = model.series_id if model is not None else None
+        if (
+            series_id is not None
+            and expected_models_by_series is not None
+            and series_id in expected_models_by_series
+        ):
+            # An explicit per-series mapping is an intentional caller override.
+            contract = expected_models_by_series[series_id]
+        elif series_id is not None and series_id in conflicted_series:
+            # A project conflict is distinct from an absent contract; the
+            # global fallback must never conceal it.
+            contract = None
+        elif series_id is not None and series_id in resolved_models:
+            contract = resolved_models[series_id]
+        else:
+            contract = expected_model
         motifs = _geometry_motifs(geometry)
         if model is None or model.technical_status is not RegressionModelTechnicalStatus.EVALUABLE:
             motifs.append(TeacherGraphDiagnosticReason.MODEL_NOT_EVALUABLE)
@@ -201,6 +246,6 @@ def build_teacher_graph_diagnostics(
                 details.append(detail)
         diagnostics.append(TeacherGraphDiagnostic(
             summary.regression_id, status, headline, unique_motifs,
-            tuple(lines), tuple(details), requires_review,
+            tuple(lines), tuple(details), requires_review, contract,
         ))
     return tuple(diagnostics)

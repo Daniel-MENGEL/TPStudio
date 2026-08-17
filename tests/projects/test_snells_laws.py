@@ -8,7 +8,7 @@ from tpstudio.expectations import (
     NormalizedErrorThresholds,
     PresenceRequirement,
 )
-from tpstudio.projects import snells_laws_teacher_project
+from tpstudio.projects import ExpectedGraphModel, snells_laws_teacher_project
 from tpstudio.reasoning import extract_comparison_justification
 
 
@@ -85,6 +85,7 @@ def test_graph_orientation_and_slope_index_relation_are_explicit() -> None:
     assert graph.slope_index_relation_id == "slope_index_relation"
     assert not graph.title_required
     assert graph.legend_required
+    assert graph.expected_model is ExpectedGraphModel.LINEAR_THROUGH_ORIGIN
 
 
 def test_comparisons_keep_standard_thresholds_and_declared_contexts() -> None:

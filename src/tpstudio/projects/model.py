@@ -57,6 +57,14 @@ class NotebookReferenceRole(str, Enum):
     CONTROL_COPY = "control_copy"
 
 
+class ExpectedGraphModel(str, Enum):
+    """Mathematical form declared by the teacher for one expected graph."""
+
+    LINEAR_THROUGH_ORIGIN = "linear_through_origin"
+    AFFINE = "affine"
+    QUADRATIC = "quadratic"
+
+
 @dataclass(frozen=True, slots=True)
 class NotebookReference:
     reference_id: str
@@ -93,6 +101,7 @@ class GraphExpectation:
     title_required: bool = False
     legend_required: bool = True
     description: str = ""
+    expected_model: ExpectedGraphModel | None = None
 
     def __post_init__(self) -> None:
         for name in (
@@ -115,6 +124,8 @@ class GraphExpectation:
         for name in ("regression_required", "title_required", "legend_required"):
             if type(getattr(self, name)) is not bool:
                 raise TypeError(f"Le champ {name!r} doit être un booléen.")
+        if self.expected_model is not None and type(self.expected_model) is not ExpectedGraphModel:
+            raise TypeError("Le modèle attendu doit être un ExpectedGraphModel ou None.")
         if not isinstance(self.description, str):
             raise TypeError("La description doit être une chaîne.")
 

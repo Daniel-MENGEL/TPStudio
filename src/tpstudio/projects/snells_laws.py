@@ -44,6 +44,7 @@ from tpstudio.feedback import (
 from tpstudio.protocol import snells_laws_manipulations
 
 from .model import (
+    ExpectedGraphModel,
     GraphExpectation,
     GraphExpectationSet,
     NotebookReference,
@@ -245,6 +246,7 @@ def _graphs(plan: ScientificProductionPlan) -> GraphExpectationSet:
                 False,
                 True,
                 "L'abscisse est sin(i2), l'ordonnée sin(i1) et la pente représente n.",
+                ExpectedGraphModel.LINEAR_THROUGH_ORIGIN,
             ),
         ),
     )

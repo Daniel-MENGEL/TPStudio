@@ -3,6 +3,7 @@
 from .model import (
     GraphExpectation,
     GraphExpectationSet,
+    ExpectedGraphModel,
     NotebookReference,
     NotebookReferenceRole,
     TeacherProjectConfiguration,
@@ -15,6 +16,7 @@ from .snells_laws import snells_laws_teacher_project
 __all__ = [
     "GraphExpectation",
     "GraphExpectationSet",
+    "ExpectedGraphModel",
     "NotebookReference",
     "NotebookReferenceRole",
     "TeacherProjectConfiguration",
