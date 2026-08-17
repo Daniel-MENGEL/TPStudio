@@ -29,6 +29,30 @@ class GraphScientificClassification(str, Enum):
 
 
 @dataclass(frozen=True, slots=True)
+class GraphResidualDiagnostics:
+    """Descriptive residual facts for the origin-constrained affine model.
+
+    This structure deliberately contains no classification or threshold.  The
+    existing :class:`GraphAnalysis` fields remain the diagnostics for the
+    freely fitted affine line; these values describe the additional reference
+    ``y = a*x`` using the same fitted slope ``a``.
+    """
+
+    n_points: int
+    vertical_scale: float | None
+    constrained_model_available: bool
+    constrained_residual_rms: float | None
+    constrained_residual_max_abs: float | None
+    constrained_residual_max_normalized: float | None
+    constrained_mean_signed_residual: float | None
+    constrained_mean_signed_residual_normalized: float | None
+    constrained_positive_count: int | None
+    constrained_negative_count: int | None
+    constrained_near_zero_count: int | None
+    constrained_sign_imbalance: float | None
+
+
+@dataclass(frozen=True, slots=True)
 class GraphAnalysis:
     series_id: str
     cell_id: str | None
@@ -54,6 +78,7 @@ class GraphAnalysis:
     scientific_classification: GraphScientificClassification | None
     diagnostics: tuple[str, ...]
     requires_human_review: bool
+    residual_diagnostics: GraphResidualDiagnostics | None = None
 
 
 # These are deliberately centralized provisional calibration parameters.  They
@@ -200,7 +225,71 @@ def _loo_metrics(
     return (min(slopes), max(slopes)), (min(intercepts), max(intercepts)), effect
 
 
-def analyze_graph_series(series: "GraphSeriesData") -> GraphAnalysis:
+def _constrained_residual_diagnostics(
+    x: tuple[float, ...],
+    y: tuple[float, ...],
+    slope: float,
+    vertical_scale: float,
+) -> GraphResidualDiagnostics:
+    """Measure residuals around ``y = slope*x`` without classifying them."""
+
+    n = len(x)
+    unavailable = dict(
+        n_points=n,
+        vertical_scale=vertical_scale if math.isfinite(vertical_scale) else None,
+        constrained_model_available=False,
+        constrained_residual_rms=None,
+        constrained_residual_max_abs=None,
+        constrained_residual_max_normalized=None,
+        constrained_mean_signed_residual=None,
+        constrained_mean_signed_residual_normalized=None,
+        constrained_positive_count=None,
+        constrained_negative_count=None,
+        constrained_near_zero_count=None,
+        constrained_sign_imbalance=None,
+    )
+    try:
+        residuals = tuple(y_value - slope * x_value for x_value, y_value in zip(x, y))
+    except (ArithmeticError, OverflowError):
+        return GraphResidualDiagnostics(**unavailable)
+    if len(residuals) != n or not all(math.isfinite(value) for value in residuals):
+        return GraphResidualDiagnostics(**unavailable)
+    max_abs = max((abs(value) for value in residuals), default=0.0)
+    if not math.isfinite(max_abs):
+        return GraphResidualDiagnostics(**unavailable)
+    near_zero_scale = max_abs * SIGN_EPSILON
+    positive = sum(value > near_zero_scale for value in residuals)
+    negative = sum(value < -near_zero_scale for value in residuals)
+    near_zero = n - positive - negative
+    rms = math.sqrt(sum(value * value for value in residuals) / n) if n else 0.0
+    mean_signed = sum(residuals) / n if n else 0.0
+    if not all(math.isfinite(value) for value in (rms, mean_signed)):
+        return GraphResidualDiagnostics(**unavailable)
+    normalized_max = max_abs / vertical_scale if vertical_scale > 0.0 else None
+    normalized_mean = mean_signed / vertical_scale if vertical_scale > 0.0 else None
+    if any(value is not None and not math.isfinite(value) for value in (normalized_max, normalized_mean)):
+        return GraphResidualDiagnostics(**unavailable)
+    return GraphResidualDiagnostics(
+        n_points=n,
+        vertical_scale=vertical_scale if math.isfinite(vertical_scale) else None,
+        constrained_model_available=True,
+        constrained_residual_rms=rms,
+        constrained_residual_max_abs=max_abs,
+        constrained_residual_max_normalized=normalized_max,
+        constrained_mean_signed_residual=mean_signed,
+        constrained_mean_signed_residual_normalized=normalized_mean,
+        constrained_positive_count=positive,
+        constrained_negative_count=negative,
+        constrained_near_zero_count=near_zero,
+        constrained_sign_imbalance=abs(positive - negative) / n if n else 0.0,
+    )
+
+
+def analyze_graph_series(
+    series: "GraphSeriesData",
+    *,
+    constrained_linear_slope: float | None = None,
+) -> GraphAnalysis:
     """Analyze one measured series without reparsing its notebook."""
 
     # Local import avoids a package-initialization cycle: orchestration imports
@@ -236,6 +325,7 @@ def analyze_graph_series(series: "GraphSeriesData") -> GraphAnalysis:
         curvature_indicator="unknown",
         technical_status=GraphAnalysisTechnicalStatus.NOT_EVALUABLE,
         scientific_classification=None,
+        residual_diagnostics=None,
         diagnostics=(),
         requires_human_review=True,
     )
@@ -332,11 +422,24 @@ def analyze_graph_series(series: "GraphSeriesData") -> GraphAnalysis:
         curvature_indicator=curvature,
         technical_status=GraphAnalysisTechnicalStatus.EVALUABLE,
         scientific_classification=classification,
+        residual_diagnostics=(
+            _constrained_residual_diagnostics(x, y, constrained_linear_slope, y_scale)
+            if constrained_linear_slope is not None and math.isfinite(constrained_linear_slope)
+            else None
+        ),
         diagnostics=tuple(diagnostics),
         requires_human_review=classification is GraphScientificClassification.INCONCLUSIVE,
     )
     return GraphAnalysis(**base)
 
 
-def analyze_graph_series_collection(series: tuple[GraphSeriesData, ...]) -> tuple[GraphAnalysis, ...]:
-    return tuple(analyze_graph_series(item) for item in series)
+def analyze_graph_series_collection(
+    series: tuple[GraphSeriesData, ...],
+    *,
+    constrained_linear_slopes: dict[str, float] | None = None,
+) -> tuple[GraphAnalysis, ...]:
+    slopes = constrained_linear_slopes or {}
+    return tuple(
+        analyze_graph_series(item, constrained_linear_slope=slopes.get(item.series_id))
+        for item in series
+    )

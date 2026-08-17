@@ -50,6 +50,7 @@ from tpstudio.regression_plot_consistency import (
 from tpstudio.graph_analysis import (
     GraphAnalysis,
     GraphAnalysisTechnicalStatus,
+    GraphResidualDiagnostics,
     GraphScientificClassification,
     analyze_graph_series,
     analyze_graph_series_collection,

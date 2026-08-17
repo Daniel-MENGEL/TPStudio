@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import math
 from collections.abc import Iterator
 from dataclasses import dataclass
 from enum import Enum
@@ -78,8 +79,8 @@ from tpstudio.reasoning import extract_expected_quantity
 from .graph_adapter import GraphEvaluation, GraphSeriesData, evaluate_saved_graph, observe_saved_graph, extract_all_graph_series_data
 from tpstudio.graph_analysis import GraphAnalysis, analyze_graph_series_collection
 from tpstudio.regression import RegressionObservation, extract_regression_observations
-from tpstudio.regression_matching import RegressionSeriesMatch, match_regressions_to_series
-from tpstudio.regression_model import RegressionModelAnalysis, analyze_regression_models
+from tpstudio.regression_matching import RegressionSeriesMatch, RegressionSeriesMatchStatus, match_regressions_to_series
+from tpstudio.regression_model import RegressionModelAnalysis, RegressionModelTechnicalStatus, analyze_regression_models
 from tpstudio.regression_plot_matching import RegressionPlotMatch, match_regressions_to_plots
 from tpstudio.regression_plot_consistency import (
     RegressionPlotConsistencyAnalysis,
@@ -96,6 +97,35 @@ from .observed_values import (
     ObservedValueSource,
     detect_observed_values,
 )
+
+
+def _constrained_linear_slopes(
+    models: tuple[RegressionModelAnalysis, ...],
+) -> dict[str, float]:
+    """Return only unambiguous, evaluable degree-one model slopes by series."""
+
+    candidates: dict[str, list[float]] = {}
+    for model in models:
+        if (
+            model.series_id is None
+            or model.degree != 1
+            or model.technical_status is not RegressionModelTechnicalStatus.EVALUABLE
+            or model.match_status not in (
+                RegressionSeriesMatchStatus.EXACT,
+                RegressionSeriesMatchStatus.NUMERIC_EQUIVALENT,
+            )
+            or model.coefficients is None
+            or len(model.coefficients) < 1
+        ):
+            continue
+        slope = model.coefficients[0]
+        if isinstance(slope, (int, float)) and math.isfinite(float(slope)):
+            candidates.setdefault(model.series_id, []).append(float(slope))
+    return {
+        series_id: values[0]
+        for series_id, values in candidates.items()
+        if len(values) == 1
+    }
 
 
 @dataclass(frozen=True, slots=True)
@@ -258,6 +288,7 @@ class CopyAnalysisResult:
     interpretation_review_traces: tuple[InterpretationReviewTrace, ...] = ()
     graph_series_data: tuple[GraphSeriesData, ...] = ()
     graph_analyses: tuple[GraphAnalysis, ...] = ()
+    all_graph_analyses: tuple[GraphAnalysis, ...] = ()
     regression_observations: tuple[RegressionObservation, ...] = ()
     regression_series_matches: tuple[RegressionSeriesMatch, ...] = ()
     regression_model_analyses: tuple[RegressionModelAnalysis, ...] = ()
@@ -274,6 +305,7 @@ class CopyAnalysisResult:
         object.__setattr__(self, "interpretation_review_traces", tuple(self.interpretation_review_traces))
         object.__setattr__(self, "graph_series_data", tuple(self.graph_series_data))
         object.__setattr__(self, "graph_analyses", tuple(self.graph_analyses))
+        object.__setattr__(self, "all_graph_analyses", tuple(self.all_graph_analyses))
         object.__setattr__(self, "regression_observations", tuple(self.regression_observations))
         object.__setattr__(self, "regression_series_matches", tuple(self.regression_series_matches))
         object.__setattr__(self, "regression_model_analyses", tuple(self.regression_model_analyses))
@@ -666,13 +698,21 @@ class SnellsLawsCopyAnalyzer:
             for evaluation in graph_evaluations
             for series in (evaluation.observation.series_data if evaluation.observation else ())
         )
-        graph_analyses = analyze_graph_series_collection(graph_series_data)
         all_graph_series_data = extract_all_graph_series_data(notebook)
         regression_series_matches = match_regressions_to_series(
             notebook, regression_observations, all_graph_series_data
         )
         regression_model_analyses = analyze_regression_models(
             regression_observations, regression_series_matches, all_graph_series_data
+        )
+        constrained_slopes = _constrained_linear_slopes(regression_model_analyses)
+        graph_analyses = analyze_graph_series_collection(
+            graph_series_data,
+            constrained_linear_slopes=constrained_slopes,
+        )
+        all_graph_analyses = analyze_graph_series_collection(
+            all_graph_series_data,
+            constrained_linear_slopes=constrained_slopes,
         )
         regression_plot_matches = match_regressions_to_plots(
             notebook, regression_observations, regression_model_analyses, all_graph_series_data
@@ -693,6 +733,7 @@ class SnellsLawsCopyAnalyzer:
             tuple(interpretation_review_traces),
             graph_series_data=graph_series_data,
             graph_analyses=graph_analyses,
+            all_graph_analyses=all_graph_analyses,
             regression_observations=regression_observations,
             regression_series_matches=regression_series_matches,
             regression_model_analyses=regression_model_analyses,

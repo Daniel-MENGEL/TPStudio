@@ -234,3 +234,66 @@ def test_analysis_does_not_reparse_or_execute_notebook() -> None:
     assert result.series_id == "series-test"
     assert result.cell_id == "cell-test"
     assert math.isfinite(result.slope)
+
+
+def test_residual_diagnostics_for_origin_line_are_centered_when_exact() -> None:
+    result = analyze_graph_series(_series(range(6), [2 * value for value in range(6)]), constrained_linear_slope=2.0)
+    diagnostics = result.residual_diagnostics
+    assert diagnostics is not None
+    assert diagnostics.constrained_model_available is True
+    assert diagnostics.constrained_residual_rms == pytest.approx(0.0)
+    assert diagnostics.constrained_mean_signed_residual == pytest.approx(0.0)
+    assert diagnostics.constrained_sign_imbalance == pytest.approx(0.0)
+    assert diagnostics.constrained_near_zero_count == 6
+
+
+@pytest.mark.parametrize("offset, expected_sign", [(1.0, 1), (-1.0, -1)])
+def test_residual_diagnostics_capture_origin_offset(offset, expected_sign) -> None:
+    result = analyze_graph_series(
+        _series(range(6), [2 * value + offset for value in range(6)]),
+        constrained_linear_slope=2.0,
+    )
+    diagnostics = result.residual_diagnostics
+    assert diagnostics is not None
+    assert diagnostics.constrained_residual_rms == pytest.approx(abs(offset))
+    assert diagnostics.constrained_mean_signed_residual == pytest.approx(offset)
+    assert diagnostics.constrained_positive_count == (6 if expected_sign > 0 else 0)
+    assert diagnostics.constrained_negative_count == (0 if expected_sign > 0 else 6)
+    assert diagnostics.constrained_sign_imbalance == pytest.approx(1.0)
+
+
+def test_residual_diagnostics_separate_dispersion_from_centering() -> None:
+    result = analyze_graph_series(
+        _series(range(6), [1, -1, 1, -1, -2, 2]),
+        constrained_linear_slope=0.0,
+    )
+    diagnostics = result.residual_diagnostics
+    assert diagnostics is not None
+    assert diagnostics.constrained_residual_rms > 0.0
+    assert diagnostics.constrained_mean_signed_residual == pytest.approx(0.0)
+    assert diagnostics.constrained_sign_imbalance == pytest.approx(0.0)
+
+
+def test_residual_diagnostics_absent_for_non_evaluable_series() -> None:
+    result = analyze_graph_series(_series(None, None, status=GraphSeriesStatus.NOT_EVALUABLE))
+    assert result.residual_diagnostics is None
+
+
+def test_residual_diagnostics_are_not_invented_without_associated_model() -> None:
+    result = analyze_graph_series(_series(range(6), [2 * value + 1 for value in range(6)]))
+    assert result.scientific_classification is GraphScientificClassification.LINEAR_COMPATIBLE
+    assert result.residual_diagnostics is None
+
+
+def test_zero_vertical_scale_keeps_absolute_metrics_but_not_normalized_ones() -> None:
+    result = analyze_graph_series(
+        _series(range(4), [4.0, 4.0, 4.0, 4.0]),
+        constrained_linear_slope=1.0,
+    )
+    diagnostics = result.residual_diagnostics
+    assert diagnostics is not None
+    assert diagnostics.vertical_scale == pytest.approx(0.0)
+    assert diagnostics.constrained_residual_rms is not None
+    assert diagnostics.constrained_residual_max_abs is not None
+    assert diagnostics.constrained_residual_max_normalized is None
+    assert diagnostics.constrained_mean_signed_residual_normalized is None

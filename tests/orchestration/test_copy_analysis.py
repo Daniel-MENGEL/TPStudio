@@ -188,6 +188,10 @@ def test_snell_like_dtype_float_pipeline_is_evaluable(tmp_path: Path) -> None:
     assert measured.n_points == 5
     assert result.regression_series_matches[0].status.value == "exact"
     assert result.regression_model_analyses[0].technical_status.value == "evaluable"
+    assert len(result.all_graph_analyses) == 1
+    graph_analysis = result.all_graph_analyses[0]
+    assert graph_analysis.residual_diagnostics is not None
+    assert graph_analysis.residual_diagnostics.constrained_model_available is True
 
 
 def test_global_series_match_is_reused_by_model_analysis_without_expectation(tmp_path: Path) -> None:
@@ -212,6 +216,23 @@ def test_global_series_match_is_reused_by_model_analysis_without_expectation(tmp
     assert model.coefficients is not None
     assert model.predicted_y_values is not None
     assert "serie_appariee_absente" not in model.diagnostics
+
+
+def test_quadratic_regression_does_not_supply_constrained_linear_diagnostics(tmp_path: Path) -> None:
+    notebook = _notebook()
+    graph_cell = _cell_with(notebook, "# Vérification graphique")
+    graph_cell.source = (
+        "# Vérification graphique\n"
+        "x = [0.0, 1.0, 2.0, 3.0]\n"
+        "y = [1.0, 2.0, 5.0, 10.0]\n"
+        "plt.plot(x, y, 'o', label='Mesures')\n"
+        "p = np.polyfit(x, y, 2)\n"
+    )
+    result = _analyze(tmp_path, notebook)
+    assert result.regression_model_analyses[0].degree == 2
+    assert result.regression_model_analyses[0].technical_status.value == "evaluable"
+    assert len(result.graph_analyses) == 1
+    assert result.graph_analyses[0].residual_diagnostics is None
 
 
 def test_regressions_in_several_cells_keep_global_order(tmp_path: Path) -> None:
