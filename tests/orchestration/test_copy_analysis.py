@@ -1,3 +1,4 @@
+from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
 
@@ -18,9 +19,11 @@ from tpstudio.orchestration import (
     analyze_snells_laws_copy,
     summarize_copy_analysis,
 )
+from tpstudio.orchestration.copy_analysis import _constrained_linear_slopes
 from tpstudio.graph_analysis import GraphScientificClassification
 from tpstudio.regression import RegressionTargetKind
-from tpstudio.projects import snells_laws_teacher_project
+from tpstudio.projects import ExpectedGraphModel, snells_laws_teacher_project
+from tpstudio.projects.model import GraphExpectationSet
 from tpstudio.reporting import build_teacher_copy_report
 from tpstudio.protocol import (
     ProtocolStatus,
@@ -84,6 +87,25 @@ def _analyze(tmp_path: Path, notebook=None, options=None):
     )
     assert path.read_bytes() == before
     return result
+
+
+def _analyze_with_expected_model(tmp_path: Path, notebook, expected_model):
+    project = snells_laws_teacher_project()
+    graph = project.graph_expectation_set.get("regression_graph")
+    assert graph is not None
+    project = replace(
+        project,
+        graph_expectation_set=GraphExpectationSet(
+            project.scientific_production_plan,
+            (replace(graph, expected_model=expected_model),),
+        ),
+    )
+    path = tmp_path / "copy-with-model"
+    nbformat.write(notebook, path)
+    return SnellsLawsCopyAnalyzer().analyze(
+        NotebookCopySource("synthetic-model", "Copie synthétique", path),
+        project=project,
+    )
 
 
 def _cell_with(notebook, marker: str):
@@ -233,6 +255,84 @@ def test_quadratic_regression_does_not_supply_constrained_linear_diagnostics(tmp
     assert result.regression_model_analyses[0].technical_status.value == "evaluable"
     assert len(result.graph_analyses) == 1
     assert result.graph_analyses[0].residual_diagnostics is None
+
+
+def test_explicit_affine_contract_blocks_constrained_linear_diagnostics(tmp_path: Path) -> None:
+    notebook = _notebook()
+    graph_cell = _cell_with(notebook, "# Vérification graphique")
+    graph_cell.source = (
+        "# Vérification graphique\n"
+        "i1 = np.array([0.0, 5.0, 10.0, 15.0, 20.0], dtype=float)\n"
+        "i2 = np.array([0.0, 3.5, 7.0, 10.0, 13.0], dtype=float)\n"
+        "i1 = i1*np.pi/180\n"
+        "i2 = i2*np.pi/180\n"
+        "sini1 = np.sin(i1)\n"
+        "sini2 = np.sin(i2)\n"
+        "plt.plot(sini2, sini1, 'bo', label='Points expérimentaux')\n"
+        "a, b = np.polyfit(sini2, sini1, 1)\n"
+    )
+    result = _analyze_with_expected_model(tmp_path, notebook, ExpectedGraphModel.AFFINE)
+    assert result.all_graph_analyses[0].residual_diagnostics is None
+
+
+def test_explicit_quadratic_contract_blocks_constrained_linear_diagnostics(tmp_path: Path) -> None:
+    notebook = _notebook()
+    graph_cell = _cell_with(notebook, "# Vérification graphique")
+    graph_cell.source = (
+        "# Vérification graphique\n"
+        "i1 = np.array([0.0, 5.0, 10.0, 15.0, 20.0], dtype=float)\n"
+        "i2 = np.array([0.0, 3.5, 7.0, 10.0, 13.0], dtype=float)\n"
+        "i1 = i1*np.pi/180\n"
+        "i2 = i2*np.pi/180\n"
+        "sini1 = np.sin(i1)\n"
+        "sini2 = np.sin(i2)\n"
+        "plt.plot(sini2, sini1, 'bo', label='Points expérimentaux')\n"
+        "a, b = np.polyfit(sini2, sini1, 1)\n"
+    )
+    result = _analyze_with_expected_model(tmp_path, notebook, ExpectedGraphModel.QUADRATIC)
+    assert result.all_graph_analyses[0].residual_diagnostics is None
+
+
+def test_missing_expected_model_preserves_historical_constrained_diagnostics(tmp_path: Path) -> None:
+    notebook = _notebook()
+    graph_cell = _cell_with(notebook, "# Vérification graphique")
+    graph_cell.source = (
+        "# Vérification graphique\n"
+        "i1 = np.array([0.0, 5.0, 10.0, 15.0, 20.0], dtype=float)\n"
+        "i2 = np.array([0.0, 3.5, 7.0, 10.0, 13.0], dtype=float)\n"
+        "i1 = i1*np.pi/180\n"
+        "i2 = i2*np.pi/180\n"
+        "sini1 = np.sin(i1)\n"
+        "sini2 = np.sin(i2)\n"
+        "plt.plot(sini2, sini1, 'bo', label='Points expérimentaux')\n"
+        "a, b = np.polyfit(sini2, sini1, 1)\n"
+    )
+    result = _analyze_with_expected_model(tmp_path, notebook, None)
+    assert result.all_graph_analyses[0].residual_diagnostics is not None
+
+
+def test_constrained_diagnostics_are_gated_per_series_model(tmp_path: Path) -> None:
+    notebook = _notebook()
+    graph_cell = _cell_with(notebook, "# Vérification graphique")
+    graph_cell.source = (
+        "# Vérification graphique\n"
+        "i1 = np.array([0.0, 5.0, 10.0, 15.0, 20.0], dtype=float)\n"
+        "i2 = np.array([0.0, 3.5, 7.0, 10.0, 13.0], dtype=float)\n"
+        "i1 = i1*np.pi/180\n"
+        "i2 = i2*np.pi/180\n"
+        "sini1 = np.sin(i1)\n"
+        "sini2 = np.sin(i2)\n"
+        "plt.plot(sini2, sini1, 'bo', label='Points expérimentaux')\n"
+        "a, b = np.polyfit(sini2, sini1, 1)\n"
+    )
+    origin_result = _analyze_with_expected_model(tmp_path, notebook, None)
+    origin_model = origin_result.regression_model_analyses[0]
+    affine_model = replace(origin_model, regression_id="affine", series_id="series-affine")
+    origin_model = replace(origin_model, regression_id="origin", series_id="series-origin")
+    slopes = _constrained_linear_slopes(
+        (origin_model, affine_model), blocked_series_ids=frozenset({"series-affine"})
+    )
+    assert set(slopes) == {"series-origin"}
 
 
 def test_regressions_in_several_cells_keep_global_order(tmp_path: Path) -> None:

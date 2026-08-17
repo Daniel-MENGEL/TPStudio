@@ -46,6 +46,7 @@ from tpstudio.notebooks import (
     resolve_notebook_bindings,
 )
 from tpstudio.projects import (
+    ExpectedGraphModel,
     TeacherProjectConfiguration,
     snells_laws_teacher_project,
     validate_teacher_project_configuration,
@@ -101,6 +102,8 @@ from .observed_values import (
 
 def _constrained_linear_slopes(
     models: tuple[RegressionModelAnalysis, ...],
+    *,
+    blocked_series_ids: frozenset[str] = frozenset(),
 ) -> dict[str, float]:
     """Return only unambiguous, evaluable degree-one model slopes by series."""
 
@@ -108,6 +111,7 @@ def _constrained_linear_slopes(
     for model in models:
         if (
             model.series_id is None
+            or model.series_id in blocked_series_ids
             or model.degree != 1
             or model.technical_status is not RegressionModelTechnicalStatus.EVALUABLE
             or model.match_status not in (
@@ -705,7 +709,18 @@ class SnellsLawsCopyAnalyzer:
         regression_model_analyses = analyze_regression_models(
             regression_observations, regression_series_matches, all_graph_series_data
         )
-        constrained_slopes = _constrained_linear_slopes(regression_model_analyses)
+        blocked_constrained_series_ids = frozenset(
+            series.series_id
+            for evaluation in graph_evaluations
+            if evaluation.expectation.expected_model is not None
+            and evaluation.expectation.expected_model is not ExpectedGraphModel.LINEAR_THROUGH_ORIGIN
+            and evaluation.observation is not None
+            for series in evaluation.observation.series_data
+        )
+        constrained_slopes = _constrained_linear_slopes(
+            regression_model_analyses,
+            blocked_series_ids=blocked_constrained_series_ids,
+        )
         graph_analyses = analyze_graph_series_collection(
             graph_series_data,
             constrained_linear_slopes=constrained_slopes,

@@ -96,7 +96,7 @@ class GraphExpectation:
     accepted_y_labels: tuple[str, ...]
     regression_required: bool
     slope_quantity_id: str
-    index_quantity_id: str
+    index_quantity_id: str | None
     slope_index_relation_id: str
     title_required: bool = False
     legend_required: bool = True
@@ -106,9 +106,11 @@ class GraphExpectation:
     def __post_init__(self) -> None:
         for name in (
             "production_id", "x_expression", "y_expression", "slope_quantity_id",
-            "index_quantity_id", "slope_index_relation_id",
+            "slope_index_relation_id",
         ):
             _required_text(getattr(self, name), name)
+        if self.index_quantity_id is not None:
+            _required_text(self.index_quantity_id, "index_quantity_id")
         for name in ("accepted_x_labels", "accepted_y_labels"):
             value = getattr(self, name)
             if isinstance(value, (str, bytes)):
@@ -153,6 +155,8 @@ class GraphExpectationSet:
             if production is None or production.kind is not ScientificProductionKind.PLOT:
                 raise ValueError("Un graphe doit cibler une production PLOT connue.")
             for quantity_id in (graph.slope_quantity_id, graph.index_quantity_id):
+                if quantity_id is None:
+                    continue
                 quantity = self.production_plan.get(quantity_id)
                 if quantity is None or quantity.kind is not ScientificProductionKind.QUANTITY:
                     raise ValueError("Le graphe référence une quantité inconnue.")
