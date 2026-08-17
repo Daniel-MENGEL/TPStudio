@@ -19,6 +19,19 @@ from .graph_model_inference import (
     ExpectedModelProposalSource,
     infer_expected_graph_model,
 )
+from .project_resolution import (
+    PROJECT_DESCRIPTORS,
+    ProjectDescriptor,
+    ProjectEvidenceCategory,
+    ProjectResolutionCandidate,
+    ProjectResolutionConfidence,
+    ProjectResolutionEvidence,
+    ProjectResolutionResult,
+    extract_project_signatures,
+    known_project_ids,
+    project_descriptor,
+    resolve_project_for_copy,
+)
 
 __all__ = [
     "GraphExpectation",
@@ -36,4 +49,15 @@ __all__ = [
     "ExpectedModelProposalConfidence",
     "ExpectedModelProposalSource",
     "infer_expected_graph_model",
+    "PROJECT_DESCRIPTORS",
+    "ProjectDescriptor",
+    "ProjectEvidenceCategory",
+    "ProjectResolutionCandidate",
+    "ProjectResolutionConfidence",
+    "ProjectResolutionEvidence",
+    "ProjectResolutionResult",
+    "extract_project_signatures",
+    "known_project_ids",
+    "project_descriptor",
+    "resolve_project_for_copy",
 ]
