@@ -47,7 +47,14 @@ from tpstudio.notebooks import (
 )
 from tpstudio.projects import (
     ExpectedGraphModel,
+    ProjectEvidenceCategory,
+    ProjectResolutionCandidate,
+    ProjectResolutionConfidence,
+    ProjectResolutionEvidence,
+    ProjectResolutionResult,
     TeacherProjectConfiguration,
+    project_descriptor,
+    resolve_project_for_copy,
     snells_laws_teacher_project,
     validate_teacher_project_configuration,
 )
@@ -436,6 +443,31 @@ class CopyAnalysisResult:
         )
 
 
+class ProjectSelectionProvenance(str, Enum):
+    EXPLICIT = "explicit"
+    AUTO_RESOLVED = "auto_resolved"
+    UNRESOLVED = "unresolved"
+
+
+@dataclass(frozen=True, slots=True)
+class CopyAnalysisDispatchResult:
+    resolution: ProjectResolutionResult
+    provenance: ProjectSelectionProvenance
+    analysis: CopyAnalysisResult | None
+
+    def __post_init__(self) -> None:
+        if type(self.resolution) is not ProjectResolutionResult:
+            raise TypeError("La résolution de projet est invalide.")
+        if type(self.provenance) is not ProjectSelectionProvenance:
+            raise TypeError("La provenance du projet est invalide.")
+        if self.analysis is not None and type(self.analysis) is not CopyAnalysisResult:
+            raise TypeError("L'analyse de copie est invalide.")
+        if self.provenance is ProjectSelectionProvenance.UNRESOLVED and self.analysis is not None:
+            raise ValueError("Une résolution non aboutie ne peut pas porter d'analyse.")
+        if self.provenance is not ProjectSelectionProvenance.UNRESOLVED and self.analysis is None:
+            raise ValueError("Une résolution aboutie doit porter une analyse.")
+
+
 def _catalog(project: TeacherProjectConfiguration, expected_type):
     return next((item for item in project.feedback_catalogs if type(item) is expected_type), None)
 
@@ -756,6 +788,43 @@ class SnellsLawsCopyAnalyzer:
             regression_plot_matches=regression_plot_matches,
             regression_plot_consistency_analyses=regression_plot_consistency_analyses,
         )
+
+
+def analyze_copy(
+    source: NotebookCopySource,
+    *,
+    project: TeacherProjectConfiguration | None = None,
+    options: CopyAnalysisOptions | None = None,
+) -> CopyAnalysisDispatchResult:
+    """Analyze one copy with an explicit or safely auto-resolved project."""
+    if type(source) is not NotebookCopySource:
+        raise TypeError("La source de copie est invalide.")
+    if project is not None:
+        validate_teacher_project_configuration(project)
+        resolution = ProjectResolutionResult(
+            project.identity.project_id,
+            (ProjectResolutionCandidate(
+                project.identity.project_id,
+                ProjectResolutionConfidence.HIGH,
+                (ProjectResolutionEvidence(
+                    "explicit", "Projet fourni explicitement", ProjectEvidenceCategory.STRONG
+                ),),
+            ),),
+            False,
+        )
+        analysis = SnellsLawsCopyAnalyzer().analyze(source, project=project, options=options)
+        return CopyAnalysisDispatchResult(resolution, ProjectSelectionProvenance.EXPLICIT, analysis)
+
+    notebook = load_notebook_copy(source)
+    resolution = resolve_project_for_copy(notebook, filename=source.display_name)
+    if resolution.selected_project_id is None:
+        return CopyAnalysisDispatchResult(resolution, ProjectSelectionProvenance.UNRESOLVED, None)
+    descriptor = project_descriptor(resolution.selected_project_id)
+    if descriptor is None:
+        raise ValueError(f"Aucune factory n'est enregistrée pour {resolution.selected_project_id!r}.")
+    resolved_project = descriptor.factory()
+    analysis = SnellsLawsCopyAnalyzer().analyze(source, project=resolved_project, options=options)
+    return CopyAnalysisDispatchResult(resolution, ProjectSelectionProvenance.AUTO_RESOLVED, analysis)
 
 
 def analyze_snells_laws_copy(source, project=None, options=None) -> CopyAnalysisResult:

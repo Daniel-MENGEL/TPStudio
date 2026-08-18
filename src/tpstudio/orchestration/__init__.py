@@ -2,6 +2,7 @@
 
 from .copy_analysis import (
     CopyAnalysisOptions,
+    CopyAnalysisDispatchResult,
     CopyAnalysisResult,
     CopyProductionResolution,
     CopyProductionResolutionSet,
@@ -10,6 +11,8 @@ from .copy_analysis import (
     RelationEvaluation,
     RelationObservationStatus,
     SnellsLawsCopyAnalyzer,
+    ProjectSelectionProvenance,
+    analyze_copy,
     analyze_snells_laws_copy,
     summarize_copy_analysis,
 )
