@@ -16,6 +16,13 @@ from .copy_analysis import (
     analyze_snells_laws_copy,
     summarize_copy_analysis,
 )
+from .batch_dispatch import (
+    BatchCopyDispatchResult,
+    BatchCopyDispatchStatus,
+    BatchCopyRequest,
+    BatchDispatchResult,
+    run_batch,
+)
 from tpstudio.conclusion import ConclusionEvaluation
 from tpstudio.regression import (
     RegressionMethod,
