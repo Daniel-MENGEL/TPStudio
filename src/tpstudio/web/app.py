@@ -7,19 +7,20 @@ from dataclasses import replace
 from datetime import datetime, timezone
 
 from tpstudio.batch import BatchCopyStatus, render_batch_report_markdown
-from tpstudio.web.execution import analyze_selected_copy, can_run_batch, run_selected_dispatch
+from tpstudio.export import CopyExportOptions
+from tpstudio.web.execution import analyze_selected_copy, can_run_batch, export_active_copies, run_selected_dispatch
 from tpstudio.web.model import WebBatchOptions
 from tpstudio.web.identity import (
     CopyIdentityStatus, StudentIdentity, confirm_copy_identity,
     identify_selected_copy,
 )
 from tpstudio.web.model import WebCopyOverride
-from tpstudio.web.planning import WebInputError, build_batch_plan_from_web_selection, build_dispatch_requests_from_web_selection
+from tpstudio.web.planning import WebInputError, build_batch_plan_from_web_selection, build_dispatch_requests_from_web_selection, resolve_output_dir
 from tpstudio.projects import project_descriptor
 from tpstudio.web.presenters import (
     batch_plan_rows, graph_summary_rows,
     identity_resolution_candidates, active_analysis_for_source, batch_dispatch_rows,
-    project_choices_for_source,
+    project_choices_for_source, exportable_count, non_exportable_count,
 )
 from tpstudio.web.roster import (
     default_roster_path, load_roster, parse_roster_csv, save_roster,
@@ -42,6 +43,7 @@ from tpstudio.web.state import (
     REVIEW_FILTER_KEY, REVIEW_INDEX_KEY, REVIEW_MESSAGE_KEY,
     get_current_dispatch_result, set_dispatch_result, clear_dispatch_result,
     get_project_overrides, set_project_override, remove_project_override,
+    get_export_results, set_export_results,
 )
 from tpstudio.web.workspace import WebWorkspace
 
@@ -347,6 +349,7 @@ def main() -> None:
             st.write(f"Copies : {len(dispatch_result.copies)} · Analysées : {dispatch_result.analyzed_count} · À confirmer : {dispatch_result.unresolved_count} · Erreurs : {dispatch_result.error_count} · Non traitées : {dispatch_result.skipped_count}")
             overrides = get_project_overrides(st.session_state)
             rows = batch_dispatch_rows(dispatch_result, copies, overrides)
+            export_results = get_export_results(st.session_state)
             for row, item in zip(rows, dispatch_result.copies):
                 icon = {
                     "Analysée": "✅", "TP à confirmer": "⚠️", "Aucun TP reconnu": "⚠️",
@@ -376,6 +379,16 @@ def main() -> None:
                             st.markdown(f"{graph_row.icon} **{graph_row.headline}**")
                             for line in graph_row.summary_lines:
                                 st.caption(line)
+                    export_state = export_results.get(item.source_id)
+                    if export_state is not None:
+                        if export_state.result is not None:
+                            st.success("Export réussi")
+                            st.markdown("**Artefacts**")
+                            st.caption(f"Notebook corrigé : {export_state.result.notebook_artifact.path}")
+                            st.caption(f"Version HTML : {export_state.result.html_artifact.path}")
+                        else:
+                            st.error("❌ Erreur d'export")
+                            st.caption(export_state.error_message)
                     if item.status.value == "unresolved" or active_analysis is not None:
                         current_project = active_analysis.project_id if active_analysis is not None else None
                         if active_analysis is not None and not row.validated_by_teacher:
@@ -413,6 +426,44 @@ def main() -> None:
                         if row.validated_by_teacher and st.button("Revenir à la détection automatique", key=f"auto-project-{item.source_id}"):
                             remove_project_override(st.session_state, item.source_id)
                             st.rerun()
+            st.markdown("### Options d'export")
+            export_output_text = st.text_input(
+                "Dossier des corrections",
+                value=str(default_output_dir()),
+                key="tpstudio_export_output_dir",
+            )
+            include_teacher_feedback = st.checkbox("Inclure le retour professeur", key="export-teacher-feedback")
+            include_diagnostics = st.checkbox("Inclure les diagnostics", key="export-diagnostics")
+            include_limitations = st.checkbox("Inclure les limitations", key="export-limitations")
+            hide_code = st.checkbox("Masquer le code dans le HTML", key="export-hide-code")
+            hide_outputs = st.checkbox("Masquer les sorties dans le HTML", key="export-hide-outputs")
+            embed_images = st.checkbox("Inclure les images", value=True, key="export-embed-images")
+            include_input_prompts = st.checkbox("Inclure les invites d'entrée", key="export-input-prompts")
+            include_output_prompts = st.checkbox("Inclure les invites de sortie", key="export-output-prompts")
+            overwrite = st.checkbox("Autoriser le remplacement des fichiers existants", key="export-overwrite")
+            ready_count = exportable_count(dispatch_result, overrides)
+            st.write(f"Copies prêtes à exporter : {ready_count} · Copies sans analyse active : {non_exportable_count(dispatch_result, overrides)}")
+            if st.button("Exporter les copies analysées", disabled=ready_count == 0, key="export-active-copies"):
+                try:
+                    output_dir = resolve_output_dir(export_output_text)
+                    export_options = CopyExportOptions(
+                        overwrite=overwrite,
+                        include_teacher_feedback=include_teacher_feedback,
+                        include_diagnostics=include_diagnostics,
+                        include_limitations=include_limitations,
+                        embed_images=embed_images,
+                        include_code=not hide_code,
+                        include_outputs=not hide_outputs,
+                        include_input_prompts=include_input_prompts,
+                        include_output_prompts=include_output_prompts,
+                    )
+                    set_export_results(
+                        st.session_state,
+                        export_active_copies(dispatch_result, overrides, output_dir=output_dir, options=export_options),
+                    )
+                    st.rerun()
+                except (TypeError, ValueError, OSError) as exc:
+                    st.error(web_error_message(exc))
     if st.button("Réinitialiser"):
         workspace.reset()
         reset_web_session(st.session_state)

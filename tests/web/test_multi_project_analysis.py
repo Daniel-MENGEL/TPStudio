@@ -4,10 +4,11 @@ from pathlib import Path
 import nbformat
 
 from tpstudio.orchestration import BatchDispatchResult
+from tpstudio.export import CopyExportOptions, export_analyzed_copy as real_export_analyzed_copy
 from tpstudio.projects import known_project_ids
-from tpstudio.web.execution import analyze_selected_copy, run_selected_dispatch
+from tpstudio.web.execution import analyze_selected_copy, export_active_copies, run_selected_dispatch
 import tpstudio.web.execution as execution
-from tpstudio.web.model import SelectedCopy, WebCopyOverride
+from tpstudio.web.model import SelectedCopy, WebCopyExportState, WebCopyOverride
 from tpstudio.web.planning import build_dispatch_requests_from_web_selection
 from tpstudio.web.presenters import active_analysis_for_source, batch_dispatch_rows, project_choices_for_source
 from tpstudio.web.state import (
@@ -130,3 +131,55 @@ def test_overrides_are_cleared_with_new_dispatch_result(tmp_path):
     assert state[PROJECT_OVERRIDES_KEY]
     set_dispatch_result(state, result, ("new",))
     assert get_project_overrides(state) == {}
+
+
+def test_export_active_analyses_excludes_unresolved(tmp_path):
+    copies = _copies(tmp_path)
+    empty = _empty_copy(tmp_path)
+    result = run_selected_dispatch(copies + (empty,))
+    output = tmp_path / "exports"
+    states = export_active_copies(result, {}, output_dir=output, options=CopyExportOptions())
+    assert set(states) == {"copy-001", "copy-002"}
+    assert all(isinstance(value, WebCopyExportState) and value.result is not None for value in states.values())
+    assert all(path.exists() for value in states.values() for path in value.result.output_paths)
+
+
+def test_export_uses_override_analysis_without_analysis_calls(tmp_path, monkeypatch):
+    copies = _copies(tmp_path)
+    result = run_selected_dispatch(copies)
+    auto = result.get("copy-002").dispatch.analysis
+    override = WebCopyOverride("copy-002", "snells-laws-mvp", analyze_selected_copy(auto.source, "snells-laws-mvp").analysis)
+    calls = []
+
+    def fake_export(source, analysis, output_dir, **kwargs):
+        calls.append((source.source_id, analysis.project_id))
+        return real_export_analyzed_copy(source, analysis, output_dir, **kwargs)
+
+    monkeypatch.setattr(execution, "export_analyzed_copy", fake_export)
+    states = export_active_copies(
+        result, {"copy-002": override}, output_dir=tmp_path / "exports", options=CopyExportOptions(),
+    )
+    assert calls == [("copy-001", "snells-laws-mvp"), ("copy-002", "snells-laws-mvp")]
+    assert states["copy-002"].result.project_id == "snells-laws-mvp"
+
+
+def test_export_error_isolated_per_copy(tmp_path, monkeypatch):
+    copies = _copies(tmp_path)
+    result = run_selected_dispatch(copies)
+    real = execution.export_analyzed_copy
+    calls = []
+
+    def flaky_export(source, analysis, output_dir, **kwargs):
+        calls.append(source.source_id)
+        if source.source_id == "copy-001":
+            raise OSError("destination unavailable")
+        return real(source, analysis, output_dir, **kwargs)
+
+    monkeypatch.setattr(execution, "export_analyzed_copy", flaky_export)
+    states = export_active_copies(
+        result, {}, output_dir=tmp_path / "exports", options=CopyExportOptions(),
+    )
+    assert calls == ["copy-001", "copy-002"]
+    assert states["copy-001"].result is None
+    assert states["copy-001"].error_type == "OSError"
+    assert states["copy-002"].result is not None

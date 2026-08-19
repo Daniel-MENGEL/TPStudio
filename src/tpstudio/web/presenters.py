@@ -113,6 +113,14 @@ def active_analysis_for_source(result: BatchDispatchResult, overrides: Mapping[s
     return item.dispatch.analysis if item and item.dispatch else None
 
 
+def exportable_count(result: BatchDispatchResult, overrides: Mapping[str, WebCopyOverride]) -> int:
+    return sum(active_analysis_for_source(result, overrides, item.source_id) is not None for item in result.copies)
+
+
+def non_exportable_count(result: BatchDispatchResult, overrides: Mapping[str, WebCopyOverride]) -> int:
+    return len(result.copies) - exportable_count(result, overrides)
+
+
 def project_choices_for_source(result: BatchDispatchResult, source_id: str) -> tuple[str, ...]:
     item = result.get(source_id)
     candidate_ids = (
