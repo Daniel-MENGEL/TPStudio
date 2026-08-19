@@ -8,7 +8,8 @@ def test_streamlit_app_smoke_without_network():
     assert app.exception == []
     assert any("TPStudio" in title.value for title in app.title)
     assert "tpstudio_web_uploads_0" in app.session_state
-    assert any("Dossier des corrections" in item.label for item in app.text_input)
+    assert not any("Dossier des corrections" in item.label for item in app.text_input)
+    assert any("détection automatique du TP par copie" in item.value for item in app.info)
     assert any("Vérifier le lot" in button.label for button in app.button)
     assert any("Réinitialiser" in button.label for button in app.button)
 

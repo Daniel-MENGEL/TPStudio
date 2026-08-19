@@ -7,16 +7,16 @@ from dataclasses import replace
 from datetime import datetime, timezone
 
 from tpstudio.batch import BatchCopyStatus, render_batch_report_markdown
-from tpstudio.web.execution import can_run_batch, run_prepared_batch
+from tpstudio.web.execution import can_run_batch, run_selected_dispatch
 from tpstudio.web.model import WebBatchOptions
 from tpstudio.web.identity import (
     CopyIdentityStatus, StudentIdentity, confirm_copy_identity,
     identify_selected_copy,
 )
-from tpstudio.web.planning import WebInputError, build_batch_plan_from_web_selection, resolve_output_dir
+from tpstudio.web.planning import WebInputError, build_batch_plan_from_web_selection
 from tpstudio.web.presenters import (
-    batch_plan_rows, graph_summary_rows, has_output_name_collision,
-    identity_resolution_candidates,
+    batch_plan_rows, graph_summary_rows,
+    identity_resolution_candidates, batch_dispatch_rows,
 )
 from tpstudio.web.roster import (
     default_roster_path, load_roster, parse_roster_csv, save_roster,
@@ -37,6 +37,7 @@ from tpstudio.web.state import (
     clear_run_result, get_current_run_result, set_run_result, RUN_IN_PROGRESS_KEY,
     default_output_dir,
     REVIEW_FILTER_KEY, REVIEW_INDEX_KEY, REVIEW_MESSAGE_KEY,
+    get_current_dispatch_result, set_dispatch_result, clear_dispatch_result,
 )
 from tpstudio.web.workspace import WebWorkspace
 
@@ -198,14 +199,10 @@ def main() -> None:
 
     st.title("TPStudio")
     st.subheader("Correction assistée de travaux pratiques")
-    st.info("TP actif : Snell-Descartes · Projet : snells-laws-mvp")
+    st.info("Mode : détection automatique du TP par copie")
     with st.sidebar:
         st.header("Options")
-        include_teacher = st.checkbox("Inclure le retour professeur")
-        include_diagnostics = st.checkbox("Inclure les diagnostics")
-        hide_code = st.checkbox("Masquer le code dans le HTML")
-        hide_outputs = st.checkbox("Masquer les sorties dans le HTML")
-        overwrite = st.checkbox("Autoriser le remplacement des fichiers existants")
+        st.caption("Les options d’export seront disponibles après la phase d’analyse.")
         try:
             roster = load_roster()
             st.caption(f"Étudiants : {len(roster)} chargés")
@@ -225,7 +222,10 @@ def main() -> None:
                 st.error("Le fichier roster n'a pas pu être importé.")
     generation = st.session_state[UPLOADER_GENERATION_KEY]
     uploads = st.file_uploader("Sélectionner les notebooks (.ipynb)", type=["ipynb"], accept_multiple_files=True, key=f"tpstudio_web_uploads_{generation}")
-    output_text = st.text_input("Dossier des corrections", value=str(default_output_dir()))
+    # A75a5.1 is analysis-only.  Keep historical planning inputs internal until
+    # the export phase is introduced, so no artifact naming is suggested here.
+    output_dir = default_output_dir()
+    options = WebBatchOptions()
     copies = []
     if uploads:
         try:
@@ -255,32 +255,20 @@ def main() -> None:
         else:
             st.session_state[SELECTION_KEY] = ()
             clear_prepared_batch(st.session_state)
-    output_error = None
-    try:
-        output_dir = resolve_output_dir(output_text)
-    except WebInputError as exc:
-        output_dir = Path(output_text)
-        output_error = exc
-    options = WebBatchOptions(include_teacher, include_diagnostics, hide_code, hide_outputs, overwrite)
     signature = _input_signature(copies, output_dir, options) if copies and all(item.workspace_path.exists() for item in copies) else ()
     invalidate_if_signature_changed(st.session_state, signature)
     if st.button("Vérifier le lot", type="primary"):
-        if output_error is not None:
-            st.error(web_error_message(output_error))
-        else:
-            try:
-                plan = build_batch_plan_from_web_selection(tuple(copies), output_dir, options)
-                set_prepared_batch(st.session_state, plan, signature)
-                st.success("Lot prêt")
-            except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
-                clear_prepared_batch(st.session_state)
-                st.error(web_error_message(exc))
+        try:
+            plan = build_batch_plan_from_web_selection(tuple(copies), output_dir, options)
+            set_prepared_batch(st.session_state, plan, signature)
+            st.success("Lot prêt")
+        except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
+            clear_prepared_batch(st.session_state)
+            st.error(web_error_message(exc))
     if st.session_state.get(PLAN_KEY) is not None and st.session_state.get(SIGNATURE_KEY) == signature:
         plan = st.session_state[PLAN_KEY]
         st.success("Lot prêt")
-        st.write(f"Copies : {len(plan.sources)} · Dossier de sortie : {plan.output_dir}")
-        st.write(f"Retour professeur : {'oui' if options.include_teacher_feedback else 'non'} · Diagnostics : {'oui' if options.include_diagnostics else 'non'}")
-        st.write(f"Code HTML : {'masqué' if options.hide_code else 'visible'} · Sorties HTML : {'masquées' if options.hide_outputs else 'visibles'} · Remplacement : {'oui' if options.overwrite else 'non'}")
+        st.write(f"Copies : {len(plan.sources)}")
         identity_by_id = {item.source_id: item.identity for item in copies}
         table_rows = []
         for row in batch_plan_rows(plan, identity_by_id):
@@ -290,12 +278,8 @@ def main() -> None:
                 "Étudiants détectés": row.students_display,
                 "Statut identité": row.identity_status,
                 "Source": row.identity_source,
-                "Notebook corrigé": row.notebook_output_name,
-                "Version HTML": row.html_output_name,
             })
         st.table(table_rows)
-        if has_output_name_collision(plan):
-            st.info("Des noms de fichiers identiques ont été détectés. TPStudio a préparé des noms de sortie distincts.")
         unresolved = [item for item in copies if item.identity and item.identity.status is CopyIdentityStatus.TO_REVIEW]
         if unresolved:
             st.markdown("### Résolution des identités")
@@ -340,72 +324,45 @@ def main() -> None:
         can_run, reasons = can_run_batch(copies, plan)
         if not can_run:
             st.warning("Certaines identités doivent être vérifiées avant correction.")
-        if options.overwrite:
-            st.warning("Les fichiers de sortie existants pourront être remplacés.")
-        if st.button("Corriger le lot", type="primary", disabled=not can_run or st.session_state[RUN_IN_PROGRESS_KEY]):
+        if st.button("Analyser", type="primary", disabled=not can_run or st.session_state[RUN_IN_PROGRESS_KEY]):
             st.session_state[RUN_IN_PROGRESS_KEY] = True
             try:
-                plan.output_dir.mkdir(parents=True, exist_ok=True)
-                if not plan.output_dir.is_dir():
-                    raise ValueError("Le dossier de sortie est invalide.")
-                with st.spinner("Correction du lot en cours…"):
-                    result = run_prepared_batch(plan)
-                set_run_result(st.session_state, result, signature)
+                with st.spinner("Analyse du lot en cours…"):
+                    result = run_selected_dispatch(copies)
+                set_dispatch_result(st.session_state, result, signature)
+                clear_run_result(st.session_state)
                 st.session_state[REVIEW_INDEX_KEY] = 0
             except Exception:
-                clear_run_result(st.session_state)
-                st.error("Impossible de lancer la correction du lot.")
+                clear_dispatch_result(st.session_state)
+                st.error("Impossible d'analyser le lot.")
             finally:
                 st.session_state[RUN_IN_PROGRESS_KEY] = False
-        result = get_current_run_result(st.session_state, signature)
-        if result is not None:
-            if result.success:
-                st.success("Correction terminée.")
-            elif result.success_count:
-                st.warning("Le lot a été traité avec des erreurs.")
-            else:
-                st.warning("Aucune copie n'a été corrigée.")
-            st.subheader("Résultat de la correction")
-            st.write(f"Copies : {len(result.results)} · Réussies : {result.success_count} · Échecs : {result.failed_count} · Ignorées : {result.skipped_count} · Annotations : {result.total_annotation_count} · Revue humaine confirmée : {result.human_review_count}")
-            from tpstudio.web.presenters import artifact_download_info, batch_run_rows
-            result_rows = batch_run_rows(result, copies)
-            st.table([{
-                "Copie": row.copy_label, "Étudiants": row.students_display,
-                "Statut": row.status, "Notebook corrigé": row.notebook_output_name,
-                "Version HTML": row.html_output_name, "Annotations": row.annotation_count,
-                "Revue humaine": row.human_review, "Limites": row.limitations,
-                "Problème": row.problem,
-            } for row in result_rows])
-            for item, row in zip(result.results, result_rows):
-                if item.status is BatchCopyStatus.SUCCESS:
-                    with st.expander(f"{row.copy_label} · {row.students_display}"):
-                        for kind, label in (("notebook", "Télécharger le notebook"), ("html", "Télécharger le HTML")):
-                            try:
-                                filename, mime, path = artifact_download_info(item, plan.output_dir, kind)
-                                st.download_button(label, data=path.read_bytes(), file_name=filename, mime=mime, key=f"download-{item.source_id}-{kind}")
-                            except (FileNotFoundError, ValueError):
-                                st.warning("Artefact indisponible.")
-                        graph_rows = graph_summary_rows(item.teacher_report, key_prefix=item.source_id)
-                        if graph_rows:
-                            st.markdown("#### Graphes et régressions")
-                            for graph_index, graph_row in enumerate(graph_rows, 1):
-                                st.markdown(f"{graph_row.icon} **{graph_row.headline}**")
-                                for line in graph_row.summary_lines:
-                                    st.caption(line)
-                                if graph_row.technical_details:
-                                    with st.popover(_graph_detail_label(item.source_id, graph_index)):
-                                        for detail in graph_row.technical_details:
-                                            st.caption(detail)
-            with st.expander("Rapport du lot"):
-                st.markdown(render_batch_report_markdown(result))
-            if any(item.interpretation_review_traces for item in result.results):
-                st.subheader("Revue humaine des interprétations")
-                review_labels = {}
-                for selected in copies:
-                    students = " · ".join(student.display_name for student in getattr(selected.identity, "students", ()))
-                    review_labels[selected.source_id] = f"{selected.original_filename} · {students or '—'}"
-                _render_interpretation_review(st, result, plan.output_dir, review_labels)
-                _render_review_corpus(st, result, plan.output_dir)
+        dispatch_result = get_current_dispatch_result(st.session_state, signature)
+        if dispatch_result is not None:
+            st.subheader("Résultat de l'analyse")
+            st.write(f"Copies : {len(dispatch_result.copies)} · Analysées : {dispatch_result.analyzed_count} · À confirmer : {dispatch_result.unresolved_count} · Erreurs : {dispatch_result.error_count} · Non traitées : {dispatch_result.skipped_count}")
+            for row, item in zip(batch_dispatch_rows(dispatch_result, copies), dispatch_result.copies):
+                icon = {"Analysée": "✅", "TP à confirmer": "⚠️", "Erreur technique": "❌", "Non traitée": "⏭️"}[row.status]
+                with st.expander(f"{icon} {row.display_name} — {row.status}", expanded=True):
+                    if row.project_title:
+                        st.write(f"TP : {row.project_title}")
+                    if row.confidence:
+                        st.write(f"Confiance : {row.confidence}")
+                    st.write(f"Provenance : {row.provenance}")
+                    if row.error_message:
+                        st.warning(row.error_message)
+                    if row.evidence:
+                        st.markdown("**Détails de la détection**")
+                        with st.container():
+                            for kind, text in row.evidence:
+                                st.caption(f"{kind} : {text}")
+                    if item.dispatch and item.dispatch.analysis:
+                        from tpstudio.reporting import build_teacher_copy_report
+                        graph_rows = graph_summary_rows(build_teacher_copy_report(item.dispatch.analysis), key_prefix=item.source_id)
+                        for graph_row in graph_rows:
+                            st.markdown(f"{graph_row.icon} **{graph_row.headline}**")
+                            for line in graph_row.summary_lines:
+                                st.caption(line)
     if st.button("Réinitialiser"):
         workspace.reset()
         reset_web_session(st.session_state)

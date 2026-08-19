@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from tpstudio.batch import BatchCopySource, BatchOptions, BatchPlan, build_batch_plan
-from tpstudio.orchestration import load_and_normalize_notebook
+from tpstudio.orchestration import BatchCopyRequest, NotebookCopySource, load_and_normalize_notebook
 
 from .identity import build_canonical_copy_stem, canonical_tp_name, identify_selected_copy
 from .model import SelectedCopy, WebBatchOptions
@@ -68,3 +68,17 @@ def build_batch_plan_from_web_selection(
         hide_outputs=options.hide_outputs,
     )
     return build_batch_plan(sources, output_dir, batch_options)
+
+
+def build_dispatch_requests_from_web_selection(copies: tuple[SelectedCopy, ...]) -> tuple[BatchCopyRequest, ...]:
+    """Convert selected uploads to project-agnostic analysis requests."""
+    copies = tuple(copies)
+    if not copies:
+        raise ValueError("Aucune copie sélectionnée.")
+    return tuple(
+        BatchCopyRequest(
+            item.source_id,
+            NotebookCopySource(item.source_id, item.original_filename, item.workspace_path),
+        )
+        for item in copies
+    )

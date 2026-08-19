@@ -3,12 +3,24 @@
 from __future__ import annotations
 
 from tpstudio.batch import BatchPlan, BatchRunResult, run_snells_laws_batch
+from tpstudio.orchestration import BatchDispatchResult, CopyAnalysisOptions, run_batch
+
+from .planning import build_dispatch_requests_from_web_selection
 
 
 def run_prepared_batch(plan: BatchPlan) -> BatchRunResult:
     if type(plan) is not BatchPlan:
         raise TypeError("Le lancement web exige un BatchPlan.")
     return run_snells_laws_batch(plan)
+
+
+def run_selected_dispatch(copies, *, options: CopyAnalysisOptions | None = None, continue_on_error: bool = True) -> BatchDispatchResult:
+    """Analyze selected copies generically, without export side effects."""
+    return run_batch(
+        build_dispatch_requests_from_web_selection(tuple(copies)),
+        options=options,
+        continue_on_error=continue_on_error,
+    )
 
 
 def can_run_batch(selected_copies, plan) -> tuple[bool, tuple[str, ...]]:

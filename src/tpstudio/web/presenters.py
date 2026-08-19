@@ -8,6 +8,8 @@ from pathlib import Path
 
 from tpstudio.batch import BatchPlan
 from tpstudio.batch import BatchCopyStatus, BatchRunResult
+from tpstudio.orchestration import BatchCopyDispatchStatus, BatchDispatchResult, ProjectSelectionProvenance
+from tpstudio.projects import project_descriptor
 from tpstudio.interpretation import InterpretationClassification, InterpretationReviewTrace
 from tpstudio.reporting import TeacherCopyReport, TeacherGraphHeadlineStatus
 from tpstudio.review_store import (
@@ -73,6 +75,58 @@ class BatchRunRow:
     limitations: str
     error: str
     problem: str
+
+
+@dataclass(frozen=True, slots=True)
+class BatchDispatchRow:
+    source_id: str
+    display_name: str
+    status: str
+    project_id: str | None
+    project_title: str | None
+    confidence: str | None
+    provenance: str
+    requires_teacher_choice: bool
+    error_message: str | None
+    evidence: tuple[tuple[str, str], ...]
+
+
+def _confidence_label(value) -> str | None:
+    return {"high": "Haute", "medium": "Moyenne", "low": "Faible", None: None}.get(getattr(value, "value", value), None)
+
+
+def _provenance_label(value) -> str:
+    return {
+        ProjectSelectionProvenance.AUTO_RESOLVED: "Détection automatique",
+        ProjectSelectionProvenance.EXPLICIT: "Projet imposé",
+        ProjectSelectionProvenance.UNRESOLVED: "Non résolu",
+    }.get(value, "Non résolu")
+
+
+def batch_dispatch_rows(result: BatchDispatchResult, selected_copies=()) -> tuple[BatchDispatchRow, ...]:
+    labels = {BatchCopyDispatchStatus.ANALYZED: "Analysée", BatchCopyDispatchStatus.UNRESOLVED: "TP à confirmer", BatchCopyDispatchStatus.ERROR: "Erreur technique", BatchCopyDispatchStatus.SKIPPED: "Non traitée"}
+    names = {item.source_id: item.original_filename for item in selected_copies}
+    rows = []
+    for item in result.copies:
+        dispatch = item.dispatch
+        resolution = dispatch.resolution if dispatch else None
+        analysis = dispatch.analysis if dispatch else None
+        project_id = analysis.project_id if analysis else None
+        candidate = None
+        if resolution:
+            candidate = next((value for value in resolution.candidates if value.project_id == resolution.selected_project_id), None)
+        if candidate is None and resolution:
+            candidate = resolution.candidates[0] if resolution.candidates else None
+        title = analysis.project.identity.title if analysis else (project_descriptor(candidate.project_id).title if candidate and project_descriptor(candidate.project_id) else None)
+        evidence = tuple((e.kind, e.text) for c in (resolution.candidates if resolution else ()) for e in c.evidence)
+        rows.append(BatchDispatchRow(
+            item.source_id, names.get(item.source_id, item.source_id), labels[item.status],
+            project_id, title, _confidence_label(candidate.confidence if candidate else None),
+            _provenance_label(dispatch.provenance if dispatch else None),
+            bool(resolution and resolution.requires_teacher_choice),
+            item.error_message[:240] if item.error_message else None, evidence,
+        ))
+    return tuple(rows)
 
 
 @dataclass(frozen=True, slots=True)
