@@ -15,6 +15,7 @@ RUN_RESULT_KEY = "tpstudio_web_run_result"
 RUN_SIGNATURE_KEY = "tpstudio_web_run_signature"
 DISPATCH_RESULT_KEY = "tpstudio_web_dispatch_result"
 DISPATCH_SIGNATURE_KEY = "tpstudio_web_dispatch_signature"
+PROJECT_OVERRIDES_KEY = "tpstudio_web_project_overrides"
 RUN_IN_PROGRESS_KEY = "tpstudio_web_run_in_progress"
 REVIEW_INDEX_KEY = "tpstudio_web_review_index"
 REVIEW_FILTER_KEY = "tpstudio_web_review_only_pending"
@@ -35,6 +36,7 @@ def initialize_session_state(state: MutableMapping) -> None:
     state.setdefault(RUN_SIGNATURE_KEY, None)
     state.setdefault(DISPATCH_RESULT_KEY, None)
     state.setdefault(DISPATCH_SIGNATURE_KEY, None)
+    state.setdefault(PROJECT_OVERRIDES_KEY, {})
     state.setdefault(RUN_IN_PROGRESS_KEY, False)
     state.setdefault(REVIEW_INDEX_KEY, 0)
     state.setdefault(REVIEW_FILTER_KEY, True)
@@ -54,6 +56,7 @@ def clear_run_result(state: MutableMapping) -> None:
 def clear_dispatch_result(state: MutableMapping) -> None:
     state[DISPATCH_RESULT_KEY] = None
     state[DISPATCH_SIGNATURE_KEY] = None
+    state[PROJECT_OVERRIDES_KEY] = {}
 
 
 def set_run_result(state: MutableMapping, result, signature: tuple) -> None:
@@ -70,6 +73,23 @@ def get_current_run_result(state: MutableMapping, signature: tuple):
 def set_dispatch_result(state: MutableMapping, result, signature: tuple) -> None:
     state[DISPATCH_RESULT_KEY] = result
     state[DISPATCH_SIGNATURE_KEY] = signature
+    state[PROJECT_OVERRIDES_KEY] = {}
+
+
+def get_project_overrides(state: MutableMapping) -> dict:
+    return dict(state.get(PROJECT_OVERRIDES_KEY, {}))
+
+
+def set_project_override(state: MutableMapping, override) -> None:
+    overrides = get_project_overrides(state)
+    overrides[override.source_id] = override
+    state[PROJECT_OVERRIDES_KEY] = overrides
+
+
+def remove_project_override(state: MutableMapping, source_id: str) -> None:
+    overrides = get_project_overrides(state)
+    overrides.pop(source_id, None)
+    state[PROJECT_OVERRIDES_KEY] = overrides
 
 
 def get_current_dispatch_result(state: MutableMapping, signature: tuple):

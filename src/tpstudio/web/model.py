@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .identity import CopyIdentity
+    from tpstudio.orchestration import CopyAnalysisResult
 
 
 def validate_upload_filename(filename: str) -> str:
@@ -56,3 +57,27 @@ class WebBatchOptions:
         for name in self.__dataclass_fields__:
             if type(getattr(self, name)) is not bool:
                 raise TypeError(f"L'option {name!r} doit être un booléen exact.")
+
+
+@dataclass(frozen=True, slots=True)
+class WebCopyOverride:
+    """Teacher-selected active analysis, kept outside the scientific dispatch."""
+
+    source_id: str
+    project_id: str
+    analysis: "CopyAnalysisResult"
+    validated_by_teacher: bool = True
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.source_id, str) or not self.source_id.strip():
+            raise ValueError("source_id doit être une chaîne non vide.")
+        if not isinstance(self.project_id, str) or not self.project_id.strip():
+            raise ValueError("project_id doit être une chaîne non vide.")
+        from tpstudio.orchestration import CopyAnalysisResult
+
+        if type(self.analysis) is not CopyAnalysisResult:
+            raise TypeError("analysis doit être un CopyAnalysisResult.")
+        if self.analysis.source_id != self.source_id or self.analysis.project_id != self.project_id:
+            raise ValueError("L'override ne correspond pas à la copie ou au projet.")
+        if type(self.validated_by_teacher) is not bool:
+            raise TypeError("validated_by_teacher doit être booléen.")

@@ -7,16 +7,19 @@ from dataclasses import replace
 from datetime import datetime, timezone
 
 from tpstudio.batch import BatchCopyStatus, render_batch_report_markdown
-from tpstudio.web.execution import can_run_batch, run_selected_dispatch
+from tpstudio.web.execution import analyze_selected_copy, can_run_batch, run_selected_dispatch
 from tpstudio.web.model import WebBatchOptions
 from tpstudio.web.identity import (
     CopyIdentityStatus, StudentIdentity, confirm_copy_identity,
     identify_selected_copy,
 )
-from tpstudio.web.planning import WebInputError, build_batch_plan_from_web_selection
+from tpstudio.web.model import WebCopyOverride
+from tpstudio.web.planning import WebInputError, build_batch_plan_from_web_selection, build_dispatch_requests_from_web_selection
+from tpstudio.projects import project_descriptor
 from tpstudio.web.presenters import (
     batch_plan_rows, graph_summary_rows,
-    identity_resolution_candidates, batch_dispatch_rows,
+    identity_resolution_candidates, active_analysis_for_source, batch_dispatch_rows,
+    project_choices_for_source,
 )
 from tpstudio.web.roster import (
     default_roster_path, load_roster, parse_roster_csv, save_roster,
@@ -38,6 +41,7 @@ from tpstudio.web.state import (
     default_output_dir,
     REVIEW_FILTER_KEY, REVIEW_INDEX_KEY, REVIEW_MESSAGE_KEY,
     get_current_dispatch_result, set_dispatch_result, clear_dispatch_result,
+    get_project_overrides, set_project_override, remove_project_override,
 )
 from tpstudio.web.workspace import WebWorkspace
 
@@ -341,14 +345,22 @@ def main() -> None:
         if dispatch_result is not None:
             st.subheader("Résultat de l'analyse")
             st.write(f"Copies : {len(dispatch_result.copies)} · Analysées : {dispatch_result.analyzed_count} · À confirmer : {dispatch_result.unresolved_count} · Erreurs : {dispatch_result.error_count} · Non traitées : {dispatch_result.skipped_count}")
-            for row, item in zip(batch_dispatch_rows(dispatch_result, copies), dispatch_result.copies):
-                icon = {"Analysée": "✅", "TP à confirmer": "⚠️", "Erreur technique": "❌", "Non traitée": "⏭️"}[row.status]
+            overrides = get_project_overrides(st.session_state)
+            rows = batch_dispatch_rows(dispatch_result, copies, overrides)
+            for row, item in zip(rows, dispatch_result.copies):
+                icon = {
+                    "Analysée": "✅", "TP à confirmer": "⚠️", "Aucun TP reconnu": "⚠️",
+                    "Erreur technique": "❌", "Non traitée": "⏭️",
+                    "Non analysée à cause d'une erreur précédente": "⏭️",
+                }.get(row.status, "ℹ️")
                 with st.expander(f"{icon} {row.display_name} — {row.status}", expanded=True):
                     if row.project_title:
                         st.write(f"TP : {row.project_title}")
                     if row.confidence:
                         st.write(f"Confiance : {row.confidence}")
                     st.write(f"Provenance : {row.provenance}")
+                    if row.validated_by_teacher:
+                        st.write("✓ Validé par l'enseignant")
                     if row.error_message:
                         st.warning(row.error_message)
                     if row.evidence:
@@ -356,13 +368,51 @@ def main() -> None:
                         with st.container():
                             for kind, text in row.evidence:
                                 st.caption(f"{kind} : {text}")
-                    if item.dispatch and item.dispatch.analysis:
+                    active_analysis = active_analysis_for_source(dispatch_result, overrides, item.source_id)
+                    if active_analysis is not None:
                         from tpstudio.reporting import build_teacher_copy_report
-                        graph_rows = graph_summary_rows(build_teacher_copy_report(item.dispatch.analysis), key_prefix=item.source_id)
+                        graph_rows = graph_summary_rows(build_teacher_copy_report(active_analysis), key_prefix=item.source_id)
                         for graph_row in graph_rows:
                             st.markdown(f"{graph_row.icon} **{graph_row.headline}**")
                             for line in graph_row.summary_lines:
                                 st.caption(line)
+                    if item.status.value == "unresolved" or active_analysis is not None:
+                        current_project = active_analysis.project_id if active_analysis is not None else None
+                        if active_analysis is not None and not row.validated_by_teacher:
+                            edit = st.checkbox("Modifier le TP", key=f"edit-project-{item.source_id}")
+                        else:
+                            edit = True
+                        if edit:
+                            choices = project_choices_for_source(dispatch_result, item.source_id)
+                            if current_project in choices:
+                                default_index = choices.index(current_project)
+                            else:
+                                default_index = 0
+                            chosen = st.selectbox(
+                                "TP à utiliser",
+                                choices,
+                                index=default_index,
+                                format_func=lambda value: project_descriptor(value).title,
+                                key=f"project-choice-{item.source_id}",
+                            )
+                            if st.button("Utiliser ce TP", key=f"use-project-{item.source_id}"):
+                                try:
+                                    source = active_analysis.source if active_analysis is not None else next(
+                                        request.source for request in build_dispatch_requests_from_web_selection(tuple(copies))
+                                        if request.source_id == item.source_id
+                                    )
+                                    explicit_dispatch = analyze_selected_copy(source, chosen)
+                                    if explicit_dispatch.analysis is None:
+                                        raise ValueError("Le projet choisi n'a pas permis d'analyser cette copie.")
+                                    set_project_override(st.session_state, WebCopyOverride(
+                                        item.source_id, chosen, explicit_dispatch.analysis,
+                                    ))
+                                    st.rerun()
+                                except Exception:
+                                    st.error("Impossible d'analyser la copie avec ce TP.")
+                        if row.validated_by_teacher and st.button("Revenir à la détection automatique", key=f"auto-project-{item.source_id}"):
+                            remove_project_override(st.session_state, item.source_id)
+                            st.rerun()
     if st.button("Réinitialiser"):
         workspace.reset()
         reset_web_session(st.session_state)

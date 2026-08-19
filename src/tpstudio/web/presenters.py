@@ -9,9 +9,10 @@ from pathlib import Path
 from tpstudio.batch import BatchPlan
 from tpstudio.batch import BatchCopyStatus, BatchRunResult
 from tpstudio.orchestration import BatchCopyDispatchStatus, BatchDispatchResult, ProjectSelectionProvenance
-from tpstudio.projects import project_descriptor
+from tpstudio.projects import known_project_ids, project_descriptor
 from tpstudio.interpretation import InterpretationClassification, InterpretationReviewTrace
 from tpstudio.reporting import TeacherCopyReport, TeacherGraphHeadlineStatus
+from .model import WebCopyOverride
 from tpstudio.review_store import (
     latest_interpretation_review, load_interpretation_reviews, review_store_path,
 )
@@ -89,6 +90,7 @@ class BatchDispatchRow:
     requires_teacher_choice: bool
     error_message: str | None
     evidence: tuple[tuple[str, str], ...]
+    validated_by_teacher: bool = False
 
 
 def _confidence_label(value) -> str | None:
@@ -103,14 +105,38 @@ def _provenance_label(value) -> str:
     }.get(value, "Non résolu")
 
 
-def batch_dispatch_rows(result: BatchDispatchResult, selected_copies=()) -> tuple[BatchDispatchRow, ...]:
-    labels = {BatchCopyDispatchStatus.ANALYZED: "Analysée", BatchCopyDispatchStatus.UNRESOLVED: "TP à confirmer", BatchCopyDispatchStatus.ERROR: "Erreur technique", BatchCopyDispatchStatus.SKIPPED: "Non traitée"}
+def active_analysis_for_source(result: BatchDispatchResult, overrides: Mapping[str, WebCopyOverride], source_id: str):
+    override = overrides.get(source_id)
+    if override is not None:
+        return override.analysis
+    item = result.get(source_id)
+    return item.dispatch.analysis if item and item.dispatch else None
+
+
+def project_choices_for_source(result: BatchDispatchResult, source_id: str) -> tuple[str, ...]:
+    item = result.get(source_id)
+    candidate_ids = (
+        tuple(candidate.project_id for candidate in item.dispatch.resolution.candidates)
+        if item and item.dispatch else ()
+    )
+    known = known_project_ids()
+    return tuple(dict.fromkeys(candidate_ids + known))
+
+
+def batch_dispatch_rows(
+    result: BatchDispatchResult,
+    selected_copies=(),
+    overrides: Mapping[str, WebCopyOverride] | None = None,
+) -> tuple[BatchDispatchRow, ...]:
+    overrides = overrides or {}
+    labels = {BatchCopyDispatchStatus.ANALYZED: "Analysée", BatchCopyDispatchStatus.UNRESOLVED: "Aucun TP reconnu", BatchCopyDispatchStatus.ERROR: "Erreur technique", BatchCopyDispatchStatus.SKIPPED: "Non analysée à cause d'une erreur précédente"}
     names = {item.source_id: item.original_filename for item in selected_copies}
     rows = []
     for item in result.copies:
         dispatch = item.dispatch
         resolution = dispatch.resolution if dispatch else None
-        analysis = dispatch.analysis if dispatch else None
+        override = overrides.get(item.source_id)
+        analysis = override.analysis if override else (dispatch.analysis if dispatch else None)
         project_id = analysis.project_id if analysis else None
         candidate = None
         if resolution:
@@ -118,13 +144,19 @@ def batch_dispatch_rows(result: BatchDispatchResult, selected_copies=()) -> tupl
         if candidate is None and resolution:
             candidate = resolution.candidates[0] if resolution.candidates else None
         title = analysis.project.identity.title if analysis else (project_descriptor(candidate.project_id).title if candidate and project_descriptor(candidate.project_id) else None)
+        status = "Analysée" if analysis is not None else (
+            "TP à confirmer" if item.status is BatchCopyDispatchStatus.UNRESOLVED and candidate else labels[item.status]
+        )
+        provenance = "Projet choisi par l'enseignant" if override else _provenance_label(dispatch.provenance if dispatch else None)
+        confidence = None if override else _confidence_label(candidate.confidence if candidate else None)
         evidence = tuple((e.kind, e.text) for c in (resolution.candidates if resolution else ()) for e in c.evidence)
         rows.append(BatchDispatchRow(
-            item.source_id, names.get(item.source_id, item.source_id), labels[item.status],
-            project_id, title, _confidence_label(candidate.confidence if candidate else None),
-            _provenance_label(dispatch.provenance if dispatch else None),
+            item.source_id, names.get(item.source_id, item.source_id), status,
+            project_id, title, confidence,
+            provenance,
             bool(resolution and resolution.requires_teacher_choice),
             item.error_message[:240] if item.error_message else None, evidence,
+            bool(override and override.validated_by_teacher),
         ))
     return tuple(rows)
 

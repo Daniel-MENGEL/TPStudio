@@ -4,14 +4,16 @@ from pathlib import Path
 import nbformat
 
 from tpstudio.orchestration import BatchDispatchResult
-from tpstudio.web.execution import run_selected_dispatch
+from tpstudio.projects import known_project_ids
+from tpstudio.web.execution import analyze_selected_copy, run_selected_dispatch
 import tpstudio.web.execution as execution
-from tpstudio.web.model import SelectedCopy
+from tpstudio.web.model import SelectedCopy, WebCopyOverride
 from tpstudio.web.planning import build_dispatch_requests_from_web_selection
-from tpstudio.web.presenters import batch_dispatch_rows
+from tpstudio.web.presenters import active_analysis_for_source, batch_dispatch_rows, project_choices_for_source
 from tpstudio.web.state import (
     DISPATCH_RESULT_KEY, DISPATCH_SIGNATURE_KEY, initialize_session_state,
-    invalidate_if_signature_changed, set_dispatch_result,
+    PROJECT_OVERRIDES_KEY, get_project_overrides, invalidate_if_signature_changed,
+    set_dispatch_result, set_project_override,
 )
 
 
@@ -28,6 +30,12 @@ def _copies(tmp_path):
             f"copy-{index:03}", path.name, path, sha256(path.read_bytes()).hexdigest(),
         ))
     return tuple(copies)
+
+
+def _empty_copy(tmp_path):
+    path = tmp_path / "copy-003.ipynb"
+    nbformat.write(nbformat.v4.new_notebook(), path)
+    return SelectedCopy("copy-003", path.name, path, sha256(path.read_bytes()).hexdigest())
 
 
 def test_web_selection_becomes_project_agnostic_requests(tmp_path):
@@ -84,3 +92,41 @@ def test_web_execution_calls_generic_run_batch_once(tmp_path, monkeypatch):
     assert [request.source_id for request in observed["requests"]] == ["copy-001", "copy-002"]
     assert observed["options"] is None
     assert observed["continue_on_error"] is True
+
+
+def test_unresolved_project_choices_are_candidates_then_registry(tmp_path):
+    empty = _empty_copy(tmp_path)
+    result = run_selected_dispatch((empty,))
+    assert result.unresolved_count == 1
+    assert project_choices_for_source(result, empty.source_id) == known_project_ids()
+    row = batch_dispatch_rows(result, (empty,))[0]
+    assert row.status == "Aucun TP reconnu"
+
+
+def test_active_analysis_override_and_restore(tmp_path):
+    copies = _copies(tmp_path)
+    result = run_selected_dispatch(copies)
+    auto = result.get("copy-002").dispatch.analysis
+    explicit = analyze_selected_copy(auto.source, "snells-laws-mvp")
+    override = WebCopyOverride("copy-002", "snells-laws-mvp", explicit.analysis)
+    assert active_analysis_for_source(result, {}, "copy-002") is auto
+    assert active_analysis_for_source(result, {"copy-002": override}, "copy-002") is explicit.analysis
+    row = batch_dispatch_rows(result, copies, {"copy-002": override})[1]
+    assert row.project_id == "snells-laws-mvp"
+    assert row.provenance == "Projet choisi par l'enseignant"
+    assert row.confidence is None
+    assert row.validated_by_teacher
+    assert active_analysis_for_source(result, {}, "copy-002") is auto
+
+
+def test_overrides_are_cleared_with_new_dispatch_result(tmp_path):
+    copies = _copies(tmp_path)
+    result = run_selected_dispatch(copies)
+    analysis = result.get("copy-002").dispatch.analysis
+    override = WebCopyOverride("copy-002", "snells-laws-mvp", analyze_selected_copy(analysis.source, "snells-laws-mvp").analysis)
+    state = {}
+    initialize_session_state(state)
+    set_project_override(state, override)
+    assert state[PROJECT_OVERRIDES_KEY]
+    set_dispatch_result(state, result, ("new",))
+    assert get_project_overrides(state) == {}
