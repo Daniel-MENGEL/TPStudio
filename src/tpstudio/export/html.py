@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import nbformat
 import re
+from html import escape
 from nbformat.notebooknode import NotebookNode
 from nbconvert import HTMLExporter
 
@@ -12,12 +13,12 @@ from tpstudio.annotation.rendering import annotation_css
 from .model import CopyExportOptions
 
 
-_TITLE = "TPStudio — Lois de Snell-Descartes — Correction"
+_DEFAULT_TITLE = "TPStudio — Lois de Snell-Descartes — Correction"
 _STYLE = "<style>.tpstudio-banner{padding:0.8em;margin:0 0 1.2em;border:1px solid #ccd;background:#f7f8fa}.tpstudio-banner strong{display:block;margin-bottom:.25em}</style>" + annotation_css()
 _BANNER = "<div class=\"tpstudio-banner\"><strong>TPStudio — copie annotée</strong>Générée en lecture seule ; le notebook n'a pas été exécuté. Les annotations proviennent de la configuration professeur. Aucune note automatique.</div>"
 
 
-def _customize_nbconvert_html(document: str) -> str:
+def _customize_nbconvert_html(document: str, *, title: str = _DEFAULT_TITLE) -> str:
     """Inject A71f presentation into the one nbconvert document."""
     if not isinstance(document, str) or not document.strip():
         raise ValueError("Le document HTML nbconvert est vide.")
@@ -27,8 +28,10 @@ def _customize_nbconvert_html(document: str) -> str:
         raise ValueError("Le rendu nbconvert ne contient pas d'en-tête HTML.")
     if not re.search(r"<body\b[^>]*>", document, re.IGNORECASE) or not re.search(r"</body\s*>", document, re.IGNORECASE):
         raise ValueError("Le rendu nbconvert ne contient pas de corps HTML.")
+    if not isinstance(title, str) or not title.strip():
+        raise ValueError("Le titre HTML ne peut pas être vide.")
     document = re.sub(r"<title\b[^>]*>.*?</title\s*>", "", document, flags=re.IGNORECASE | re.DOTALL)
-    document = re.sub(r"</head\s*>", f"<title>{_TITLE}</title>\n{_STYLE}\n</head>", document, count=1, flags=re.IGNORECASE)
+    document = re.sub(r"</head\s*>", f"<title>{escape(title)}</title>\n{_STYLE}\n</head>", document, count=1, flags=re.IGNORECASE)
     if 'class="tpstudio-banner"' not in document:
         document = re.sub(r"(<body\b[^>]*>)", r"\1" + _BANNER, document, count=1, flags=re.IGNORECASE)
     return document
@@ -38,6 +41,7 @@ def render_annotated_notebook_html(
     notebook: NotebookNode,
     *,
     options: CopyExportOptions,
+    title: str = _DEFAULT_TITLE,
 ) -> str:
     if not isinstance(notebook, NotebookNode):
         raise TypeError("Le notebook doit être un NotebookNode.")
@@ -51,4 +55,4 @@ def render_annotated_notebook_html(
     exporter.exclude_output_prompt = not options.include_output_prompts
     resources = {"embed_images": options.embed_images}
     body, _ = exporter.from_notebook_node(notebook, resources=resources)
-    return _customize_nbconvert_html(body)
+    return _customize_nbconvert_html(body, title=title)

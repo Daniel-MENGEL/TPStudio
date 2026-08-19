@@ -14,7 +14,7 @@ from tpstudio.annotation import (
     AnnotationOptions, apply_annotation_plan, build_annotation_plan,
 )
 from tpstudio.orchestration import (
-    NotebookCopySource, analyze_snells_laws_copy, load_notebook_copy,
+    CopyAnalysisResult, NotebookCopySource, analyze_snells_laws_copy, load_notebook_copy,
 )
 from tpstudio.interpretation import apply_interpretation_reviews
 from tpstudio.interpretation import InterpretationDiagnostic, InterpretationFeedbackItem
@@ -98,21 +98,55 @@ def export_snells_laws_copy(
 ) -> CopyExportResult:
     if not isinstance(source_path, Path) or not isinstance(output_dir, Path):
         raise TypeError("source_path et output_dir doivent être des pathlib.Path.")
+    source = NotebookCopySource(source_id, source_path.name, source_path)
+    analysis = analyze_snells_laws_copy(source)
+    return export_analyzed_copy(
+        source, analysis, output_dir, options=options,
+        notebook_output_path=notebook_output_path,
+        html_output_path=html_output_path,
+    )
+
+
+def export_analyzed_copy(
+    source: NotebookCopySource,
+    analysis: CopyAnalysisResult,
+    output_dir: Path,
+    *,
+    options: CopyExportOptions | None = None,
+    output_stem: str | None = None,
+    notebook_output_path: Path | None = None,
+    html_output_path: Path | None = None,
+) -> CopyExportResult:
+    """Export an already completed analysis without running analysis again."""
+    if not isinstance(source, NotebookCopySource):
+        raise TypeError("source doit être un NotebookCopySource.")
+    if type(analysis) is not CopyAnalysisResult:
+        raise TypeError("analysis doit être un CopyAnalysisResult.")
+    if not isinstance(output_dir, Path):
+        raise TypeError("output_dir doit être un pathlib.Path.")
+    if (
+        source.source_id != analysis.source_id
+        or source.path.resolve() != analysis.source.path.resolve()
+    ):
+        raise ValueError("source et analysis ne désignent pas la même copie.")
     options = CopyExportOptions() if options is None else options
     if type(options) is not CopyExportOptions:
         raise TypeError("Les options d'export sont invalides.")
     if (notebook_output_path is None) != (html_output_path is None):
         raise ValueError("Les deux destinations explicites doivent être fournies ensemble.")
     if notebook_output_path is None:
-        notebook_name, html_name = default_export_names(source_path.name)
+        name = source.display_name if output_stem is None else output_stem
+        notebook_name, html_name = default_export_names(name)
         notebook_path, html_path = output_dir / notebook_name, output_dir / html_name
     else:
+        if output_stem is not None:
+            raise ValueError("output_stem et destinations explicites sont mutuellement exclusifs.")
         if not isinstance(notebook_output_path, Path) or not isinstance(html_output_path, Path):
             raise TypeError("Les destinations explicites doivent être des pathlib.Path.")
         notebook_path, html_path = notebook_output_path, html_output_path
         if not _inside_directory(notebook_path, output_dir) or not _inside_directory(html_path, output_dir):
             raise ValueError("Les destinations explicites doivent rester dans output_dir.")
-    if _same_location(notebook_path, source_path) or _same_location(html_path, source_path):
+    if _same_location(notebook_path, source.path) or _same_location(html_path, source.path):
         raise ValueError("Une destination d'export ne peut pas être le notebook source.")
     if _same_location(notebook_path, html_path):
         raise ValueError("Les destinations notebook et HTML doivent être distinctes.")
@@ -121,9 +155,7 @@ def export_snells_laws_copy(
     if not options.overwrite and (notebook_existed or html_existed):
         raise FileExistsError("Une destination d'export existe déjà.")
 
-    before = sha256(source_path.read_bytes()).digest()
-    source = NotebookCopySource(source_id, source_path.name, source_path)
-    analysis = analyze_snells_laws_copy(source)
+    before = sha256(source.path.read_bytes()).digest()
     persisted_reviews = load_interpretation_reviews(review_store_path(output_dir))
     effective_evaluations, effective_traces, interpretation_diagnostics, interpretation_feedback = apply_interpretation_reviews(
         analysis.interpretation_response_evaluations,
@@ -157,7 +189,8 @@ def export_snells_laws_copy(
     notebook_validation = validate_notebook_object(annotated.notebook)
     if not notebook_validation.valid:
         raise ValueError("Le notebook annoté est invalide.")
-    html = render_annotated_notebook_html(annotated.notebook, options=options)
+    title = f"TPStudio — {analysis.project.identity.title} — Correction"
+    html = render_annotated_notebook_html(annotated.notebook, options=options, title=title)
     if not html.strip():
         raise ValueError("Le rendu HTML est vide.")
 
@@ -173,7 +206,7 @@ def export_snells_laws_copy(
         temp_notebook, notebook_path, temp_html, html_path,
         overwrite=options.overwrite,
     )
-    after = sha256(source_path.read_bytes()).digest()
+    after = sha256(source.path.read_bytes()).digest()
     if before != after:
         raise RuntimeError("Le notebook source a été modifié pendant l'export.")
     student = sum(item.audience.value == "student" for item in plan.annotations)
