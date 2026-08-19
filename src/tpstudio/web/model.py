@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 import re
 from typing import TYPE_CHECKING
@@ -108,3 +109,45 @@ class WebCopyExportState:
             raise ValueError("Un export réussi ne peut pas porter d'erreur.")
         if self.result is None and (self.error_type is None or self.error_message is None):
             raise ValueError("Un export en erreur doit porter son type et son message.")
+
+
+class TeacherScientificSeverity(str, Enum):
+    """Presentation-only severity for the compact teacher overview."""
+
+    OK = "ok"
+    REVIEW = "review"
+    ERROR = "error"
+    INFO = "info"
+
+
+@dataclass(frozen=True, slots=True)
+class TeacherScientificOverviewRow:
+    key: str
+    label: str
+    summary: str
+    severity: TeacherScientificSeverity
+    details: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        for name in ("key", "label", "summary"):
+            if not isinstance(getattr(self, name), str) or not getattr(self, name).strip():
+                raise ValueError(f"{name} doit être une chaîne non vide.")
+        if type(self.severity) is not TeacherScientificSeverity:
+            raise TypeError("severity doit être une TeacherScientificSeverity.")
+        if any(not isinstance(item, str) or not item.strip() for item in self.details):
+            raise ValueError("Chaque détail doit être une chaîne non vide.")
+        object.__setattr__(self, "details", tuple(self.details))
+
+
+@dataclass(frozen=True, slots=True)
+class TeacherScientificOverview:
+    rows: tuple[TeacherScientificOverviewRow, ...]
+
+    def __post_init__(self) -> None:
+        rows = tuple(self.rows)
+        if any(type(row) is not TeacherScientificOverviewRow for row in rows):
+            raise TypeError("Chaque ligne doit être une TeacherScientificOverviewRow.")
+        keys = tuple(row.key for row in rows)
+        if len(keys) != len(set(keys)):
+            raise ValueError("Les clés de synthèse doivent être uniques.")
+        object.__setattr__(self, "rows", rows)

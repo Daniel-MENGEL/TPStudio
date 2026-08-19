@@ -27,6 +27,10 @@ from tpstudio.web.roster import (
     suggest_roster_students,
 )
 from tpstudio.web.presenters import review_prefill, select_interpretation_review_items
+from tpstudio.web.scientific_overview import (
+    build_teacher_scientific_overview, scientific_detail_widget_key,
+    scientific_severity_icon,
+)
 from tpstudio.interpretation import InterpretationClassification
 from tpstudio.review_store import append_interpretation_review, review_store_path
 from tpstudio.review_store import load_interpretation_reviews
@@ -374,7 +378,24 @@ def main() -> None:
                     active_analysis = active_analysis_for_source(dispatch_result, overrides, item.source_id)
                     if active_analysis is not None:
                         from tpstudio.reporting import build_teacher_copy_report
-                        graph_rows = graph_summary_rows(build_teacher_copy_report(active_analysis), key_prefix=item.source_id)
+                        report = build_teacher_copy_report(active_analysis)
+                        st.markdown("**Contrôle scientifique**")
+                        overview = build_teacher_scientific_overview(report)
+                        for overview_row in overview.rows:
+                            st.markdown(
+                                f"{scientific_severity_icon(overview_row.severity)} "
+                                f"**{overview_row.label}** — {overview_row.summary}"
+                            )
+                            if overview_row.details:
+                                details_key = scientific_detail_widget_key(item.source_id, overview_row.key)
+                                if st.checkbox(
+                                    f"Afficher les détails — {overview_row.label}",
+                                    key=details_key,
+                                ):
+                                    with st.container():
+                                        for detail in overview_row.details:
+                                            st.caption(detail)
+                        graph_rows = graph_summary_rows(report, key_prefix=item.source_id)
                         for graph_row in graph_rows:
                             st.markdown(f"{graph_row.icon} **{graph_row.headline}**")
                             for line in graph_row.summary_lines:
