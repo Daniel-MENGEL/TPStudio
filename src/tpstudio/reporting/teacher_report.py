@@ -7,6 +7,7 @@ from decimal import Decimal
 
 from tpstudio.feedback import FeedbackAudience
 from tpstudio.orchestration import CopyAnalysisResult, ProductionResolutionStatus
+from tpstudio.projects import ExpectedGraphModel
 
 from .priorities import (
     TeacherReportCategory,
@@ -131,6 +132,10 @@ class TeacherGraphReport:
     slope_relation_status: str
     evaluable: bool
     limitations: tuple[str, ...]
+    expected_description: str | None = None
+    expected_x_expression: str | None = None
+    expected_y_expression: str | None = None
+    expected_model: ExpectedGraphModel | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -400,6 +405,10 @@ def build_teacher_copy_report(result: CopyAnalysisResult) -> TeacherCopyReport:
         item.orientation_status.value, item.label_status.value,
         item.regression_status.value, item.slope_relation_status.value,
         item.evaluable, tuple(item.reasons) + (item.observation.analysis_limitations if item.observation else ()),
+        item.expectation.description,
+        item.expectation.x_expression,
+        item.expectation.y_expression,
+        item.expectation.expected_model,
     ) for item in result.graph_evaluations)
     student_by_id = {item.comparison_id: item for item in result.student_normalized_error_evaluations}
     interpretation_by_id = {item.comparison_id: item for item in result.comparison_interpretation_evaluations}

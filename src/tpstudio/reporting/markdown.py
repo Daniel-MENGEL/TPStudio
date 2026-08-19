@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from tpstudio.feedback import FeedbackAudience
+from tpstudio.projects import ExpectedGraphModel
 
 from .priorities import TeacherReportSeverity
 from .teacher_report import TeacherCopyReport
@@ -18,6 +19,15 @@ _MARK = {
 
 def _shown(value: object | None) -> str:
     return "—" if value is None else str(value)
+
+
+def _expected_model_text(model: ExpectedGraphModel | None) -> str | None:
+    return {
+        ExpectedGraphModel.LINEAR_THROUGH_ORIGIN: "droite passant par l'origine",
+        ExpectedGraphModel.AFFINE: "modèle affine",
+        ExpectedGraphModel.QUADRATIC: "modèle quadratique",
+        None: None,
+    }[model]
 
 
 def render_teacher_report_markdown(report: TeacherCopyReport) -> str:
@@ -60,9 +70,21 @@ def render_teacher_report_markdown(report: TeacherCopyReport) -> str:
     lines.extend(f"- `{q.production_id}` : {q.status}, évaluable={'oui' if q.evaluable else 'non'}, valeur={_shown(q.value)}, unité={_shown(q.unit)}, incertitude={_shown(q.uncertainty)}, raisons={list(q.reasons) or '—'}" for q in report.quantities)
     lines += ["", "## Relations scientifiques", ""]
     lines.extend(f"- `{r.relation_id}` : {r.status}, cellule(s) {list(r.cell_indices) or '—'}" for r in report.relations)
-    lines += ["", "## Graphe et régression", "", "Attendu Snell-Descartes : x = `sin(i2)`, y = `sin(i1)`, pente `a = n`. L’apparence et les pixels ne sont pas inspectés.", ""]
+    lines += ["", "## Graphe et régression", "", "L’apparence et les pixels ne sont pas inspectés.", ""]
     for g in report.graph:
-        lines += [f"### `{g.production_id}`", "", f"- Cellule : {_shown(g.cell_index)} ; figure enregistrée : {'oui' if g.figure_output_present else 'non'}", f"- x / y observés : `{_shown(g.x_expression)}` / `{_shown(g.y_expression)}`", f"- labels : `{_shown(g.x_label)}` / `{_shown(g.y_label)}`", f"- orientation : {g.orientation_status} ; labels : {g.label_status} ; régression : {g.regression_status} ; pente–indice : {g.slope_relation_status}", f"- Limites : {list(g.limitations) or '—'}", ""]
+        lines += [f"### `{g.production_id}`", ""]
+        if g.expected_description or g.expected_x_expression or g.expected_y_expression or g.expected_model is not None:
+            lines.append("- Attendu :")
+            if g.expected_description:
+                lines.append(f"  - {g.expected_description}")
+            if g.expected_x_expression is not None:
+                lines.append(f"  - x = `{g.expected_x_expression}`")
+            if g.expected_y_expression is not None:
+                lines.append(f"  - y = `{g.expected_y_expression}`")
+            model_text = _expected_model_text(g.expected_model)
+            if model_text:
+                lines.append(f"  - modèle : {model_text}")
+        lines += [f"- Cellule : {_shown(g.cell_index)} ; figure enregistrée : {'oui' if g.figure_output_present else 'non'}", f"- x / y observés : `{_shown(g.x_expression)}` / `{_shown(g.y_expression)}`", f"- labels : `{_shown(g.x_label)}` / `{_shown(g.y_label)}`", f"- orientation : {g.orientation_status} ; labels : {g.label_status} ; régression : {g.regression_status} ; pente–indice : {g.slope_relation_status}", f"- Limites : {list(g.limitations) or '—'}", ""]
     lines += ["## Comparaisons quantitatives", ""]
     for index, c in enumerate(report.comparisons, 1):
         lines += [f"### Comparaison {index} — `{c.comparison_id}`", "", f"- Résultats comparés : `{c.left_quantity_id}` / `{c.right_quantity_id}`", f"- En objectif : {_shown(c.normalized_error)} ; classe A70b : **{c.objective_status}** ; raisons : {list(c.objective_reasons) or '—'}", f"- En étudiant : {_shown(c.student_error_value)} ; statut A70d : **{_shown(c.student_error_status)}**", f"- Interprétation A70e : **{_shown(c.interpretation_status)}** ; preuve : {_shown(c.interpretation_excerpt)}", f"- Justification A70g : **{_shown(c.justification_status)}** ; observés={list(c.observed_justification_elements)} ; REQUIRED manquants={list(c.missing_required_elements)} ; groupes manquants={list(c.missing_alternative_groups)}", ""]
