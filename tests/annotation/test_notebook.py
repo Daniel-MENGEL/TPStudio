@@ -5,7 +5,7 @@ import nbformat
 from tpstudio.annotation import (
     AnnotationKind, AnnotationOptions, AnnotationPlacement, AnnotationPlan,
     NotebookAnnotation, apply_annotation_plan, find_tpstudio_annotations,
-    remove_tpstudio_annotations,
+    remove_tpstudio_annotations, StudentSummaryAnnotation, SkippedAnnotationReason,
 )
 from tpstudio.feedback import FeedbackAudience
 from tpstudio.reporting import TeacherReportSeverity
@@ -76,3 +76,18 @@ def test_multiple_annotations_keep_plan_order_and_notebook_metadata() -> None:
     assert "Premier" in result.notebook.cells[2].source
     assert "Second" in result.notebook.cells[3].source
     assert result.notebook.metadata == original_metadata
+
+
+def test_student_summary_is_inserted_once_and_replaced() -> None:
+    source = _notebook(); original = deepcopy(source)
+    summary = StudentSummaryAnnotation(
+        "summary-a", FeedbackAudience.STUDENT, "Conclusion — réponse absente.",
+        TeacherReportSeverity.BLOCKING, SkippedAnnotationReason.TARGET_UNAVAILABLE,
+        production_id="final_conclusion", source_ids=("feedback:conclusion",),
+    )
+    first = apply_annotation_plan(source, AnnotationPlan("p", "s", (), summary_annotations=(summary,)))
+    assert sum(cell.metadata.get("tpstudio", {}).get("kind") == "student_summary" for cell in first.notebook.cells) == 1
+    assert "Conclusion — réponse absente." in first.notebook.cells[0].source
+    repeated = apply_annotation_plan(first.notebook, AnnotationPlan("p", "s", (), summary_annotations=(summary,)))
+    assert sum(cell.metadata.get("tpstudio", {}).get("kind") == "student_summary" for cell in repeated.notebook.cells) == 1
+    assert source == original

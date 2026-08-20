@@ -8,6 +8,12 @@ import pytest
 
 from tpstudio.export import CopyExportOptions, export_snells_laws_copy
 import tpstudio.export.pipeline as pipeline
+from tpstudio.annotation import (
+    AnnotationKind, AnnotationPlacement, AnnotationPlan, NotebookAnnotation,
+    SkippedAnnotationReason, StudentSummaryAnnotation,
+)
+from tpstudio.feedback import FeedbackAudience
+from tpstudio.reporting import TeacherReportSeverity
 from tpstudio.interpretation import InterpretationClassification
 from tpstudio.orchestration import NotebookCopySource, analyze_snells_laws_copy
 from tpstudio.review_store import append_interpretation_review, review_store_path
@@ -26,6 +32,37 @@ def test_pipeline_creates_two_derived_artifacts_and_preserves_source(tmp_path):
     assert result.notebook_artifact.path.exists() and result.html_artifact.path.exists()
     exported = nbformat.read(result.notebook_artifact.path, as_version=nbformat.NO_CONVERT)
     assert "Retour TPStudio" in "\n".join(cell.source for cell in exported.cells if cell.cell_type == "markdown")
+
+
+def test_pipeline_exports_student_summary_to_notebook_and_html(tmp_path, monkeypatch):
+    module = _fixture()
+    source = tmp_path / "copy.ipynb"
+    nbformat.write(module._notebook(), source)
+    analysis = analyze_snells_laws_copy(NotebookCopySource("local-copy", source.name, source))
+    summary = StudentSummaryAnnotation(
+        "summary-missing", FeedbackAudience.STUDENT,
+        "Conclusion — cette production attendue n'a pas été retrouvée.",
+        TeacherReportSeverity.IMPORTANT,
+        SkippedAnnotationReason.TARGET_UNAVAILABLE,
+        production_id="final_conclusion", source_ids=("production:final_conclusion",),
+    )
+    local = NotebookAnnotation(
+        "local-feedback", AnnotationKind.FEEDBACK, FeedbackAudience.STUDENT,
+        "Retour local.", ("local",), None, None, 0,
+        AnnotationPlacement.APPEND_TO_MARKDOWN, TeacherReportSeverity.ATTENTION,
+    )
+    plan = AnnotationPlan(analysis.project_id, analysis.source_id, (local,), summary_annotations=(summary,))
+    monkeypatch.setattr(pipeline, "build_annotation_plan", lambda *args, **kwargs: plan)
+    result = pipeline.export_analyzed_copy(
+        analysis.source, analysis, tmp_path / "out", options=CopyExportOptions()
+    )
+    exported = nbformat.read(result.notebook_artifact.path, as_version=nbformat.NO_CONVERT)
+    notebook_text = "\n".join(cell.source for cell in exported.cells if cell.cell_type == "markdown")
+    html_text = result.html_artifact.path.read_text(encoding="utf-8")
+    assert notebook_text.count("Points à compléter ou à revoir") == 1
+    assert "Conclusion — cette production attendue n'a pas été retrouvée." in notebook_text
+    assert "Points à compléter ou à revoir" in html_text
+    assert "Conclusion — cette production attendue n'a pas été retrouvée." in html_text
 
 
 def test_pipeline_renders_multiline_stream_output_as_text(tmp_path):

@@ -13,6 +13,7 @@ from tpstudio.reporting import (
 from .model import (
     AnnotationKind, AnnotationOptions, AnnotationPlacement, AnnotationPlan,
     NotebookAnnotation, SkippedAnnotation, SkippedAnnotationReason,
+    StudentSummaryAnnotation,
 )
 
 
@@ -87,6 +88,41 @@ def _semantic_ids(result: CopyAnalysisResult, production_id, comparison_id):
     return production_id, comparison_id
 
 
+def _feedback_severity(priority: str) -> TeacherReportSeverity:
+    priority = getattr(priority, "value", priority)
+    return {
+        "high": TeacherReportSeverity.IMPORTANT,
+        "normal": TeacherReportSeverity.ATTENTION,
+        "low": TeacherReportSeverity.INFO,
+    }.get(str(priority).lower(), TeacherReportSeverity.ATTENTION)
+
+
+def _summary_message(item, production, reason: SkippedAnnotationReason) -> str:
+    title = production.title if production is not None else None
+    if reason is SkippedAnnotationReason.TARGET_AMBIGUOUS:
+        suffix = (
+            "plusieurs éléments pourraient correspondre à cette production ; "
+            "la réponse n'a pas pu être identifiée de façon fiable."
+        )
+    else:
+        suffix = item.text
+    return f"{title} — {suffix}" if title else item.text
+
+
+def _summary_candidate(item, production, reason: SkippedAnnotationReason):
+    if item.audience is not FeedbackAudience.STUDENT:
+        return False
+    required_missing = production is not None and production.required and production.status.lower() == "missing"
+    required_ambiguous = production is not None and production.required and production.status.lower() == "ambiguous"
+    important = getattr(item.priority, "value", item.priority) == "high"
+    return required_missing or required_ambiguous or important
+
+
+def _production_summary_severity(report: TeacherCopyReport, production_id: str) -> TeacherReportSeverity:
+    priorities = tuple(item for item in report.priorities if item.production_id == production_id)
+    return priorities[0].severity if priorities else TeacherReportSeverity.ATTENTION
+
+
 def build_annotation_plan(
     result: CopyAnalysisResult,
     report: TeacherCopyReport | None = None,
@@ -104,12 +140,14 @@ def build_annotation_plan(
     if report != canonical_report:
         raise ValueError("Le rapport doit être la projection canonique de l'analyse.")
     annotations: list[NotebookAnnotation] = []
+    summary_annotations: list[StudentSummaryAnnotation] = []
     skipped: list[SkippedAnnotation] = []
+    productions = {item.production_id: item for item in report.productions}
+    summary_keys: set[tuple] = set()
+    summarized_productions: set[str] = set()
 
     for item in report.feedback:
-        production_id, comparison_id = _semantic_ids(
-            result, item.production_id, item.comparison_id
-        )
+        production_id, comparison_id = _semantic_ids(result, item.production_id, item.comparison_id)
         allowed = (
             item.audience is FeedbackAudience.STUDENT and options.include_student_feedback
         ) or (
@@ -118,45 +156,89 @@ def build_annotation_plan(
         if not allowed:
             skipped.append(SkippedAnnotation(item.source_key, AnnotationKind.FEEDBACK, item.audience, SkippedAnnotationReason.AUDIENCE_EXCLUDED, production_id, comparison_id))
             continue
+
         if item.cell_index is not None and production_id is None and comparison_id is None:
             if item.cell_index < 0 or item.cell_index >= result.technical_inspection.cell_count:
-                skipped.append(SkippedAnnotation(item.source_key, AnnotationKind.FEEDBACK, item.audience, SkippedAnnotationReason.TARGET_UNAVAILABLE))
+                reason = SkippedAnnotationReason.TARGET_UNAVAILABLE
+                production = None
+            else:
+                placement = _placement(item.cell_type or "markdown", options)
+                if placement is None:
+                    skipped.append(SkippedAnnotation(item.source_key, AnnotationKind.FEEDBACK, item.audience, SkippedAnnotationReason.PLACEMENT_DISABLED))
+                    continue
+                annotation_id = _stable_id(result.project_id, result.source_id, AnnotationKind.FEEDBACK, item.audience, item.source_key, item.cell_index)
+                annotations.append(NotebookAnnotation(
+                    annotation_id, AnnotationKind.FEEDBACK, item.audience, item.text,
+                    (item.source_key,), None, None,
+                    item.cell_index, placement, _feedback_severity(item.priority),
+                ))
                 continue
-            placement = _placement(item.cell_type or "markdown", options)
-            if placement is None:
-                skipped.append(SkippedAnnotation(item.source_key, AnnotationKind.FEEDBACK, item.audience, SkippedAnnotationReason.PLACEMENT_DISABLED))
-                continue
-            severity = {
-                "high": TeacherReportSeverity.IMPORTANT,
-                "normal": TeacherReportSeverity.ATTENTION,
-                "low": TeacherReportSeverity.INFO,
-            }.get(item.priority, TeacherReportSeverity.ATTENTION)
-            annotation_id = _stable_id(result.project_id, result.source_id, AnnotationKind.FEEDBACK, item.audience, item.source_key, item.cell_index)
-            annotations.append(NotebookAnnotation(
-                annotation_id, AnnotationKind.FEEDBACK, item.audience, item.text,
-                (item.source_key,), None, None,
-                item.cell_index, placement, severity,
-            ))
-            continue
-        resolution, reason = _target(result, production_id, comparison_id)
+        else:
+            resolution, reason = _target(result, production_id, comparison_id)
+            production = productions.get(production_id)
+
         if reason is not None:
+            if _summary_candidate(item, production, reason):
+                if production_id is not None and production_id in summarized_productions:
+                    continue
+                key = (production_id, comparison_id, item.audience, item.source_key, reason, item.text)
+                if key not in summary_keys:
+                    summary_keys.add(key)
+                    summary_annotations.append(StudentSummaryAnnotation(
+                        annotation_id=f"tpstudio:student-summary:{len(summary_annotations):04d}",
+                        audience=item.audience,
+                        message=_summary_message(item, production, reason),
+                        severity=_feedback_severity(item.priority),
+                        reason=reason,
+                        production_id=production_id,
+                        comparison_id=comparison_id,
+                        source_ids=(item.source_key,),
+                    ))
+                    if production_id is not None and production is not None and production.status.lower() in {"missing", "ambiguous"}:
+                        summarized_productions.add(production_id)
+                continue
             skipped.append(SkippedAnnotation(item.source_key, AnnotationKind.FEEDBACK, item.audience, reason, production_id, comparison_id))
             continue
         placement = _placement(resolution.cell.cell_type, options)
         if placement is None:
             skipped.append(SkippedAnnotation(item.source_key, AnnotationKind.FEEDBACK, item.audience, SkippedAnnotationReason.PLACEMENT_DISABLED, production_id, comparison_id))
             continue
-        severity = {
-            "high": TeacherReportSeverity.IMPORTANT,
-            "normal": TeacherReportSeverity.ATTENTION,
-            "low": TeacherReportSeverity.INFO,
-        }.get(item.priority, TeacherReportSeverity.ATTENTION)
         annotation_id = _stable_id(result.project_id, result.source_id, AnnotationKind.FEEDBACK, item.audience, item.source_key, resolution.cell.index)
         annotations.append(NotebookAnnotation(
             annotation_id, AnnotationKind.FEEDBACK, item.audience, item.text,
             (item.source_key,), production_id, comparison_id,
-            resolution.cell.index, placement, severity,
+            resolution.cell.index, placement, _feedback_severity(item.priority),
         ))
+
+    # Some mandatory productions have a report status but no separate student
+    # feedback item (for example a missing value). Preserve that existing status
+    # in the student summary without consulting the project or analysis engine.
+    for production in report.productions:
+        status = production.status.lower()
+        if not production.required or status not in {"missing", "ambiguous"}:
+            continue
+        if production.production_id in summarized_productions:
+            continue
+        reason = (
+            SkippedAnnotationReason.TARGET_AMBIGUOUS
+            if status == "ambiguous" else SkippedAnnotationReason.TARGET_UNAVAILABLE
+        )
+        message = (
+            f"{production.title} — plusieurs éléments pourraient correspondre à cette production ; "
+            "la réponse n'a pas pu être identifiée de façon fiable."
+            if status == "ambiguous" else
+            f"{production.title} — cette production attendue n'a pas été retrouvée."
+        )
+        summary_annotations.append(StudentSummaryAnnotation(
+            annotation_id=f"tpstudio:student-summary:{len(summary_annotations):04d}",
+            audience=FeedbackAudience.STUDENT,
+            message=message,
+            severity=_production_summary_severity(report, production.production_id),
+            reason=reason,
+            production_id=production.production_id,
+            source_ids=(f"production:{production.production_id}",),
+        ))
+        summarized_productions.add(production.production_id)
 
     if options.include_diagnostics:
         for item in report.diagnostics:
@@ -196,7 +278,7 @@ def build_annotation_plan(
     ))
     return AnnotationPlan(
         result.project_id, result.source_id, tuple(annotations), tuple(skipped),
-        tuple(result.limitations),
+        tuple(result.limitations), tuple(summary_annotations),
     )
 
 

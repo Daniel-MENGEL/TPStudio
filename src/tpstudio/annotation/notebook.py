@@ -13,6 +13,7 @@ from nbformat.notebooknode import NotebookNode
 from .model import (
     AnnotatedNotebookResult, AnnotationOptions, AnnotationPlacement,
     AnnotationPlan, ExistingAnnotationMode, ExistingNotebookAnnotation,
+    StudentSummaryAnnotation,
 )
 from .rendering import render_notebook_annotation
 
@@ -96,6 +97,29 @@ def _annotation_cell(annotation, *, include_id: bool = True) -> NotebookNode:
     return cell
 
 
+def _student_summary_cell(items: tuple[StudentSummaryAnnotation, ...]) -> NotebookNode:
+    """Render untargeted student feedback as one compact, replaceable cell."""
+    labels = {
+        "blocking": "Problème",
+        "important": "À vérifier",
+        "attention": "À vérifier",
+        "info": "Remarque",
+    }
+    lines = ["## Points à compléter ou à revoir", ""]
+    for item in items:
+        severity = labels[item.severity.value]
+        lines.append(f"- **{severity}** — {item.message}")
+    cell = nbformat.v4.new_markdown_cell("\n".join(lines) + "\n")
+    cell.metadata["tpstudio"] = {
+        "annotation": True,
+        "kind": "student_summary",
+        "summary_id": "tpstudio-student-summary",
+        "annotation_ids": [item.annotation_id for item in items],
+    }
+    cell.id = "tpstudio-student-summary"
+    return cell
+
+
 def apply_annotation_plan(
     notebook: NotebookNode,
     plan: AnnotationPlan,
@@ -116,6 +140,14 @@ def apply_annotation_plan(
     else:
         working = deepcopy(notebook)
         removed = ()
+    if plan.summary_annotations:
+        summary = _student_summary_cell(plan.summary_annotations)
+        insert_at = 1 if (
+            working.cells
+            and working.cells[0].get("cell_type") == "markdown"
+            and str(working.cells[0].get("source", "")).lstrip().startswith("#")
+        ) else 0
+        working.cells.insert(insert_at, summary)
     existing_ids = {item.annotation_id for item in find_tpstudio_annotations(working)}
     pending = tuple(item for item in plan.annotations if item.annotation_id not in existing_ids)
     include_cell_ids = not (

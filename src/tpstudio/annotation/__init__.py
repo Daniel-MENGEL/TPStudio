@@ -4,7 +4,7 @@ from .model import (
     AnnotatedNotebookResult, AnnotationKind, AnnotationOptions,
     AnnotationPlacement, AnnotationPlan, ExistingAnnotationMode,
     ExistingNotebookAnnotation, NotebookAnnotation, SkippedAnnotation,
-    SkippedAnnotationReason,
+    SkippedAnnotationReason, StudentSummaryAnnotation,
 )
 from .notebook import (
     apply_annotation_plan, default_annotated_notebook_name,

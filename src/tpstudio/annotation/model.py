@@ -84,6 +84,36 @@ class SkippedAnnotation:
 
 
 @dataclass(frozen=True, slots=True)
+class StudentSummaryAnnotation:
+    """Student-facing feedback that has no safe local cell target."""
+
+    annotation_id: str
+    audience: FeedbackAudience
+    message: str
+    severity: TeacherReportSeverity
+    reason: SkippedAnnotationReason
+    production_id: str | None = None
+    comparison_id: str | None = None
+    source_ids: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.annotation_id, str) or not self.annotation_id.strip():
+            raise ValueError("annotation_id ne peut pas être vide.")
+        if self.audience is not FeedbackAudience.STUDENT:
+            raise TypeError("Une synthèse étudiante exige l'audience STUDENT.")
+        if not isinstance(self.message, str) or not self.message.strip():
+            raise ValueError("Le message ne peut pas être vide.")
+        if type(self.severity) is not TeacherReportSeverity:
+            raise TypeError("La sévérité est invalide.")
+        if type(self.reason) is not SkippedAnnotationReason:
+            raise TypeError("La raison est invalide.")
+        sources = tuple(self.source_ids)
+        if any(not isinstance(item, str) or not item.strip() for item in sources):
+            raise ValueError("Les sources doivent être des chaînes non vides.")
+        object.__setattr__(self, "source_ids", sources)
+
+
+@dataclass(frozen=True, slots=True)
 class AnnotationOptions:
     include_student_feedback: bool = True
     include_teacher_feedback: bool = False
@@ -105,6 +135,7 @@ class AnnotationPlan:
     annotations: tuple[NotebookAnnotation, ...]
     skipped: tuple[SkippedAnnotation, ...] = ()
     limitations: tuple[str, ...] = ()
+    summary_annotations: tuple[StudentSummaryAnnotation, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.project_id, str) or not self.project_id.strip():
@@ -112,15 +143,20 @@ class AnnotationPlan:
         if not isinstance(self.source_id, str) or not self.source_id.strip():
             raise ValueError("source_id ne peut pas être vide.")
         annotations = tuple(self.annotations)
+        summaries = tuple(self.summary_annotations)
         skipped = tuple(self.skipped)
         limitations = tuple(self.limitations)
         if any(type(item) is not NotebookAnnotation for item in annotations):
             raise TypeError("Une annotation du plan est invalide.")
         if any(type(item) is not SkippedAnnotation for item in skipped):
             raise TypeError("Une annotation ignorée est invalide.")
-        if len({item.annotation_id for item in annotations}) != len(annotations):
+        if any(type(item) is not StudentSummaryAnnotation for item in summaries):
+            raise TypeError("Une synthèse étudiante est invalide.")
+        all_ids = [item.annotation_id for item in annotations] + [item.annotation_id for item in summaries]
+        if len(set(all_ids)) != len(all_ids):
             raise ValueError("Les identifiants d'annotation doivent être uniques.")
         object.__setattr__(self, "annotations", annotations)
+        object.__setattr__(self, "summary_annotations", summaries)
         object.__setattr__(self, "skipped", skipped)
         object.__setattr__(self, "limitations", limitations)
 
@@ -129,7 +165,9 @@ class AnnotationPlan:
 
     @property
     def student_annotations(self) -> tuple[NotebookAnnotation, ...]:
-        return tuple(item for item in self.annotations if item.audience is FeedbackAudience.STUDENT)
+        return tuple(item for item in self.annotations if item.audience is FeedbackAudience.STUDENT) + tuple(
+            item for item in self.summary_annotations if item.audience is FeedbackAudience.STUDENT
+        )
 
     @property
     def teacher_annotations(self) -> tuple[NotebookAnnotation, ...]:
@@ -141,7 +179,7 @@ class AnnotationPlan:
 
     @property
     def count(self) -> int:
-        return len(self.annotations)
+        return len(self.annotations) + len(self.summary_annotations)
 
     @property
     def is_empty(self) -> bool:
