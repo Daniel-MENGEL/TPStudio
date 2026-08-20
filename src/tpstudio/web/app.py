@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 
 from tpstudio.batch import BatchCopyStatus, render_batch_report_markdown
 from tpstudio.export import CopyExportOptions
+from tpstudio.orchestration import BatchCopyDispatchStatus
 from tpstudio.web.execution import analyze_selected_copy, can_run_batch, export_active_copies, run_selected_dispatch
 from tpstudio.web.model import WebBatchOptions
 from tpstudio.web.identity import (
@@ -350,7 +351,14 @@ def main() -> None:
         dispatch_result = get_current_dispatch_result(st.session_state, signature)
         if dispatch_result is not None:
             st.subheader("Résultat de l'analyse")
-            st.write(f"Copies : {len(dispatch_result.copies)} · Analysées : {dispatch_result.analyzed_count} · À confirmer : {dispatch_result.unresolved_count} · Erreurs : {dispatch_result.error_count} · Non traitées : {dispatch_result.skipped_count}")
+            st.write(
+                f"Copies : {len(dispatch_result.copies)} · "
+                f"Analysées : {dispatch_result.analyzed_count} · "
+                f"Reconnues — correction indisponible : {dispatch_result.resolved_not_ready_count} · "
+                f"À confirmer : {dispatch_result.unresolved_count} · "
+                f"Erreurs : {dispatch_result.error_count} · "
+                f"Non traitées : {dispatch_result.skipped_count}"
+            )
             overrides = get_project_overrides(st.session_state)
             rows = batch_dispatch_rows(dispatch_result, copies, overrides)
             export_results = get_export_results(st.session_state)
@@ -370,6 +378,11 @@ def main() -> None:
                         st.write("✓ Validé par l'enseignant")
                     if row.error_message:
                         st.warning(row.error_message)
+                    if item.status is BatchCopyDispatchStatus.RESOLVED_NOT_READY:
+                        st.info(
+                            "TP reconnu. La correction automatique de ce TP "
+                            "n’est pas encore disponible."
+                        )
                     if row.evidence:
                         st.markdown("**Détails de la détection**")
                         with st.container():
@@ -463,7 +476,11 @@ def main() -> None:
             include_output_prompts = st.checkbox("Inclure les invites de sortie", key="export-output-prompts")
             overwrite = st.checkbox("Autoriser le remplacement des fichiers existants", key="export-overwrite")
             ready_count = exportable_count(dispatch_result, overrides)
-            st.write(f"Copies prêtes à exporter : {ready_count} · Copies sans analyse active : {non_exportable_count(dispatch_result, overrides)}")
+            st.write(
+                f"Copies prêtes à exporter : {ready_count} · "
+                f"Copies sans analyse active : {non_exportable_count(dispatch_result, overrides)} "
+                f"(dont {dispatch_result.resolved_not_ready_count} reconnue(s) sans couverture)"
+            )
             if st.button("Exporter les copies analysées", disabled=ready_count == 0, key="export-active-copies"):
                 try:
                     output_dir = resolve_output_dir(export_output_text)

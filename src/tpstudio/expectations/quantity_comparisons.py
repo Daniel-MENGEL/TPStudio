@@ -104,8 +104,6 @@ class QuantityComparisonExpectationSet:
         if self.quantity_expectation_set.plan is not self.production_plan:
             raise ValueError("Les comparaisons et les quantités doivent partager le plan.")
         comparisons = tuple(self.comparisons)
-        if not comparisons:
-            raise ValueError("Un jeu de comparaisons ne peut pas être vide.")
         if any(
             not isinstance(comparison, ExpectedQuantityComparison)
             for comparison in comparisons

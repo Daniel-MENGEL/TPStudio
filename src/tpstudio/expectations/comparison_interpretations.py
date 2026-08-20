@@ -67,8 +67,6 @@ class ComparisonInterpretationExpectationSet:
         if isinstance(self.expectations, (str, bytes)):
             raise TypeError("Les attentes doivent former une collection ordonnée.")
         expectations = tuple(self.expectations)
-        if not expectations:
-            raise ValueError("Au moins une attente d'interprétation est requise.")
         if any(type(item) is not ExpectedComparisonInterpretation for item in expectations):
             raise TypeError("Chaque attente doit être une ExpectedComparisonInterpretation.")
         identifiers = tuple(item.comparison_id for item in expectations)

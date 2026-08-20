@@ -245,9 +245,8 @@ def test_quantity_expectation_set_is_immutable_ordered_and_tuple_backed() -> Non
         quantity_set.quantities = ()  # type: ignore[misc]
 
 
-def test_empty_or_duplicate_quantity_set_is_rejected() -> None:
-    with pytest.raises(ValueError, match="ne peut pas être vide"):
-        QuantityExpectationSet(_plan(), ())
+def test_empty_quantity_set_is_allowed_but_duplicates_are_rejected() -> None:
+    assert len(QuantityExpectationSet(_plan(), ())) == 0
     quantity = _quantity("gravity_dynamic")
     with pytest.raises(ValueError, match="doivent être uniques"):
         QuantityExpectationSet(_plan(), (quantity, quantity))

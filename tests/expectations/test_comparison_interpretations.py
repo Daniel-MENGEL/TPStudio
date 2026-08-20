@@ -75,10 +75,10 @@ def test_set_api_partial_coverage_and_evaluation_order() -> None:
     assert partial.get("comparison2") is None
 
 
-def test_set_rejects_empty_duplicate_and_unknown_expectations() -> None:
+def test_set_allows_empty_but_rejects_duplicate_and_unknown_expectations() -> None:
     comparisons = _comparisons()
-    with pytest.raises(ValueError):
-        ComparisonInterpretationExpectationSet(comparisons, ())
+    empty = ComparisonInterpretationExpectationSet(comparisons, ())
+    assert tuple(empty) == ()
     item = _expected()
     with pytest.raises(ValueError):
         ComparisonInterpretationExpectationSet(comparisons, (item, item))

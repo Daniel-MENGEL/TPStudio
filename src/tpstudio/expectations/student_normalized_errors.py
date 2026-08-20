@@ -56,8 +56,6 @@ class StudentNormalizedErrorExpectationSet:
         if not isinstance(self.comparison_expectation_set, QuantityComparisonExpectationSet):
             raise TypeError("Les comparaisons doivent former un QuantityComparisonExpectationSet.")
         expectations = tuple(self.expectations)
-        if not expectations:
-            raise ValueError("Au moins une attente de En étudiant est requise.")
         if any(not isinstance(item, ExpectedStudentNormalizedError) for item in expectations):
             raise TypeError("Chaque attente doit être un ExpectedStudentNormalizedError.")
         identifiers = tuple(item.comparison_id for item in expectations)

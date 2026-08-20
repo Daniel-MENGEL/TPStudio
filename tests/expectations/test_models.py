@@ -105,6 +105,5 @@ def test_expectation_set_rejects_duplicate_and_shared_identifiers() -> None:
         )
 
 
-def test_expectation_set_rejects_an_empty_declaration() -> None:
-    with pytest.raises(ValueError, match="ne peut pas être vide"):
-        ExpectationSet("set", "Set")
+def test_expectation_set_allows_an_empty_declaration() -> None:
+    assert ExpectationSet("set", "Set").relations == ()

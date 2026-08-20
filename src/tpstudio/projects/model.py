@@ -307,7 +307,7 @@ def validate_teacher_project_configuration(
     if isinstance(catalogs, (str, bytes)):
         raise TypeError("Les catalogues doivent former une collection.")
     catalogs = tuple(catalogs)
-    if not catalogs or any(type(item) not in _CATALOG_TYPES for item in catalogs):
+    if any(type(item) not in _CATALOG_TYPES for item in catalogs):
         raise TypeError("Chaque catalogue doit être un catalogue public pris en charge.")
     if len({type(item) for item in catalogs}) != len(catalogs):
         raise ValueError("Un type de catalogue ne peut apparaître qu'une fois.")

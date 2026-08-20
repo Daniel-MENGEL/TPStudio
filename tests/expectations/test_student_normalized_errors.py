@@ -82,8 +82,7 @@ def test_expectation_set_validation_and_api() -> None:
     assert expectation_set.in_evaluation_order == (first,)
     with pytest.raises(FrozenInstanceError):
         expectation_set.expectations = ()
-    with pytest.raises(ValueError):
-        StudentNormalizedErrorExpectationSet(comparisons, ())
+    assert len(StudentNormalizedErrorExpectationSet(comparisons, ())) == 0
     with pytest.raises(ValueError):
         StudentNormalizedErrorExpectationSet(comparisons, (first, first))
     with pytest.raises(ValueError):

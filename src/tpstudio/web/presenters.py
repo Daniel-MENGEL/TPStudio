@@ -137,7 +137,13 @@ def batch_dispatch_rows(
     overrides: Mapping[str, WebCopyOverride] | None = None,
 ) -> tuple[BatchDispatchRow, ...]:
     overrides = overrides or {}
-    labels = {BatchCopyDispatchStatus.ANALYZED: "Analysée", BatchCopyDispatchStatus.UNRESOLVED: "Aucun TP reconnu", BatchCopyDispatchStatus.ERROR: "Erreur technique", BatchCopyDispatchStatus.SKIPPED: "Non analysée à cause d'une erreur précédente"}
+    labels = {
+        BatchCopyDispatchStatus.ANALYZED: "Analysée",
+        BatchCopyDispatchStatus.UNRESOLVED: "Aucun TP reconnu",
+        BatchCopyDispatchStatus.RESOLVED_NOT_READY: "TP reconnu — analyse indisponible",
+        BatchCopyDispatchStatus.ERROR: "Erreur technique",
+        BatchCopyDispatchStatus.SKIPPED: "Non analysée à cause d'une erreur précédente",
+    }
     names = {item.source_id: item.original_filename for item in selected_copies}
     rows = []
     for item in result.copies:
@@ -145,7 +151,9 @@ def batch_dispatch_rows(
         resolution = dispatch.resolution if dispatch else None
         override = overrides.get(item.source_id)
         analysis = override.analysis if override else (dispatch.analysis if dispatch else None)
-        project_id = analysis.project_id if analysis else None
+        project_id = analysis.project_id if analysis else (
+            resolution.selected_project_id if resolution else None
+        )
         candidate = None
         if resolution:
             candidate = next((value for value in resolution.candidates if value.project_id == resolution.selected_project_id), None)

@@ -122,8 +122,6 @@ class QuantityExpectationSet:
         if not isinstance(self.plan, ScientificProductionPlan):
             raise TypeError("Le plan doit être un ScientificProductionPlan.")
         quantities = tuple(self.quantities)
-        if not quantities:
-            raise ValueError("Un jeu d'attendus de quantités ne peut pas être vide.")
         if any(not isinstance(quantity, ExpectedQuantity) for quantity in quantities):
             raise TypeError("Chaque attendu doit être une ExpectedQuantity.")
         object.__setattr__(self, "quantities", quantities)

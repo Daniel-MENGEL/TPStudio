@@ -92,7 +92,6 @@ class ComparisonJustificationExpectationSet:
         if type(self.comparison_expectation_set) is not QuantityComparisonExpectationSet: raise TypeError("Le jeu A70a est invalide.")
         if isinstance(self.expectations, (str, bytes)): raise TypeError("Les attentes doivent former une collection.")
         expectations = tuple(self.expectations)
-        if not expectations: raise ValueError("Au moins une attente est requise.")
         if any(type(item) is not ExpectedComparisonJustification for item in expectations): raise TypeError("Chaque attente est invalide.")
         identifiers = tuple(item.comparison_id for item in expectations)
         if len(identifiers) != len(set(identifiers)): raise ValueError("Les comparaisons doivent être uniques.")

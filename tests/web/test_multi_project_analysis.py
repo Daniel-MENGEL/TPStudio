@@ -3,7 +3,10 @@ from pathlib import Path
 
 import nbformat
 
-from tpstudio.orchestration import BatchDispatchResult
+from tpstudio.orchestration import (
+    BatchCopyDispatchResult, BatchCopyDispatchStatus, BatchDispatchResult,
+    NotebookCopySource, analyze_copy,
+)
 from tpstudio.export import CopyExportOptions, export_analyzed_copy as real_export_analyzed_copy
 from tpstudio.projects import known_project_ids
 from tpstudio.web.execution import analyze_selected_copy, export_active_copies, run_selected_dispatch
@@ -11,6 +14,7 @@ import tpstudio.web.execution as execution
 from tpstudio.web.model import SelectedCopy, WebCopyExportState, WebCopyOverride
 from tpstudio.web.planning import build_dispatch_requests_from_web_selection
 from tpstudio.web.presenters import active_analysis_for_source, batch_dispatch_rows, project_choices_for_source
+from tpstudio.projects import torsion_pendulum_teacher_project
 from tpstudio.web.state import (
     DISPATCH_RESULT_KEY, DISPATCH_SIGNATURE_KEY, initialize_session_state,
     PROJECT_OVERRIDES_KEY, get_project_overrides, invalidate_if_signature_changed,
@@ -102,6 +106,45 @@ def test_unresolved_project_choices_are_candidates_then_registry(tmp_path):
     assert project_choices_for_source(result, empty.source_id) == known_project_ids()
     row = batch_dispatch_rows(result, (empty,))[0]
     assert row.status == "Aucun TP reconnu"
+
+
+def test_resolved_not_ready_row_keeps_project_and_never_looks_analyzed(tmp_path):
+    path = tmp_path / "pendulum.ipynb"
+    nbformat.write(nbformat.v4.new_notebook(cells=[
+        nbformat.v4.new_markdown_cell("# Pendule de torsion"),
+    ]), path)
+    selected = SelectedCopy(
+        "copy-004", path.name, path, sha256(path.read_bytes()).hexdigest(),
+    )
+    dispatch = analyze_copy(
+        NotebookCopySource("copy-004", path.name, path),
+        project=torsion_pendulum_teacher_project(),
+    )
+    result = BatchDispatchResult((BatchCopyDispatchResult(
+        "copy-004", BatchCopyDispatchStatus.RESOLVED_NOT_READY, dispatch,
+    ),))
+    row = batch_dispatch_rows(result, (selected,))[0]
+    assert row.status == "TP reconnu — analyse indisponible"
+    assert row.project_id == "torsion-pendulum"
+    assert row.project_title == "Pendule de torsion"
+    assert active_analysis_for_source(result, {}, "copy-004") is None
+
+
+def test_export_active_analyses_skips_resolved_not_ready(tmp_path):
+    path = tmp_path / "pendulum.ipynb"
+    nbformat.write(nbformat.v4.new_notebook(cells=[
+        nbformat.v4.new_markdown_cell("# Pendule de torsion"),
+    ]), path)
+    dispatch = analyze_copy(
+        NotebookCopySource("copy-004", path.name, path),
+        project=torsion_pendulum_teacher_project(),
+    )
+    result = BatchDispatchResult((BatchCopyDispatchResult(
+        "copy-004", BatchCopyDispatchStatus.RESOLVED_NOT_READY, dispatch,
+    ),))
+    assert export_active_copies(
+        result, {}, output_dir=tmp_path / "exports", options=CopyExportOptions(),
+    ) == {}
 
 
 def test_active_analysis_override_and_restore(tmp_path):

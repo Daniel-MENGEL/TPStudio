@@ -449,11 +449,50 @@ class ProjectSelectionProvenance(str, Enum):
     UNRESOLVED = "unresolved"
 
 
+class AnalysisReadiness(str, Enum):
+    """Whether a resolved project satisfies the current analyzer contract."""
+
+    READY = "ready"
+    NOT_READY = "not_ready"
+
+
+def assess_analysis_readiness(project: TeacherProjectConfiguration) -> AnalysisReadiness:
+    """Check generic analyzer preconditions before dispatching an analysis.
+
+    This deliberately validates the contract shape, not the project identity.
+    It keeps incomplete project registrations out of analyzer assertions while
+    leaving the analyzer's internal invariants strict for ready projects.
+    """
+    validate_teacher_project_configuration(project)
+    plan = project.scientific_production_plan
+    for production in plan:
+        if production.kind is ScientificProductionKind.QUANTITY:
+            if project.quantity_expectation_set.get(production.id) is None:
+                return AnalysisReadiness.NOT_READY
+            # The analyzer requires exactly one resolved candidate for every
+            # quantitative expectation; declaration cardinality is the part
+            # that can be checked without loading or executing a notebook.
+            if len(project.notebook_binding_plan.for_production(production.id)) != 1:
+                return AnalysisReadiness.NOT_READY
+        elif production.kind is ScientificProductionKind.RELATION:
+            if project.relation_expectation_set.relation_by_id(production.id) is None:
+                return AnalysisReadiness.NOT_READY
+            if len(project.notebook_binding_plan.for_production(production.id)) != 1:
+                return AnalysisReadiness.NOT_READY
+        elif production.kind is ScientificProductionKind.COMPARISON:
+            if project.quantity_comparison_expectation_set.get(production.id) is None:
+                return AnalysisReadiness.NOT_READY
+            if len(project.notebook_binding_plan.for_production(production.id)) != 1:
+                return AnalysisReadiness.NOT_READY
+    return AnalysisReadiness.READY
+
+
 @dataclass(frozen=True, slots=True)
 class CopyAnalysisDispatchResult:
     resolution: ProjectResolutionResult
     provenance: ProjectSelectionProvenance
     analysis: CopyAnalysisResult | None
+    readiness: AnalysisReadiness | None = None
 
     def __post_init__(self) -> None:
         if type(self.resolution) is not ProjectResolutionResult:
@@ -464,8 +503,18 @@ class CopyAnalysisDispatchResult:
             raise TypeError("L'analyse de copie est invalide.")
         if self.provenance is ProjectSelectionProvenance.UNRESOLVED and self.analysis is not None:
             raise ValueError("Une résolution non aboutie ne peut pas porter d'analyse.")
-        if self.provenance is not ProjectSelectionProvenance.UNRESOLVED and self.analysis is None:
-            raise ValueError("Une résolution aboutie doit porter une analyse.")
+        if self.provenance is ProjectSelectionProvenance.UNRESOLVED:
+            if self.readiness is not None:
+                raise ValueError("Une résolution non aboutie ne peut pas porter de readiness.")
+        elif self.analysis is None:
+            if self.readiness is not AnalysisReadiness.NOT_READY:
+                raise ValueError("Une analyse absente exige une readiness NOT_READY.")
+        elif self.readiness is None:
+            # Preserve the historical three-argument constructor while making
+            # the derived state explicit for all newly dispatched analyses.
+            object.__setattr__(self, "readiness", AnalysisReadiness.READY)
+        elif self.readiness is not AnalysisReadiness.READY:
+            raise ValueError("Une analyse exécutée exige une readiness READY.")
 
 
 def _catalog(project: TeacherProjectConfiguration, expected_type):
@@ -812,23 +861,40 @@ def analyze_copy(
             ),),
             False,
         )
+        readiness = assess_analysis_readiness(project)
+        if readiness is AnalysisReadiness.NOT_READY:
+            return CopyAnalysisDispatchResult(
+                resolution, ProjectSelectionProvenance.EXPLICIT, None, readiness
+            )
         analysis = SnellsLawsCopyAnalyzer().analyze(source, project=project, options=options)
-        return CopyAnalysisDispatchResult(resolution, ProjectSelectionProvenance.EXPLICIT, analysis)
+        return CopyAnalysisDispatchResult(
+            resolution, ProjectSelectionProvenance.EXPLICIT, analysis, readiness
+        )
 
     notebook = load_notebook_copy(source)
     resolution = resolve_project_for_copy(notebook, filename=source.display_name)
     if resolution.selected_project_id is None:
-        return CopyAnalysisDispatchResult(resolution, ProjectSelectionProvenance.UNRESOLVED, None)
+        return CopyAnalysisDispatchResult(resolution, ProjectSelectionProvenance.UNRESOLVED, None, None)
     descriptor = project_descriptor(resolution.selected_project_id)
     if descriptor is None:
         raise ValueError(f"Aucune factory n'est enregistrée pour {resolution.selected_project_id!r}.")
     resolved_project = descriptor.factory()
+    readiness = assess_analysis_readiness(resolved_project)
+    if readiness is AnalysisReadiness.NOT_READY:
+        return CopyAnalysisDispatchResult(
+            resolution, ProjectSelectionProvenance.AUTO_RESOLVED, None, readiness
+        )
     analysis = SnellsLawsCopyAnalyzer().analyze(source, project=resolved_project, options=options)
-    return CopyAnalysisDispatchResult(resolution, ProjectSelectionProvenance.AUTO_RESOLVED, analysis)
+    return CopyAnalysisDispatchResult(
+        resolution, ProjectSelectionProvenance.AUTO_RESOLVED, analysis, readiness
+    )
 
 
 def analyze_snells_laws_copy(source, project=None, options=None) -> CopyAnalysisResult:
-    return SnellsLawsCopyAnalyzer().analyze(source, project, options)
+    checked_project = snells_laws_teacher_project() if project is None else project
+    if assess_analysis_readiness(checked_project) is AnalysisReadiness.NOT_READY:
+        raise ValueError("La configuration fournie n'est pas prête pour l'analyse Snell legacy.")
+    return SnellsLawsCopyAnalyzer().analyze(source, checked_project, options)
 
 
 def summarize_copy_analysis(result: CopyAnalysisResult) -> str:

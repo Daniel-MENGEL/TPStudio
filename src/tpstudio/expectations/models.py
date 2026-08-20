@@ -107,8 +107,6 @@ class ExpectationSet:
                 "Une relation et une conclusion ne peuvent pas partager un "
                 "identifiant."
             )
-        if not self.relations and not self.conclusions:
-            raise ValueError("Un jeu d'attendus ne peut pas être vide.")
 
     def relation_by_id(self, relation_id: str) -> ExpectedRelation | None:
         for relation in self.relations:

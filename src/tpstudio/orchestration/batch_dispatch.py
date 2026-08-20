@@ -9,6 +9,7 @@ from enum import Enum
 from tpstudio.projects import TeacherProjectConfiguration
 
 from .copy_analysis import (
+    AnalysisReadiness,
     CopyAnalysisDispatchResult,
     CopyAnalysisOptions,
     ProjectSelectionProvenance,
@@ -22,6 +23,7 @@ class BatchCopyDispatchStatus(str, Enum):
 
     ANALYZED = "analyzed"
     UNRESOLVED = "unresolved"
+    RESOLVED_NOT_READY = "resolved_not_ready"
     ERROR = "error"
     SKIPPED = "skipped"
 
@@ -77,6 +79,15 @@ class BatchCopyDispatchResult:
                 raise ValueError("UNRESOLVED exige la provenance correspondante.")
             if self.error_type is not None or self.error_message is not None:
                 raise ValueError("UNRESOLVED ne peut pas porter d'erreur.")
+        elif self.status is BatchCopyDispatchStatus.RESOLVED_NOT_READY:
+            if self.dispatch is None or self.dispatch.analysis is not None:
+                raise ValueError("RESOLVED_NOT_READY exige un dispatch sans analyse.")
+            if self.dispatch.provenance is ProjectSelectionProvenance.UNRESOLVED:
+                raise ValueError("RESOLVED_NOT_READY exige une résolution aboutie.")
+            if self.dispatch.readiness is not AnalysisReadiness.NOT_READY:
+                raise ValueError("RESOLVED_NOT_READY exige une readiness NOT_READY.")
+            if self.error_type is not None or self.error_message is not None:
+                raise ValueError("RESOLVED_NOT_READY ne peut pas porter d'erreur.")
         elif self.status is BatchCopyDispatchStatus.ERROR:
             if self.dispatch is not None or self.error_type is None or self.error_message is None:
                 raise ValueError("ERROR exige une erreur et aucun dispatch.")
@@ -111,6 +122,10 @@ class BatchDispatchResult:
     @property
     def error_count(self) -> int:
         return sum(item.status is BatchCopyDispatchStatus.ERROR for item in self.copies)
+
+    @property
+    def resolved_not_ready_count(self) -> int:
+        return sum(item.status is BatchCopyDispatchStatus.RESOLVED_NOT_READY for item in self.copies)
 
     @property
     def skipped_count(self) -> int:
@@ -172,10 +187,11 @@ def run_batch(
             if not continue_on_error:
                 stopped = True
             continue
-        status = (
-            BatchCopyDispatchStatus.ANALYZED
-            if dispatch.analysis is not None
-            else BatchCopyDispatchStatus.UNRESOLVED
-        )
+        if dispatch.analysis is not None:
+            status = BatchCopyDispatchStatus.ANALYZED
+        elif dispatch.provenance is ProjectSelectionProvenance.UNRESOLVED:
+            status = BatchCopyDispatchStatus.UNRESOLVED
+        else:
+            status = BatchCopyDispatchStatus.RESOLVED_NOT_READY
         results.append(BatchCopyDispatchResult(request.source_id, status, dispatch=dispatch))
     return BatchDispatchResult(tuple(results))

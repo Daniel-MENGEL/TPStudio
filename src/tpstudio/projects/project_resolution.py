@@ -15,6 +15,7 @@ from typing import Any, Callable
 from .model import TeacherProjectConfiguration
 from .snells_laws import snells_laws_teacher_project
 from .thin_lens import thin_lens_teacher_project
+from .torsion_pendulum import torsion_pendulum_teacher_project
 
 
 class ProjectResolutionConfidence(str, Enum):
@@ -196,9 +197,21 @@ def _thin_lens_evidence(markdown: str, code: str, filename: str) -> tuple[Projec
     return tuple(evidence)
 
 
+def _torsion_pendulum_evidence(markdown: str, code: str, filename: str) -> tuple[ProjectResolutionEvidence, ...]:
+    evidence: list[ProjectResolutionEvidence] = []
+    if re.search(r"pendule\s+de\s+torsion", markdown):
+        evidence.append(_evidence("title", "Titre Pendule de torsion", ProjectEvidenceCategory.STRONG))
+    if re.search(r"T_0|J_b|m_susp|theta_eq", code):
+        evidence.append(_evidence("code", "Variables caractéristiques du pendule de torsion", ProjectEvidenceCategory.MEDIUM))
+    if re.search(r"pendule[- ]de[- ]torsion", filename):
+        evidence.append(_evidence("filename", filename, ProjectEvidenceCategory.WEAK))
+    return tuple(evidence)
+
+
 PROJECT_DESCRIPTORS: tuple[ProjectDescriptor, ...] = (
     ProjectDescriptor("snells-laws-mvp", "Lois de Snell-Descartes", snells_laws_teacher_project, _snell_evidence),
     ProjectDescriptor("thin-lens-image", "Formation d'une image par une lentille mince", thin_lens_teacher_project, _thin_lens_evidence),
+    ProjectDescriptor("torsion-pendulum", "Pendule de torsion", torsion_pendulum_teacher_project, _torsion_pendulum_evidence),
 )
 
 

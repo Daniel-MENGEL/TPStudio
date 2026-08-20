@@ -196,10 +196,9 @@ def test_set_converts_to_tuple_preserves_order_and_basic_api() -> None:
     assert expectation_set.get("unknown") is None
 
 
-def test_set_rejects_empty_invalid_duplicate_and_incoherent_plan() -> None:
+def test_set_allows_empty_but_rejects_invalid_duplicate_and_incoherent_plan() -> None:
     plan, quantities = _context()
-    with pytest.raises(ValueError):
-        QuantityComparisonExpectationSet(plan, quantities, ())
+    assert len(QuantityComparisonExpectationSet(plan, quantities, ())) == 0
     with pytest.raises(TypeError):
         QuantityComparisonExpectationSet(plan, quantities, (object(),))  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="uniques"):
