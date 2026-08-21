@@ -14,6 +14,11 @@ from .mapping import (
     ValidationState,
     propose_candidate_production_matches,
 )
+from .activation import (
+    ActivationStatus,
+    ActivatedCandidateExpectation,
+    activate_validated_candidate_quantity,
+)
 
 __all__ = [
     "CandidateConfidence",
@@ -26,4 +31,7 @@ __all__ = [
     "MatchConfidence",
     "ValidationState",
     "propose_candidate_production_matches",
+    "ActivationStatus",
+    "ActivatedCandidateExpectation",
+    "activate_validated_candidate_quantity",
 ]

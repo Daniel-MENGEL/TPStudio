@@ -21,11 +21,29 @@ from tpstudio.expectations import (
     NotebookBindingPlan,
     NotebookCellSelector,
     NotebookCellSelectorKind,
+    ExpectedQuantity,
+    EvaluationBasis,
+    PresenceRequirement,
+    QuantityExpectationSet,
+    QuantityComparisonExpectationSet,
+    ScientificProductionKind,
+    ScientificProductionPlan,
+    ScientificProductionSpec,
+    ExpectationSet,
+    StudentNormalizedErrorExpectationSet,
+    ComparisonInterpretationExpectationSet,
+    ComparisonJustificationExpectationSet,
 )
 from tpstudio.projects import (
     snells_laws_teacher_project,
     thin_lens_teacher_project,
     torsion_pendulum_teacher_project,
+)
+from tpstudio.projects.model import (
+    NotebookReference,
+    NotebookReferenceRole,
+    TeacherProjectConfiguration,
+    TeacherProjectIdentity,
 )
 
 
@@ -79,6 +97,43 @@ def test_quantity_expectation_without_binding_is_not_ready():
     )
     incomplete = replace(project, notebook_binding_plan=plan)
     assert assess_analysis_readiness(incomplete) is AnalysisReadiness.NOT_READY
+
+
+def test_symbol_only_expectation_is_not_ready_even_with_valid_binding():
+    plan = ScientificProductionPlan(
+        "synthetic", "Synthetic", (
+            ScientificProductionSpec(
+                "q", "Quantity q", ScientificProductionKind.QUANTITY,
+                (EvaluationBasis.STRUCTURAL,),
+            ),
+        ),
+    )
+    binding_plan = NotebookBindingPlan(
+        "synthetic-bindings", "Synthetic bindings", plan,
+        (CellProductionBinding(
+            "q-binding", "q",
+            NotebookCellSelector(NotebookCellSelectorKind.SOURCE_MARKER, "q = ?"),
+            CellTextScope.full_source(),
+        ),),
+    )
+    quantities = QuantityExpectationSet(
+        plan, (ExpectedQuantity(
+            "q", "q",
+            unit_requirement=PresenceRequirement.OPTIONAL,
+            uncertainty_requirement=PresenceRequirement.IGNORE,
+        ),),
+    )
+    comparisons = QuantityComparisonExpectationSet(plan, quantities, ())
+    project = TeacherProjectConfiguration(
+        TeacherProjectIdentity("synthetic", "Synthetic", "Physique", "Lycée", "test"),
+        (NotebookReference("statement", NotebookReferenceRole.STATEMENT, "statement.tex"),),
+        plan, binding_plan, quantities, ExpectationSet("relations", "Relations"),
+        None, None, comparisons,
+        StudentNormalizedErrorExpectationSet(comparisons, ()),
+        ComparisonInterpretationExpectationSet(comparisons, ()),
+        ComparisonJustificationExpectationSet(comparisons, ()), (),
+    )
+    assert assess_analysis_readiness(project) is AnalysisReadiness.NOT_READY
 
 
 def test_multiple_bindings_for_unique_quantity_are_not_ready():

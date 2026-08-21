@@ -10,6 +10,11 @@ from .notebook_bindings import (
     NotebookCellSelectorKind,
 )
 from .quantities import ExpectedQuantity, PresenceRequirement, QuantityExpectationSet
+from .sufficiency import (
+    ExpectationSufficiency,
+    ExpectationSufficiencyAssessment,
+    assess_expectation_sufficiency,
+)
 from .quantity_comparisons import (
     ComparisonPedagogicalContext,
     ExpectedQuantityComparison,
@@ -44,6 +49,34 @@ from .student_normalized_errors import (
     ExpectedStudentNormalizedError,
     StudentNormalizedErrorExpectationSet,
 )
+from .derived_quantities import (
+    Add,
+    Constant,
+    DerivedExpression,
+    DerivedQuantityEvaluation,
+    DerivedQuantityEvaluationStatus,
+    Divide,
+    ExpectedDerivedQuantity,
+    Multiply,
+    OperandRef,
+    Power,
+    ProductionValue,
+    RegressionParameter,
+    RegressionParameterKind,
+    RegressionParameterRef,
+    Subtract,
+    TeacherConstant,
+    evaluate_derived_quantity,
+)
+from .source_resolution import (
+    DerivedQuantityRuntimeEvaluation,
+    DerivedSourceResolution,
+    DerivedSourceResolutionContext,
+    DerivedSourceResolutionStatus,
+    ResolvedDerivedSource,
+    evaluate_derived_quantity_from_analysis,
+    resolve_derived_quantity_sources,
+)
 
 __all__ = [
     "CellProductionBinding",
@@ -72,6 +105,9 @@ __all__ = [
     "NormalizedErrorThresholds",
     "PresenceRequirement",
     "QuantityExpectationSet",
+    "ExpectationSufficiency",
+    "ExpectationSufficiencyAssessment",
+    "assess_expectation_sufficiency",
     "QuantityComparisonExpectationSet",
     "QuantityComparisonMethod",
     "ScientificProductionKind",
@@ -80,4 +116,28 @@ __all__ = [
     "StudentNormalizedErrorExpectationSet",
     "UncertaintyQualityExpectationSet",
     "UncertaintyQualitySpec",
+    "Add",
+    "Constant",
+    "DerivedExpression",
+    "DerivedQuantityEvaluation",
+    "DerivedQuantityEvaluationStatus",
+    "Divide",
+    "ExpectedDerivedQuantity",
+    "Multiply",
+    "OperandRef",
+    "Power",
+    "ProductionValue",
+    "RegressionParameter",
+    "RegressionParameterKind",
+    "RegressionParameterRef",
+    "Subtract",
+    "TeacherConstant",
+    "evaluate_derived_quantity",
+    "DerivedQuantityRuntimeEvaluation",
+    "DerivedSourceResolution",
+    "DerivedSourceResolutionContext",
+    "DerivedSourceResolutionStatus",
+    "ResolvedDerivedSource",
+    "evaluate_derived_quantity_from_analysis",
+    "resolve_derived_quantity_sources",
 ]

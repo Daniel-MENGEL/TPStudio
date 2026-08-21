@@ -28,7 +28,10 @@ from tpstudio.evaluation import (
     evaluate_quantity_comparisons,
     evaluate_student_normalized_errors,
 )
-from tpstudio.expectations import ScientificProductionKind
+from tpstudio.expectations import (
+    ScientificProductionKind,
+    assess_expectation_sufficiency,
+)
 from tpstudio.feedback import (
     ComparisonInterpretationFeedbackCatalog,
     ComparisonJustificationFeedbackCatalog,
@@ -467,7 +470,10 @@ def assess_analysis_readiness(project: TeacherProjectConfiguration) -> AnalysisR
     plan = project.scientific_production_plan
     for production in plan:
         if production.kind is ScientificProductionKind.QUANTITY:
-            if project.quantity_expectation_set.get(production.id) is None:
+            expectation = project.quantity_expectation_set.get(production.id)
+            if expectation is None:
+                return AnalysisReadiness.NOT_READY
+            if not assess_expectation_sufficiency(expectation).is_analyzable:
                 return AnalysisReadiness.NOT_READY
             # The analyzer requires exactly one resolved candidate for every
             # quantitative expectation; declaration cardinality is the part
@@ -475,14 +481,24 @@ def assess_analysis_readiness(project: TeacherProjectConfiguration) -> AnalysisR
             if len(project.notebook_binding_plan.for_production(production.id)) != 1:
                 return AnalysisReadiness.NOT_READY
         elif production.kind is ScientificProductionKind.RELATION:
-            if project.relation_expectation_set.relation_by_id(production.id) is None:
+            expectation = project.relation_expectation_set.relation_by_id(production.id)
+            if expectation is None:
+                return AnalysisReadiness.NOT_READY
+            if not assess_expectation_sufficiency(expectation).is_analyzable:
                 return AnalysisReadiness.NOT_READY
             if len(project.notebook_binding_plan.for_production(production.id)) != 1:
                 return AnalysisReadiness.NOT_READY
         elif production.kind is ScientificProductionKind.COMPARISON:
-            if project.quantity_comparison_expectation_set.get(production.id) is None:
+            expectation = project.quantity_comparison_expectation_set.get(production.id)
+            if expectation is None:
+                return AnalysisReadiness.NOT_READY
+            if not assess_expectation_sufficiency(expectation).is_analyzable:
                 return AnalysisReadiness.NOT_READY
             if len(project.notebook_binding_plan.for_production(production.id)) != 1:
+                return AnalysisReadiness.NOT_READY
+    if project.graph_expectation_set is not None:
+        for expectation in project.graph_expectation_set:
+            if not assess_expectation_sufficiency(expectation).is_analyzable:
                 return AnalysisReadiness.NOT_READY
     return AnalysisReadiness.READY
 
