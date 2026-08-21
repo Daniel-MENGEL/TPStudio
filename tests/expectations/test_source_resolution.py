@@ -1,9 +1,11 @@
 from decimal import Decimal
+from types import SimpleNamespace
 
 import numpy as np
 
 from tpstudio.expectations import (
     Divide,
+    build_derived_source_resolution_context,
     DerivedSourceResolutionContext,
     DerivedSourceResolutionStatus,
     ExpectedDerivedQuantity,
@@ -19,6 +21,7 @@ from tpstudio.graph_analysis import GraphAnalysis, GraphAnalysisTechnicalStatus
 from tpstudio.regression import RegressionMethod
 from tpstudio.regression_matching import RegressionSeriesMatchStatus
 from tpstudio.regression_model import RegressionModelAnalysis, RegressionModelTechnicalStatus
+from tpstudio.orchestration.observed_values import ObservedScalarValue, ObservedValueSource
 
 
 def _expectation(target, sources, rule):
@@ -31,6 +34,128 @@ def _graph(slope=2.5, intercept=1.2, status=GraphAnalysisTechnicalStatus.EVALUAB
         0.0, 0.0, 0.0, "none", "none", 1.0, 4, None, None, 0.0,
         0.0, "unavailable", "none", status, None, (), False,
     )
+
+
+def _copy_result(*, quantities=(), graph_analyses=(), regression_models=(), graph_evaluations=()):
+    return SimpleNamespace(
+        quantity_evaluations=tuple(quantities),
+        graph_analyses=tuple(graph_analyses),
+        regression_model_analyses=tuple(regression_models),
+        graph_evaluations=tuple(graph_evaluations),
+    )
+
+
+def _quantity_result(production_id, value):
+    observation = ObservedScalarValue(
+        production_id, ObservedValueSource.CODE_LITERAL, Decimal(str(value)),
+        None, 0, f"{production_id} = {value}",
+    )
+    return SimpleNamespace(
+        production_id=production_id,
+        assessment=SimpleNamespace(selected_observation=observation),
+    )
+
+
+def _graph_evaluation(production_id, series_id):
+    return SimpleNamespace(
+        expectation=SimpleNamespace(production_id=production_id),
+        observation=SimpleNamespace(series_data=(SimpleNamespace(series_id=series_id),)),
+    )
+
+
+def _model(production_id, series_id, coefficients=(2.5, 1.2), degree=1, status=RegressionModelTechnicalStatus.EVALUABLE):
+    return RegressionModelAnalysis(
+        production_id, series_id, RegressionMethod.NUMPY_POLYFIT, degree,
+        RegressionSeriesMatchStatus.EXACT, coefficients, None, None, None,
+        None, None, status, (), False,
+    )
+
+
+def test_copy_result_adapter_indexes_quantity_graph_and_regression_outputs():
+    copy_result = _copy_result(
+        quantities=(_quantity_result("production-17", 12),),
+        graph_analyses=(_graph(),),
+        regression_models=(_model("regression-1", "series-1"),),
+        graph_evaluations=(_graph_evaluation("production-plot-1", "graph-series"),
+                           _graph_evaluation("regression-plot-1", "series-1")),
+    )
+    context = build_derived_source_resolution_context(copy_result)
+    assert context.quantity_values["production-17"].production_id == "production-17"
+    assert context.graph_analyses["production-plot-1"] is copy_result.graph_analyses[0]
+    assert context.regression_model_analyses["regression-plot-1"] is copy_result.regression_model_analyses[0]
+
+
+def test_copy_result_adapter_preserves_two_analysis_categories_for_one_plot():
+    graph = _graph()
+    model = _model("model-1", "series-1")
+    copy_result = _copy_result(
+        graph_analyses=(graph,), regression_models=(model,),
+        graph_evaluations=(_graph_evaluation("plot-1", "graph-series"),
+                           _graph_evaluation("plot-1", "series-1")),
+    )
+    context = build_derived_source_resolution_context(copy_result)
+    assert context.graph_analyses["plot-1"] is graph
+    assert context.regression_model_analyses["plot-1"] is model
+    source = RegressionParameter("plot-1", RegressionParameterKind.INTERCEPT)
+    expectation = _expectation("q", (source,), OperandRef(source))
+    result = resolve_derived_quantity_sources(expectation, context)
+    assert result.status is DerivedSourceResolutionStatus.RESOLVED
+
+
+def test_copy_result_adapter_keeps_non_affine_model_for_source_resolution():
+    model = _model("model-2", "series-2", coefficients=(3.0, 2.0, 1.0), degree=2)
+    context = build_derived_source_resolution_context(
+        _copy_result(
+            regression_models=(model,),
+            graph_evaluations=(_graph_evaluation("plot-2", "series-2"),),
+        )
+    )
+    source = RegressionParameter("plot-2", RegressionParameterKind.INTERCEPT)
+    expectation = _expectation("q", (source,), OperandRef(source))
+    result = resolve_derived_quantity_sources(expectation, context)
+    assert result.status is DerivedSourceResolutionStatus.UNSUPPORTED_REGRESSION_MODEL
+
+
+def test_copy_result_adapter_builds_a_over_b_pipeline_without_manual_context_values():
+    a, b = ProductionValue("a"), ProductionValue("b")
+    expectation = _expectation("q", (a, b), Divide(OperandRef(a), OperandRef(b)))
+    context = build_derived_source_resolution_context(
+        _copy_result(quantities=(_quantity_result("a", 12), _quantity_result("b", 3)))
+    )
+    result = evaluate_derived_quantity_from_analysis(expectation, context)
+    assert result.evaluation is not None
+    assert result.evaluation.value == Decimal("4")
+
+
+def test_copy_result_adapter_runs_the_complete_jb_pipeline():
+    intercept = RegressionParameter("dynamic_graph", RegressionParameterKind.INTERCEPT)
+    dynamic_c = ProductionValue("dynamic_torsion_constant")
+    constant = TeacherConstant("four_pi_squared", Decimal("39.47841760435743"))
+    from tpstudio.expectations import Multiply
+    expectation = ExpectedDerivedQuantity(
+        "bar_inertia", "J_b", (intercept, dynamic_c, constant),
+        Divide(Multiply(OperandRef(intercept), OperandRef(dynamic_c)), OperandRef(constant)),
+    )
+    copy_result = _copy_result(
+        quantities=(_quantity_result("dynamic_torsion_constant", Decimal("39.47841760435743")),),
+        graph_analyses=(_graph(intercept=2.0),),
+        graph_evaluations=(_graph_evaluation("dynamic_graph", "graph-series"),),
+    )
+    context = build_derived_source_resolution_context(copy_result)
+    result = evaluate_derived_quantity_from_analysis(expectation, context)
+    assert result.evaluation is not None
+    assert result.evaluation.value == Decimal("2")
+
+
+def test_copy_result_adapter_rejects_ambiguous_duplicate_records():
+    first = _quantity_result("duplicate", 1)
+    second = _quantity_result("duplicate", 2)
+    try:
+        build_derived_source_resolution_context(_copy_result(quantities=(first, second)))
+    except ValueError as error:
+        assert "dupliqués" in str(error)
+    else:
+        raise AssertionError("Un doublon ambigu doit être refusé.")
 
 
 def test_production_value_uses_an_opaque_id_and_pipeline_evaluates_a_over_b():

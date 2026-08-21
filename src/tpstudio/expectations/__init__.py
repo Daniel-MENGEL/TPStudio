@@ -69,6 +69,7 @@ from .derived_quantities import (
     evaluate_derived_quantity,
 )
 from .source_resolution import (
+    build_derived_source_resolution_context,
     DerivedQuantityRuntimeEvaluation,
     DerivedSourceResolution,
     DerivedSourceResolutionContext,
@@ -76,6 +77,10 @@ from .source_resolution import (
     ResolvedDerivedSource,
     evaluate_derived_quantity_from_analysis,
     resolve_derived_quantity_sources,
+)
+from .derived_validation import (
+    DerivedQuantityPlanValidation,
+    validate_derived_quantity_expectation,
 )
 
 __all__ = [
@@ -140,4 +145,7 @@ __all__ = [
     "ResolvedDerivedSource",
     "evaluate_derived_quantity_from_analysis",
     "resolve_derived_quantity_sources",
+    "build_derived_source_resolution_context",
+    "DerivedQuantityPlanValidation",
+    "validate_derived_quantity_expectation",
 ]

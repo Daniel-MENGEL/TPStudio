@@ -86,6 +86,71 @@ class DerivedQuantityRuntimeEvaluation:
     evaluation: DerivedQuantityEvaluation | None
 
 
+def _index_analysis_items(items: object, label: str, key_fn=None) -> dict[str, object]:
+    """Index immutable analysis records without silently overwriting duplicates."""
+    indexed: dict[str, object] = {}
+    for item in tuple(items or ()):
+        production_id = key_fn(item) if key_fn is not None else getattr(item, "production_id", None)
+        if not isinstance(production_id, str) or not production_id.strip():
+            continue
+        previous = indexed.get(production_id)
+        if previous is None:
+            indexed[production_id] = item
+            continue
+        if previous is item or previous == item:
+            continue
+        raise ValueError(f"Résultats {label} dupliqués pour {production_id!r}.")
+    return indexed
+
+
+def build_derived_source_resolution_context(copy_analysis_result: object) -> DerivedSourceResolutionContext:
+    """Expose existing CopyAnalysisResult outputs by production id.
+
+    The adapter is intentionally structural to avoid importing orchestration
+    back into the expectations package.  It preserves quantity assessment,
+    graph and regression objects as-is; source resolution remains responsible
+    for interpreting their runtime values.
+    """
+    required = ("quantity_evaluations", "graph_analyses", "regression_model_analyses")
+    if any(not hasattr(copy_analysis_result, name) for name in required):
+        raise TypeError("Le résultat de copie ne possède pas les collections d'analyse requises.")
+    series_to_production: dict[str, str] = {}
+    for evaluation in tuple(getattr(copy_analysis_result, "graph_evaluations", ()) or ()):
+        expectation = getattr(evaluation, "expectation", None)
+        observation = getattr(evaluation, "observation", None)
+        production_id = getattr(expectation, "production_id", None)
+        if not isinstance(production_id, str) or observation is None:
+            continue
+        for series in tuple(getattr(observation, "series_data", ()) or ()):
+            series_id = getattr(series, "series_id", None)
+            if not isinstance(series_id, str) or not series_id.strip():
+                continue
+            previous = series_to_production.get(series_id)
+            if previous is not None and previous != production_id:
+                raise ValueError(f"Série graphique {series_id!r} associée à plusieurs productions.")
+            series_to_production[series_id] = production_id
+
+    def graph_key(item: object) -> str | None:
+        explicit = getattr(item, "production_id", None)
+        if isinstance(explicit, str) and explicit.strip():
+            return explicit
+        return series_to_production.get(getattr(item, "series_id", None))
+
+    graph_items = tuple(getattr(copy_analysis_result, "graph_analyses", ()) or ())
+    regression_items = tuple(getattr(copy_analysis_result, "regression_model_analyses", ()) or ())
+    graph_index = _index_analysis_items(graph_items, "graphiques", graph_key)
+    regression_index = _index_analysis_items(
+        regression_items,
+        "régressions",
+        lambda item: getattr(item, "production_id", None) or series_to_production.get(getattr(item, "series_id", None)),
+    )
+    return DerivedSourceResolutionContext(
+        quantity_values=_index_analysis_items(copy_analysis_result.quantity_evaluations, "quantitatifs"),
+        graph_analyses=graph_index,
+        regression_model_analyses=regression_index,
+    )
+
+
 def _to_decimal(value: object) -> Decimal | None:
     if isinstance(value, bool):
         return None
@@ -116,12 +181,12 @@ def _scalar_candidate(value: object) -> object:
     """Unwrap known assessment-shaped scalar containers only."""
     selected = getattr(value, "selected_observation", None)
     if selected is not None:
-        return selected
+        return _scalar_candidate(selected)
     assessment = getattr(value, "assessment", None)
     if assessment is not None:
         selected = getattr(assessment, "selected_observation", None)
         if selected is not None:
-            return selected
+            return _scalar_candidate(selected)
     observed_value = getattr(value, "value", None)
     if observed_value is not None and value.__class__.__name__ in {
         "ObservedScalarValue", "QuantityObservation",
