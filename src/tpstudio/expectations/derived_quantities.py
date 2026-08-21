@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from decimal import Decimal, DivisionByZero, InvalidOperation, Overflow, localcontext
 from enum import Enum
@@ -189,6 +189,41 @@ class ExpectedDerivedQuantity:
         if not isinstance(self.description, str):
             raise TypeError("description doit être une chaîne.")
         object.__setattr__(self, "sources", sources)
+
+
+@dataclass(frozen=True, slots=True)
+class DerivedQuantityExpectationSet:
+    """Immutable derived expectations awaiting contextual plan validation."""
+
+    expectations: tuple[ExpectedDerivedQuantity, ...] = ()
+
+    def __post_init__(self) -> None:
+        expectations = tuple(self.expectations)
+        if any(not isinstance(item, ExpectedDerivedQuantity) for item in expectations):
+            raise TypeError(
+                "Chaque attendu doit être une ExpectedDerivedQuantity."
+            )
+        production_ids = [item.production_id for item in expectations]
+        if len(production_ids) != len(set(production_ids)):
+            raise ValueError(
+                "Les identifiants cibles des attentes dérivées doivent être uniques."
+            )
+        object.__setattr__(self, "expectations", expectations)
+
+    def __iter__(self) -> Iterator[ExpectedDerivedQuantity]:
+        return iter(self.expectations)
+
+    def __len__(self) -> int:
+        return len(self.expectations)
+
+    def get(self, production_id: str) -> ExpectedDerivedQuantity | None:
+        return self.by_production_id(production_id)
+
+    def by_production_id(self, production_id: str) -> ExpectedDerivedQuantity | None:
+        return next(
+            (item for item in self.expectations if item.production_id == production_id),
+            None,
+        )
 
 
 class DerivedQuantityEvaluationStatus(str, Enum):

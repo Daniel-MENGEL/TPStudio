@@ -1,10 +1,20 @@
 """A76e2a structural tests for the torsion-pendulum project contract."""
 
 from pathlib import Path
+from decimal import Decimal
+from types import SimpleNamespace
 
 import nbformat
 
-from tpstudio.expectations import ScientificProductionKind
+from tpstudio.expectations import (
+    DerivedSourceResolutionStatus,
+    ScientificProductionKind,
+    assess_expectation_sufficiency,
+    build_derived_source_resolution_context,
+    evaluate_derived_quantity_from_analysis,
+)
+from tpstudio.graph_analysis import GraphAnalysis, GraphAnalysisTechnicalStatus
+from tpstudio.orchestration.observed_values import ObservedScalarValue, ObservedValueSource
 from tpstudio.notebooks.binding_resolution import resolve_notebook_bindings
 from tpstudio.projects import (
     known_project_ids,
@@ -39,12 +49,57 @@ def test_torsion_factory_declares_structural_plan_and_bindings():
         "dynamic-study", "static-study"
     }
     assert len(project.quantity_expectation_set) == 0
+    assert len(project.derived_quantity_expectation_set) == 1
+    assert project.derived_quantity_expectation_set.get("bar_inertia") is not None
     assert len(project.relation_expectation_set.relations) == 0
     assert len(project.quantity_comparison_expectation_set) == 0
     assert len(project.student_normalized_error_expectation_set) == 0
     assert len(project.comparison_interpretation_expectation_set) == 0
     assert len(project.comparison_justification_expectation_set) == 0
     assert project.feedback_catalogs == ()
+    assert assess_analysis_readiness(project) is AnalysisReadiness.NOT_READY
+
+
+def test_bar_inertia_derived_expectation_is_valid_analyzable_and_non_competing():
+    project = torsion_pendulum_teacher_project()
+    expectation = project.derived_quantity_expectation_set.get("bar_inertia")
+    assert expectation is not None
+    assert project.derived_quantity_expectation_set.get("dynamic_torsion_constant") is None
+    assert project.quantity_expectation_set.get("bar_inertia") is None
+    assert assess_expectation_sufficiency(expectation).is_analyzable
+    assert project.derived_quantity_expectation_set.get("bar_inertia") is expectation
+
+
+def test_configured_bar_inertia_runs_isolated_without_analyze_copy_activation():
+    project = torsion_pendulum_teacher_project()
+    expectation = project.derived_quantity_expectation_set.get("bar_inertia")
+    assert expectation is not None
+    graph = GraphAnalysis(
+        "dynamic-graph-series", None, 0, 4, "AFFINE", 2.0, 1.2,
+        0.0, 0.0, 0.0, "none", "none", 1.0, 4, None, None, 0.0,
+        0.0, "unavailable", "none", GraphAnalysisTechnicalStatus.EVALUABLE, None, (), False,
+    )
+    quantity = ObservedScalarValue(
+        "dynamic_torsion_constant", ObservedValueSource.CODE_LITERAL,
+        Decimal("10"), None, 0, "C = 10",
+    )
+    copy_result = SimpleNamespace(
+        quantity_evaluations=(SimpleNamespace(
+            production_id="dynamic_torsion_constant",
+            assessment=SimpleNamespace(selected_observation=quantity),
+        ),),
+        graph_analyses=(graph,),
+        regression_model_analyses=(),
+        graph_evaluations=(SimpleNamespace(
+            expectation=SimpleNamespace(production_id="dynamic_graph"),
+            observation=SimpleNamespace(series_data=(SimpleNamespace(series_id="dynamic-graph-series"),)),
+        ),),
+    )
+    context = build_derived_source_resolution_context(copy_result)
+    runtime = evaluate_derived_quantity_from_analysis(expectation, context)
+    assert runtime.resolution.status is DerivedSourceResolutionStatus.RESOLVED
+    assert runtime.evaluation is not None
+    assert runtime.evaluation.value == Decimal("0.3039635509270133143316383896")
     assert assess_analysis_readiness(project) is AnalysisReadiness.NOT_READY
 
 

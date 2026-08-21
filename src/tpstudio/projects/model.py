@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 from tpstudio.expectations import (
@@ -12,6 +12,8 @@ from tpstudio.expectations import (
     ExpectationSet,
     NotebookBindingPlan,
     QuantityComparisonExpectationSet,
+    DerivedQuantityExpectationSet,
+    validate_derived_quantity_expectation,
     QuantityExpectationSet,
     ScientificProductionKind,
     ScientificProductionPlan,
@@ -194,6 +196,9 @@ class TeacherProjectConfiguration:
     feedback_catalogs: tuple[object, ...]
     description: str = ""
     experimental_manipulations: tuple[ExperimentalManipulation, ...] = ()
+    derived_quantity_expectation_set: DerivedQuantityExpectationSet = field(
+        default_factory=DerivedQuantityExpectationSet
+    )
 
     def __post_init__(self) -> None:
         validate_teacher_project_configuration(self, normalize=True)
@@ -292,6 +297,19 @@ def validate_teacher_project_configuration(
     comparisons = configuration.quantity_comparison_expectation_set
     if type(comparisons) is not QuantityComparisonExpectationSet or comparisons.production_plan is not plan or comparisons.quantity_expectation_set is not quantities:
         raise ValueError("Les comparaisons doivent partager le plan et les quantités.")
+    derived = configuration.derived_quantity_expectation_set
+    if type(derived) is not DerivedQuantityExpectationSet:
+        raise TypeError(
+            "Les attentes dérivées doivent former un DerivedQuantityExpectationSet."
+        )
+    derived_diagnostics = []
+    for expectation in derived:
+        validation = validate_derived_quantity_expectation(expectation, plan)
+        derived_diagnostics.extend(validation.diagnostics)
+    if derived_diagnostics:
+        raise ValueError(
+            "Attentes dérivées invalides : " + " | ".join(derived_diagnostics)
+        )
     dependents = (
         (configuration.student_normalized_error_expectation_set, StudentNormalizedErrorExpectationSet),
         (configuration.comparison_interpretation_expectation_set, ComparisonInterpretationExpectationSet),

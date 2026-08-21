@@ -1,28 +1,38 @@
 """Structural teacher configuration for the torsion-pendulum notebook.
 
-This first milestone deliberately declares only the project identity, production
-plan and stable notebook bindings.  Scientific graph, uncertainty and derived
-calculation expectations are intentionally left for later milestones.
+The project keeps its derived calculation expectation declarative; execution
+remains outside the configuration/readiness path.
 """
 
 from __future__ import annotations
+
+from decimal import Decimal
 
 from tpstudio.expectations import (
     CellProductionBinding,
     CellTextScope,
     ComparisonInterpretationExpectationSet,
     ComparisonJustificationExpectationSet,
+    DerivedQuantityExpectationSet,
+    Divide,
     ExpectationSet,
     EvaluationBasis,
     NotebookBindingPlan,
     NotebookCellSelector,
     NotebookCellSelectorKind,
+    ExpectedDerivedQuantity,
+    Multiply,
+    OperandRef,
+    ProductionValue,
     QuantityComparisonExpectationSet,
     QuantityExpectationSet,
     ScientificProductionKind,
     ScientificProductionPlan,
     ScientificProductionSpec,
     StudentNormalizedErrorExpectationSet,
+    RegressionParameter,
+    RegressionParameterKind,
+    TeacherConstant,
 )
 from tpstudio.protocol import ExperimentalManipulation
 
@@ -174,6 +184,24 @@ def torsion_pendulum_teacher_project() -> TeacherProjectConfiguration:
     """Build the structural A76e2a configuration for the torsion pendulum."""
     plan = _plan()
     quantities, relations, comparisons, student_errors, interpretations, justifications = _empty_expectations(plan)
+    intercept = RegressionParameter("dynamic_graph", RegressionParameterKind.INTERCEPT)
+    dynamic_constant = ProductionValue("dynamic_torsion_constant")
+    four_pi_squared = TeacherConstant(
+        "four_pi_squared", Decimal("39.4784176043574344753379639995")
+    )
+    derived_expectations = DerivedQuantityExpectationSet((ExpectedDerivedQuantity(
+        production_id="bar_inertia",
+        canonical_symbol="J_b",
+        sources=(intercept, dynamic_constant, four_pi_squared),
+        rule=Divide(
+            Multiply(OperandRef(intercept), OperandRef(dynamic_constant)),
+            OperandRef(four_pi_squared),
+        ),
+        description=(
+            "Moment d'inertie de la barre déduit de l'ordonnée à l'origine "
+            "de la régression dynamique."
+        ),
+    ),))
     configuration = TeacherProjectConfiguration(
         TeacherProjectIdentity(
             "torsion-pendulum",
@@ -206,6 +234,7 @@ def torsion_pendulum_teacher_project() -> TeacherProjectConfiguration:
             ExperimentalManipulation("dynamic-study", "Étude dynamique", "1. Étude dynamique"),
             ExperimentalManipulation("static-study", "Étude statique", "2. Étude statique"),
         ),
+        derived_quantity_expectation_set=derived_expectations,
     )
     validate_teacher_project_configuration(configuration)
     return configuration
