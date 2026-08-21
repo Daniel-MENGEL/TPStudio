@@ -31,8 +31,8 @@ def test_torsion_factory_declares_structural_plan_and_bindings():
     project = torsion_pendulum_teacher_project()
 
     assert project.identity.project_id == "torsion-pendulum"
-    assert len(project.scientific_production_plan.productions) == 18
-    assert len(project.notebook_binding_plan.bindings) == 18
+    assert len(project.scientific_production_plan.productions) == 16
+    assert len(project.notebook_binding_plan.bindings) == 17
     assert project.graph_expectation_set is None
     assert project.uncertainty_expectation_set is None
     assert {item.stable_id for item in project.experimental_manipulations} == {
@@ -83,8 +83,29 @@ def test_torsion_bindings_are_unique_and_resolve():
         "dynamic_interpretation", "static_mass", "static_reference_angle",
         "static_distances", "static_equilibrium_angles", "static_torsion_constant",
         "static_interpretation", "dynamic_static_comparison",
-        "normalized_error_relation", "general_conclusion",
+        "normalized_error", "general_conclusion",
     }
+    assert "dynamic_model_relation" not in {
+        item.production_id for item in result
+    }
+    assert "static_model_relation" not in {
+        item.production_id for item in result
+    }
+    assert project.scientific_production_plan.get("normalized_error").kind is ScientificProductionKind.QUANTITY
+    assert all(
+        production.kind is not ScientificProductionKind.RELATION
+        for production in project.scientific_production_plan
+    )
+    assert {
+        binding.production_id
+        for binding in project.notebook_binding_plan
+        if binding.selector.value == "np.polyfit"
+    } == {"dynamic_graph"}
+    assert {
+        binding.production_id
+        for binding in project.notebook_binding_plan
+        if binding.selector.value == "E_n = ?"
+    } == {"normalized_error"}
 
 
 def test_torsion_reuses_existing_roles_without_changing_other_projects():

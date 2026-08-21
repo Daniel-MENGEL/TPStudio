@@ -50,7 +50,6 @@ def _plan() -> ScientificProductionPlan:
     declared = EvaluationBasis.DECLARED_CONTENT
     semantic = EvaluationBasis.SEMANTIC
     quantity = ScientificProductionKind.QUANTITY
-    relation = ScientificProductionKind.RELATION
     plot = ScientificProductionKind.PLOT
     comparison = ScientificProductionKind.COMPARISON
     interpretation = ScientificProductionKind.INTERPRETATION
@@ -74,10 +73,6 @@ def _plan() -> ScientificProductionPlan:
                 (structural,), ("dynamic_graph", "dynamic_torsion_constant"),
             ),
             ScientificProductionSpec(
-                "dynamic_model_relation", "Relation du modèle dynamique", relation,
-                (declared,), ("dynamic_graph",),
-            ),
-            ScientificProductionSpec(
                 "dynamic_interpretation", "Interprétation de l'étude dynamique",
                 interpretation, (semantic,),
                 ("dynamic_graph", "dynamic_torsion_constant", "bar_inertia"),
@@ -91,10 +86,6 @@ def _plan() -> ScientificProductionPlan:
                 (structural,), ("static_mass", "static_distances", "static_equilibrium_angles"),
             ),
             ScientificProductionSpec(
-                "static_model_relation", "Relation du modèle statique", relation,
-                (declared,), ("static_torsion_constant",),
-            ),
-            ScientificProductionSpec(
                 "static_interpretation", "Interprétation de l'étude statique",
                 interpretation, (semantic,), ("static_torsion_constant",),
             ),
@@ -104,8 +95,8 @@ def _plan() -> ScientificProductionPlan:
                 ("dynamic_torsion_constant", "static_torsion_constant"),
             ),
             ScientificProductionSpec(
-                "normalized_error_relation", "Écart normalisé", relation,
-                (declared,), ("dynamic_static_comparison",),
+                "normalized_error", "Écart normalisé", quantity,
+                (structural,), ("dynamic_static_comparison",),
             ),
             ScientificProductionSpec(
                 "general_conclusion", "Conclusion générale", interpretation,
@@ -142,7 +133,7 @@ def _bindings(plan: ScientificProductionPlan) -> NotebookBindingPlan:
         _marker("dynamic-thickness-cell", "dynamic_thickness", "L = ?"),
         _marker("dynamic-periods-cell", "dynamic_periods", "T_0 ="),
         _marker("dynamic-graph-cell", "dynamic_graph", "plt.plot(?, ?,"),
-        _marker("dynamic-model-cell", "dynamic_model_relation", "np.polyfit"),
+        _marker("dynamic-regression-cell", "dynamic_graph", "np.polyfit"),
         _marker("dynamic-c-cell", "dynamic_torsion_constant", "C = 8*np.pi**2*m/a"),
         _marker("dynamic-inertia-cell", "bar_inertia", "J_b = ?"),
         _cell("dynamic-interpretation-cell", "dynamic_interpretation", _NOTEBOOK_CELL_IDS["dynamic_interpretation"]),
@@ -151,10 +142,9 @@ def _bindings(plan: ScientificProductionPlan) -> NotebookBindingPlan:
         _marker("static-distance-cell", "static_distances", "d = np.array"),
         _marker("static-equilibrium-angle-cell", "static_equilibrium_angles", "theta_eq = np.array"),
         _marker("static-c-cell", "static_torsion_constant", "C2 = ?"),
-        _marker("static-model-cell", "static_model_relation", "C2 = ?"),
         _cell("static-interpretation-cell", "static_interpretation", _NOTEBOOK_CELL_IDS["static_interpretation"]),
         _cell("comparison-cell", "dynamic_static_comparison", _NOTEBOOK_CELL_IDS["comparison"]),
-        _marker("normalized-error-cell", "normalized_error_relation", "E_n = ?"),
+        _marker("normalized-error-cell", "normalized_error", "E_n = ?"),
         _cell("conclusion-cell", "general_conclusion", _NOTEBOOK_CELL_IDS["conclusion"]),
     )
     return NotebookBindingPlan(
