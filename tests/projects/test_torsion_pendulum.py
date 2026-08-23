@@ -7,11 +7,13 @@ from types import SimpleNamespace
 import nbformat
 
 from tpstudio.expectations import (
+    DerivedQuantityExpectationSet,
     DerivedSourceResolutionStatus,
+    ExpectedDerivedQuantity,
+    OperandRef,
     ScientificProductionKind,
+    TeacherConstant,
     assess_expectation_sufficiency,
-    build_derived_source_resolution_context,
-    evaluate_derived_quantity_from_analysis,
 )
 from tpstudio.graph_analysis import GraphAnalysis, GraphAnalysisTechnicalStatus
 from tpstudio.orchestration.observed_values import ObservedScalarValue, ObservedValueSource
@@ -24,7 +26,12 @@ from tpstudio.projects import (
     thin_lens_teacher_project,
     torsion_pendulum_teacher_project,
 )
-from tpstudio.orchestration import AnalysisReadiness, assess_analysis_readiness
+from tpstudio.orchestration import (
+    AnalysisReadiness,
+    assess_analysis_readiness,
+    assess_analysis_readiness_diagnostics,
+    evaluate_configured_derived_quantities,
+)
 
 
 NOTEBOOK = Path(
@@ -58,6 +65,9 @@ def test_torsion_factory_declares_structural_plan_and_bindings():
     assert len(project.comparison_justification_expectation_set) == 0
     assert project.feedback_catalogs == ()
     assert assess_analysis_readiness(project) is AnalysisReadiness.NOT_READY
+    diagnostics = assess_analysis_readiness_diagnostics(project)
+    assert not any("bar_inertia: aucune attente quantitative" in item for item in diagnostics)
+    assert not any("bar_inertia" in item for item in diagnostics)
 
 
 def test_bar_inertia_derived_expectation_is_valid_analyzable_and_non_competing():
@@ -95,12 +105,75 @@ def test_configured_bar_inertia_runs_isolated_without_analyze_copy_activation():
             observation=SimpleNamespace(series_data=(SimpleNamespace(series_id="dynamic-graph-series"),)),
         ),),
     )
-    context = build_derived_source_resolution_context(copy_result)
-    runtime = evaluate_derived_quantity_from_analysis(expectation, context)
+    results = evaluate_configured_derived_quantities(project, copy_result)
+    assert len(results) == 1
+    runtime = next(result for result in results if result.production_id == "bar_inertia")
+    expectation = project.derived_quantity_expectation_set.get("bar_inertia")
+    assert runtime.expectation is expectation
+    assert runtime.production_id == "bar_inertia"
     assert runtime.resolution.status is DerivedSourceResolutionStatus.RESOLVED
     assert runtime.evaluation is not None
     assert runtime.evaluation.value == Decimal("0.3039635509270133143316383896")
     assert assess_analysis_readiness(project) is AnalysisReadiness.NOT_READY
+
+
+def test_multiple_derived_expectations_share_context_and_fail_independently():
+    from dataclasses import replace
+
+    project = torsion_pendulum_teacher_project()
+    bar = project.derived_quantity_expectation_set.get("bar_inertia")
+    constant = TeacherConstant("synthetic-mass", Decimal("2"))
+    mass = ExpectedDerivedQuantity("dynamic_mass", "m", (constant,), OperandRef(constant))
+    configured = replace(
+        project,
+        derived_quantity_expectation_set=DerivedQuantityExpectationSet((bar, mass)),
+    )
+    graph = GraphAnalysis(
+        "dynamic-graph-series", None, 0, 4, "AFFINE", 2.0, 1.2,
+        0.0, 0.0, 0.0, "none", "none", 1.0, 4, None, None, 0.0,
+        0.0, "unavailable", "none", GraphAnalysisTechnicalStatus.EVALUABLE, None, (), False,
+    )
+    copy_result = SimpleNamespace(
+        quantity_evaluations=(),
+        graph_analyses=(graph,),
+        regression_model_analyses=(),
+        graph_evaluations=(SimpleNamespace(
+            expectation=SimpleNamespace(production_id="dynamic_graph"),
+            observation=SimpleNamespace(series_data=(SimpleNamespace(series_id="dynamic-graph-series"),)),
+        ),),
+    )
+    results = evaluate_configured_derived_quantities(configured, copy_result)
+    assert len(results) == 2
+    by_production = {item.production_id: item for item in results}
+    assert set(by_production) == {"bar_inertia", "dynamic_mass"}
+    reordered = {item.production_id: item for item in reversed(results)}
+    assert reordered["bar_inertia"] is by_production["bar_inertia"]
+    assert reordered["dynamic_mass"] is by_production["dynamic_mass"]
+    assert by_production["bar_inertia"].resolution.status is DerivedSourceResolutionStatus.MISSING_PRODUCTION
+    assert by_production["dynamic_mass"].evaluation is not None
+    assert by_production["dynamic_mass"].evaluation.value == Decimal("2")
+
+
+def test_all_derived_quantities_do_not_create_false_ready_without_runtime_dispatch():
+    from dataclasses import replace
+
+    project = torsion_pendulum_teacher_project()
+    derived = []
+    for production in project.scientific_production_plan:
+        if production.kind is not ScientificProductionKind.QUANTITY:
+            continue
+        constant = TeacherConstant(f"constant-{production.id}", Decimal("1"))
+        derived.append(ExpectedDerivedQuantity(
+            production.id, production.id, (constant,), OperandRef(constant)
+        ))
+    covered = replace(
+        project,
+        derived_quantity_expectation_set=DerivedQuantityExpectationSet(tuple(derived)),
+    )
+    diagnostics = assess_analysis_readiness_diagnostics(covered)
+    assert assess_analysis_readiness(covered) is AnalysisReadiness.NOT_READY
+    assert not any("exécution runtime non raccordée" in item for item in diagnostics)
+    assert not any("bar_inertia: aucune attente quantitative" in item for item in diagnostics)
 
 
 def test_torsion_project_is_registered_and_resolves_confidently():

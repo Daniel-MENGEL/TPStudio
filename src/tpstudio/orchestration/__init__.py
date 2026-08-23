@@ -15,6 +15,8 @@ from .copy_analysis import (
     ProjectSelectionProvenance,
     analyze_copy,
     assess_analysis_readiness,
+    assess_analysis_readiness_diagnostics,
+    evaluate_configured_derived_quantities,
     analyze_snells_laws_copy,
     summarize_copy_analysis,
 )

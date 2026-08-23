@@ -123,6 +123,8 @@ def test_copy_result_adapter_builds_a_over_b_pipeline_without_manual_context_val
         _copy_result(quantities=(_quantity_result("a", 12), _quantity_result("b", 3)))
     )
     result = evaluate_derived_quantity_from_analysis(expectation, context)
+    assert result.expectation is expectation
+    assert result.production_id == "q"
     assert result.evaluation is not None
     assert result.evaluation.value == Decimal("4")
 
@@ -143,6 +145,8 @@ def test_copy_result_adapter_runs_the_complete_jb_pipeline():
     )
     context = build_derived_source_resolution_context(copy_result)
     result = evaluate_derived_quantity_from_analysis(expectation, context)
+    assert result.expectation is expectation
+    assert result.production_id == "bar_inertia"
     assert result.evaluation is not None
     assert result.evaluation.value == Decimal("2")
 
@@ -182,6 +186,18 @@ def test_missing_and_non_scalar_production_values_are_diagnosed():
         DerivedSourceResolutionContext({"missing": [1, 2]}),
     )
     assert non_scalar.status is DerivedSourceResolutionStatus.NON_SCALAR
+
+
+def test_failed_resolution_retains_derived_expectation_identity():
+    source = ProductionValue("missing")
+    expectation = _expectation("derived-missing", (source,), OperandRef(source))
+    result = evaluate_derived_quantity_from_analysis(
+        expectation, DerivedSourceResolutionContext({})
+    )
+    assert result.expectation is expectation
+    assert result.production_id == "derived-missing"
+    assert not result.resolution.resolved
+    assert result.evaluation is None
 
 
 def test_regression_adapter_resolves_slope_and_intercept_from_graph_analysis():
@@ -383,6 +399,21 @@ def test_regression_pipeline_uses_quantity_and_teacher_constant_sources():
     )
     assert result.evaluation is not None
     assert result.evaluation.value == Decimal("4")
+
+
+def test_ast_failure_retains_derived_expectation_identity():
+    source = ProductionValue("denominator")
+    expectation = _expectation(
+        "ast-failure", (source,), Divide(OperandRef(source), OperandRef(source))
+    )
+    result = evaluate_derived_quantity_from_analysis(
+        expectation, DerivedSourceResolutionContext({"denominator": 0})
+    )
+    assert result.expectation is expectation
+    assert result.production_id == "ast-failure"
+    assert result.resolution.resolved
+    assert result.evaluation is not None
+    assert result.evaluation.value is None
 
 
 def test_jb_pipeline_resolves_graph_intercept_and_dynamic_c_without_pre_resolved_mapping():

@@ -7,6 +7,7 @@ import math
 from collections.abc import Iterator
 from dataclasses import dataclass
 from enum import Enum
+from types import SimpleNamespace
 
 from tpstudio.assessment import (
     NotebookQuantityAssessmentItem,
@@ -29,8 +30,11 @@ from tpstudio.evaluation import (
     evaluate_student_normalized_errors,
 )
 from tpstudio.expectations import (
+    DerivedQuantityRuntimeEvaluation,
     ScientificProductionKind,
     assess_expectation_sufficiency,
+    build_derived_source_resolution_context,
+    evaluate_derived_quantity_from_analysis,
 )
 from tpstudio.feedback import (
     ComparisonInterpretationFeedbackCatalog,
@@ -309,6 +313,7 @@ class CopyAnalysisResult:
     all_graph_series_data: tuple[GraphSeriesData, ...] = ()
     regression_plot_matches: tuple[RegressionPlotMatch, ...] = ()
     regression_plot_consistency_analyses: tuple[RegressionPlotConsistencyAnalysis, ...] = ()
+    derived_quantity_evaluations: tuple[DerivedQuantityRuntimeEvaluation, ...] = ()
 
     def __post_init__(self) -> None:
         detections = tuple(self.observed_value_detections)
@@ -326,6 +331,7 @@ class CopyAnalysisResult:
         object.__setattr__(self, "all_graph_series_data", tuple(self.all_graph_series_data))
         object.__setattr__(self, "regression_plot_matches", tuple(self.regression_plot_matches))
         object.__setattr__(self, "regression_plot_consistency_analyses", tuple(self.regression_plot_consistency_analyses))
+        object.__setattr__(self, "derived_quantity_evaluations", tuple(self.derived_quantity_evaluations))
         expected_ids = tuple(item.production_id for item in self.quantity_evaluations)
         observed_ids = tuple(item.production.id for item in detections)
         if observed_ids != expected_ids:
@@ -466,41 +472,64 @@ def assess_analysis_readiness(project: TeacherProjectConfiguration) -> AnalysisR
     It keeps incomplete project registrations out of analyzer assertions while
     leaving the analyzer's internal invariants strict for ready projects.
     """
+    return (
+        AnalysisReadiness.NOT_READY
+        if assess_analysis_readiness_diagnostics(project)
+        else AnalysisReadiness.READY
+    )
+
+
+def assess_analysis_readiness_diagnostics(
+    project: TeacherProjectConfiguration,
+) -> tuple[str, ...]:
+    """Explain coverage gaps without executing a copy.
+
+    A derived expectation is recognized as scientific coverage, but remains a
+    readiness gap until automatic runtime execution is wired into dispatch.
+    """
+
     validate_teacher_project_configuration(project)
     plan = project.scientific_production_plan
+    diagnostics: list[str] = []
     for production in plan:
         if production.kind is ScientificProductionKind.QUANTITY:
-            expectation = project.quantity_expectation_set.get(production.id)
-            if expectation is None:
-                return AnalysisReadiness.NOT_READY
-            if not assess_expectation_sufficiency(expectation).is_analyzable:
-                return AnalysisReadiness.NOT_READY
-            # The analyzer requires exactly one resolved candidate for every
-            # quantitative expectation; declaration cardinality is the part
-            # that can be checked without loading or executing a notebook.
-            if len(project.notebook_binding_plan.for_production(production.id)) != 1:
-                return AnalysisReadiness.NOT_READY
+            classic = project.quantity_expectation_set.get(production.id)
+            derived = project.derived_quantity_expectation_set.get(production.id)
+            if classic is not None and derived is not None:
+                diagnostics.append(f"{production.id}: attentes classique et dérivée coexistantes.")
+            elif classic is not None:
+                if not assess_expectation_sufficiency(classic).is_analyzable:
+                    diagnostics.append(f"{production.id}: attente quantitative insuffisante.")
+                if len(project.notebook_binding_plan.for_production(production.id)) != 1:
+                    diagnostics.append(f"{production.id}: binding quantitatif absent ou ambigu.")
+            elif derived is not None:
+                if not assess_expectation_sufficiency(derived).is_analyzable:
+                    diagnostics.append(f"{production.id}: attente dérivée insuffisante.")
+            else:
+                diagnostics.append(f"{production.id}: aucune attente quantitative.")
         elif production.kind is ScientificProductionKind.RELATION:
             expectation = project.relation_expectation_set.relation_by_id(production.id)
             if expectation is None:
-                return AnalysisReadiness.NOT_READY
-            if not assess_expectation_sufficiency(expectation).is_analyzable:
-                return AnalysisReadiness.NOT_READY
-            if len(project.notebook_binding_plan.for_production(production.id)) != 1:
-                return AnalysisReadiness.NOT_READY
+                diagnostics.append(f"{production.id}: aucune attente relationnelle.")
+            else:
+                if not assess_expectation_sufficiency(expectation).is_analyzable:
+                    diagnostics.append(f"{production.id}: attente relationnelle insuffisante.")
+                if len(project.notebook_binding_plan.for_production(production.id)) != 1:
+                    diagnostics.append(f"{production.id}: binding relationnel absent ou ambigu.")
         elif production.kind is ScientificProductionKind.COMPARISON:
             expectation = project.quantity_comparison_expectation_set.get(production.id)
             if expectation is None:
-                return AnalysisReadiness.NOT_READY
-            if not assess_expectation_sufficiency(expectation).is_analyzable:
-                return AnalysisReadiness.NOT_READY
-            if len(project.notebook_binding_plan.for_production(production.id)) != 1:
-                return AnalysisReadiness.NOT_READY
+                diagnostics.append(f"{production.id}: aucune attente de comparaison.")
+            else:
+                if not assess_expectation_sufficiency(expectation).is_analyzable:
+                    diagnostics.append(f"{production.id}: attente de comparaison insuffisante.")
+                if len(project.notebook_binding_plan.for_production(production.id)) != 1:
+                    diagnostics.append(f"{production.id}: binding de comparaison absent ou ambigu.")
     if project.graph_expectation_set is not None:
         for expectation in project.graph_expectation_set:
             if not assess_expectation_sufficiency(expectation).is_analyzable:
-                return AnalysisReadiness.NOT_READY
-    return AnalysisReadiness.READY
+                diagnostics.append(f"{expectation.production_id}: attente de graphe insuffisante.")
+    return tuple(diagnostics)
 
 
 @dataclass(frozen=True, slots=True)
@@ -596,6 +625,22 @@ def _assess_adapted_quantities(
             assessment,
         ))
     return NotebookQuantityAssessmentSet(resolution_set, tuple(items))
+
+
+def evaluate_configured_derived_quantities(
+    project: TeacherProjectConfiguration,
+    analysis_result_like: object,
+) -> tuple[DerivedQuantityRuntimeEvaluation, ...]:
+    """Evaluate configured derived quantities from one completed analysis set."""
+
+    expectations = tuple(project.derived_quantity_expectation_set)
+    if not expectations:
+        return ()
+    context = build_derived_source_resolution_context(analysis_result_like)
+    return tuple(
+        evaluate_derived_quantity_from_analysis(expectation, context)
+        for expectation in expectations
+    )
 
 
 class SnellsLawsCopyAnalyzer:
@@ -826,6 +871,20 @@ class SnellsLawsCopyAnalyzer:
             all_graph_series_data,
             constrained_linear_slopes=constrained_slopes,
         )
+        derived_analysis_input = SimpleNamespace(
+            quantity_evaluations=quantity_set,
+            graph_evaluations=tuple(graph_evaluations),
+            graph_analyses=tuple(graph_analyses),
+            regression_model_analyses=tuple(regression_model_analyses),
+        )
+        derived_quantity_evaluations = evaluate_configured_derived_quantities(
+            project, derived_analysis_input
+        )
+        for derived_result in derived_quantity_evaluations:
+            if not derived_result.resolution.resolved:
+                diagnostics.extend(derived_result.resolution.diagnostics)
+            elif derived_result.evaluation is not None and derived_result.evaluation.diagnostics:
+                diagnostics.extend(derived_result.evaluation.diagnostics)
         regression_plot_matches = match_regressions_to_plots(
             notebook, regression_observations, regression_model_analyses, all_graph_series_data
         )
@@ -852,6 +911,7 @@ class SnellsLawsCopyAnalyzer:
             all_graph_series_data=all_graph_series_data,
             regression_plot_matches=regression_plot_matches,
             regression_plot_consistency_analyses=regression_plot_consistency_analyses,
+            derived_quantity_evaluations=derived_quantity_evaluations,
         )
 
 

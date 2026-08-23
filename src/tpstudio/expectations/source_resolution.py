@@ -82,8 +82,18 @@ class DerivedSourceResolution:
 
 @dataclass(frozen=True, slots=True)
 class DerivedQuantityRuntimeEvaluation:
+    expectation: ExpectedDerivedQuantity
     resolution: DerivedSourceResolution
     evaluation: DerivedQuantityEvaluation | None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.expectation, ExpectedDerivedQuantity):
+            raise TypeError("expectation doit être une ExpectedDerivedQuantity.")
+
+    @property
+    def production_id(self) -> str:
+        """Return the configured target of the executed expectation."""
+        return self.expectation.production_id
 
 
 def _index_analysis_items(items: object, label: str, key_fn=None) -> dict[str, object]:
@@ -341,7 +351,7 @@ def evaluate_derived_quantity_from_analysis(
 ) -> DerivedQuantityRuntimeEvaluation:
     resolution = resolve_derived_quantity_sources(expectation, context)
     if not resolution.resolved:
-        return DerivedQuantityRuntimeEvaluation(resolution, None)
+        return DerivedQuantityRuntimeEvaluation(expectation, resolution, None)
     return DerivedQuantityRuntimeEvaluation(
-        resolution, evaluate_derived_quantity(expectation, resolution.resolved_values)
+        expectation, resolution, evaluate_derived_quantity(expectation, resolution.resolved_values)
     )
