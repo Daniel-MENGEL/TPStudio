@@ -1,9 +1,11 @@
 import nbformat
+import numpy as np
 import pytest
 
 from tpstudio.notebooks import resolve_notebook_bindings
 from tpstudio.orchestration import (
     GraphCheckStatus,
+    extract_all_graph_series_data,
     evaluate_saved_graph,
     observe_saved_graph,
 )
@@ -79,3 +81,36 @@ def test_no_pixel_or_ocr_dependency_is_present() -> None:
     source = __import__("inspect").getsource(observe_saved_graph)
     assert "ocr" not in source.lower()
     assert "image/png" not in source
+
+
+def test_preloaded_series_resolve_csv_derived_names_without_executing_notebook_code() -> None:
+    notebook = nbformat.v4.new_notebook(cells=[
+        nbformat.v4.new_code_cell("data = np.loadtxt('scope.csv')\nt = data[:, 0]\nuC = data[:, 2]"),
+        nbformat.v4.new_code_cell("plt.plot(t, uC)"),
+    ])
+    series = extract_all_graph_series_data(
+        notebook,
+        {"t": np.array([0.0, 1.0, 2.0]), "uC": (0.0, 3.0, 5.0)},
+    )
+    assert len(series) == 1
+    assert series[0].x_expression == "t"
+    assert series[0].y_expression == "uC"
+    assert series[0].x_values == (0.0, 1.0, 2.0)
+    assert series[0].y_values == (0.0, 3.0, 5.0)
+    assert series[0].technical_status.value == "extracted"
+
+
+def test_preloaded_series_length_mismatch_is_structured() -> None:
+    notebook = nbformat.v4.new_notebook(cells=[nbformat.v4.new_code_cell("plt.plot(t, uC)")])
+    series = extract_all_graph_series_data(
+        notebook, {"t": (0.0, 1.0), "uC": (0.0,)}
+    )
+    assert len(series) == 1
+    assert series[0].technical_status.value == "invalid"
+    assert "longueurs_x_y_incompatibles" in series[0].diagnostics
+
+
+def test_preloaded_series_rejects_non_numeric_values() -> None:
+    notebook = nbformat.v4.new_notebook(cells=[nbformat.v4.new_code_cell("plt.plot(t, uC)")])
+    with pytest.raises((TypeError, ValueError)):
+        extract_all_graph_series_data(notebook, {"t": (0.0, "bad"), "uC": (0.0, 1.0)})

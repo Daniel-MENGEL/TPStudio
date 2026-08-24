@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from enum import Enum
 import math
 from numbers import Real
+from collections.abc import Iterable, Mapping
 
 import numpy as np
 from nbformat.notebooknode import NotebookNode
@@ -362,9 +363,38 @@ def _extract_series(
     return tuple(result)
 
 
-def extract_all_graph_series_data(notebook: NotebookNode) -> tuple[GraphSeriesData, ...]:
-    """Collect every top-level plotted series without requiring expectations."""
+def _normalize_preloaded_series(
+    preloaded_series: Mapping[str, Iterable[Real]] | None,
+) -> dict[str, tuple[float, ...]]:
+    """Validate immutable series supplied by a trusted import layer.
+
+    This deliberately accepts values, not notebook code or file paths. The
+    caller remains responsible for loading a CSV in a controlled layer.
+    """
+    if preloaded_series is None:
+        return {}
+    if not isinstance(preloaded_series, Mapping):
+        raise TypeError("Les séries préchargées doivent former un mapping.")
+    normalized: dict[str, tuple[float, ...]] = {}
+    for name, values in preloaded_series.items():
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("Chaque série préchargée doit avoir un nom non vide.")
+        if isinstance(values, (str, bytes, Mapping)) or not isinstance(values, Iterable):
+            raise TypeError("Chaque série préchargée doit être une séquence numérique.")
+        converted = tuple(float(value) for value in values)
+        if not converted or not all(math.isfinite(value) for value in converted):
+            raise ValueError("Les séries préchargées doivent être non vides et finies.")
+        normalized[name] = converted
+    return normalized
+
+
+def extract_all_graph_series_data(
+    notebook: NotebookNode,
+    preloaded_series: Mapping[str, Iterable[Real]] | None = None,
+) -> tuple[GraphSeriesData, ...]:
+    """Collect plotted series, optionally from values supplied by an import layer."""
     collected: list[GraphSeriesData] = []
+    external = _normalize_preloaded_series(preloaded_series)
     for cell_index, cell in enumerate(notebook.cells):
         if cell.cell_type != "code":
             continue
@@ -373,6 +403,7 @@ def extract_all_graph_series_data(notebook: NotebookNode) -> tuple[GraphSeriesDa
         except SyntaxError:
             continue
         bindings = _bindings_before_cell(notebook, cell_index)
+        bindings.update(external)
         collected.extend(_extract_series(tree, cell.source, bindings, cell_index, cell.get("id")))
     return tuple(collected)
 
@@ -613,6 +644,7 @@ def series_source_position(notebook: NotebookNode, series: GraphSeriesData) -> t
 def observe_saved_graph(
     notebook: NotebookNode,
     resolution: NotebookBindingResolution,
+    preloaded_series: Mapping[str, Iterable[Real]] | None = None,
 ) -> GraphObservation | None:
     if not resolution.resolved or resolution.cell is None:
         return None
@@ -621,6 +653,7 @@ def observe_saved_graph(
         return None
     source = cell.source
     bindings = _bindings_before_cell(notebook, resolution.cell.index)
+    bindings.update(_normalize_preloaded_series(preloaded_series))
     try:
         tree = ast.parse(source)
     except SyntaxError:
