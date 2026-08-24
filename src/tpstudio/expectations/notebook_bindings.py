@@ -17,6 +17,13 @@ class NotebookCellSelectorKind(str, Enum):
     SOURCE_MARKER = "source_marker"
 
 
+class NotebookValueTransform(str, Enum):
+    """Teacher-declared reduction applied to a notebook value."""
+
+    IDENTITY = "identity"
+    MEAN = "mean"
+
+
 @dataclass(frozen=True, slots=True)
 class NotebookCellSelector:
     """Exact selector declared for a future notebook cell lookup."""
@@ -81,6 +88,7 @@ class CellProductionBinding:
     selector: NotebookCellSelector
     text_scope: CellTextScope
     description: str = ""
+    value_transform: NotebookValueTransform = NotebookValueTransform.IDENTITY
 
     def __post_init__(self) -> None:
         if not isinstance(self.id, str):
@@ -95,6 +103,8 @@ class CellProductionBinding:
             raise TypeError("Le sélecteur doit être un NotebookCellSelector.")
         if not isinstance(self.text_scope, CellTextScope):
             raise TypeError("La portée textuelle doit être un CellTextScope.")
+        if not isinstance(self.value_transform, NotebookValueTransform):
+            raise TypeError("La transformation de valeur est invalide.")
 
 
 @dataclass(frozen=True, slots=True)

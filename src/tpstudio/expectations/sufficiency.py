@@ -8,6 +8,7 @@ from typing import Any
 
 from .models import ExpectedRelation
 from .quantities import ExpectedQuantity, PresenceRequirement
+from .quantity_series import ExpectedQuantitySeries
 from .quantity_comparisons import ExpectedQuantityComparison
 from .derived_quantities import ExpectedDerivedQuantity
 
@@ -60,6 +61,17 @@ def assess_expectation_sufficiency(expectation: Any) -> ExpectationSufficiencyAs
             ("quantity expectation only requires presence/symbol", "no evaluable unit or uncertainty rule"),
         )
 
+    if isinstance(expectation, ExpectedQuantitySeries):
+        if expectation.canonical_unit is not None or expectation.expected_length is not None:
+            return ExpectationSufficiencyAssessment(
+                ExpectationSufficiency.ANALYZABLE,
+                ("série numérique avec unité ou cardinalité vérifiable",),
+            )
+        return ExpectationSufficiencyAssessment(
+            ExpectationSufficiency.STRUCTURAL_ONLY,
+            ("attente série sans contrainte vérifiable",),
+        )
+
     if isinstance(expectation, ExpectedRelation):
         return ExpectationSufficiencyAssessment(
             ExpectationSufficiency.ANALYZABLE,
@@ -76,13 +88,11 @@ def assess_expectation_sufficiency(expectation: Any) -> ExpectationSufficiencyAs
     # expectations → projects import cycle while retaining a generic API.
     if all(hasattr(expectation, field) for field in (
         "production_id", "x_expression", "y_expression", "regression_required",
-        "slope_quantity_id", "slope_index_relation_id",
+        "slope_quantity_id",
     )):
         fields = (
             expectation.x_expression,
             expectation.y_expression,
-            expectation.slope_quantity_id,
-            expectation.slope_index_relation_id,
         )
         if all(isinstance(value, str) and value.strip() for value in fields):
             return ExpectationSufficiencyAssessment(

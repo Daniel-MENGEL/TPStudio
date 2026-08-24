@@ -5,11 +5,13 @@ from .notebook_bindings import (
     CellProductionBinding,
     CellTextScope,
     CellTextScopeKind,
+    NotebookValueTransform,
     NotebookBindingPlan,
     NotebookCellSelector,
     NotebookCellSelectorKind,
 )
 from .quantities import ExpectedQuantity, PresenceRequirement, QuantityExpectationSet
+from .quantity_series import ExpectedQuantitySeries, QuantitySeriesExpectationSet
 from .sufficiency import (
     ExpectationSufficiency,
     ExpectationSufficiencyAssessment,
@@ -88,6 +90,7 @@ __all__ = [
     "CellProductionBinding",
     "CellTextScope",
     "CellTextScopeKind",
+    "NotebookValueTransform",
     "ComparisonPedagogicalContext",
     "ComparisonInterpretationExpectationSet",
     "ComparisonInterpretationKind",
@@ -100,6 +103,8 @@ __all__ = [
     "ExpectedComparisonJustificationElement",
     "ExpectedQuantityComparison",
     "ExpectedQuantity",
+    "ExpectedQuantitySeries",
+    "QuantitySeriesExpectationSet",
     "ExpectedRelation",
     "ExpectedStudentNormalizedError",
     "EvaluationBasis",

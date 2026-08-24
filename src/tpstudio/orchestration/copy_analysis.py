@@ -110,6 +110,8 @@ from .notebook_inspection import (
 from .observed_values import (
     ObservedValueDetection,
     ObservedValueSource,
+    ObservedQuantitySeries,
+    detect_observed_quantity_series,
     detect_observed_values,
 )
 
@@ -314,6 +316,7 @@ class CopyAnalysisResult:
     regression_plot_matches: tuple[RegressionPlotMatch, ...] = ()
     regression_plot_consistency_analyses: tuple[RegressionPlotConsistencyAnalysis, ...] = ()
     derived_quantity_evaluations: tuple[DerivedQuantityRuntimeEvaluation, ...] = ()
+    quantity_series_evaluations: tuple[ObservedQuantitySeries, ...] = ()
 
     def __post_init__(self) -> None:
         detections = tuple(self.observed_value_detections)
@@ -332,6 +335,7 @@ class CopyAnalysisResult:
         object.__setattr__(self, "regression_plot_matches", tuple(self.regression_plot_matches))
         object.__setattr__(self, "regression_plot_consistency_analyses", tuple(self.regression_plot_consistency_analyses))
         object.__setattr__(self, "derived_quantity_evaluations", tuple(self.derived_quantity_evaluations))
+        object.__setattr__(self, "quantity_series_evaluations", tuple(self.quantity_series_evaluations))
         expected_ids = tuple(item.production_id for item in self.quantity_evaluations)
         observed_ids = tuple(item.production.id for item in detections)
         if observed_ids != expected_ids:
@@ -495,7 +499,18 @@ def assess_analysis_readiness_diagnostics(
         if production.kind is ScientificProductionKind.QUANTITY:
             classic = project.quantity_expectation_set.get(production.id)
             derived = project.derived_quantity_expectation_set.get(production.id)
-            if classic is not None and derived is not None:
+            series = (
+                project.quantity_series_expectation_set.get(production.id)
+                if project.quantity_series_expectation_set is not None else None
+            )
+            if sum(item is not None for item in (classic, derived, series)) > 1:
+                diagnostics.append(f"{production.id}: attentes quantitatives concurrentes.")
+            elif series is not None:
+                if not assess_expectation_sufficiency(series).is_analyzable:
+                    diagnostics.append(f"{production.id}: attente série insuffisante.")
+                if len(project.notebook_binding_plan.for_production(production.id)) != 1:
+                    diagnostics.append(f"{production.id}: binding série absent ou ambigu.")
+            elif classic is not None and derived is not None:
                 diagnostics.append(f"{production.id}: attentes classique et dérivée coexistantes.")
             elif classic is not None:
                 if not assess_expectation_sufficiency(classic).is_analyzable:
@@ -719,6 +734,19 @@ class SnellsLawsCopyAnalyzer:
                 ),
                 inspect_saved_outputs=options.inspect_saved_outputs,
             ))
+        quantity_series_evaluations: list[ObservedQuantitySeries] = []
+        if project.quantity_series_expectation_set is not None:
+            for expectation in project.quantity_series_expectation_set:
+                candidates = resolution_set.for_production(expectation.production_id)
+                if len(candidates) != 1:
+                    continue
+                production = project.scientific_production_plan.get(expectation.production_id)
+                assert production is not None
+                quantity_series_evaluations.extend(
+                    detect_observed_quantity_series(
+                        notebook, candidates[0], production, expectation
+                    )
+                )
         quantity_set = _assess_adapted_quantities(
             resolution_set, project, tuple(value_detections), quantity_catalog
         )
@@ -753,6 +781,11 @@ class SnellsLawsCopyAnalyzer:
             diagnostics.extend(comparison_diagnostics)
             diagnostics.extend(interpretation_diagnostics)
             diagnostics.extend(justification_diagnostics)
+            for series in quantity_series_evaluations:
+                diagnostics.extend(
+                    f"{series.production_id}: {diagnostic}"
+                    for diagnostic in series.diagnostics
+                )
             for item in protocol_evaluations:
                 if item.status is not ProtocolStatus.PRESENT:
                     diagnostics.append(ProtocolDiagnostic(
@@ -912,6 +945,7 @@ class SnellsLawsCopyAnalyzer:
             regression_plot_matches=regression_plot_matches,
             regression_plot_consistency_analyses=regression_plot_consistency_analyses,
             derived_quantity_evaluations=derived_quantity_evaluations,
+            quantity_series_evaluations=tuple(quantity_series_evaluations),
         )
 
 

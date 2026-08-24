@@ -2,23 +2,35 @@
 
 from pathlib import Path
 from decimal import Decimal
+from dataclasses import replace
 from types import SimpleNamespace
 
 import nbformat
+import pytest
 
+from tpstudio.assessment import assess_quantity_text
 from tpstudio.expectations import (
     DerivedQuantityExpectationSet,
     DerivedSourceResolutionStatus,
     ExpectedDerivedQuantity,
+    ExpectedQuantity,
     OperandRef,
+    PresenceRequirement,
     ScientificProductionKind,
     TeacherConstant,
     assess_expectation_sufficiency,
 )
 from tpstudio.graph_analysis import GraphAnalysis, GraphAnalysisTechnicalStatus
-from tpstudio.orchestration.observed_values import ObservedScalarValue, ObservedValueSource
+from tpstudio.orchestration.observed_values import (
+    ObservedScalarValue,
+    ObservedValueSource,
+    code_literal_values,
+    detect_observed_values,
+    detect_observed_quantity_series,
+)
 from tpstudio.notebooks.binding_resolution import resolve_notebook_bindings
 from tpstudio.projects import (
+    GraphExpectationSet,
     known_project_ids,
     project_descriptor,
     resolve_project_for_copy,
@@ -50,12 +62,35 @@ def test_torsion_factory_declares_structural_plan_and_bindings():
     assert project.identity.project_id == "torsion-pendulum"
     assert len(project.scientific_production_plan.productions) == 16
     assert len(project.notebook_binding_plan.bindings) == 17
-    assert project.graph_expectation_set is None
+    graph = project.graph_expectation_set.get("dynamic_graph")
+    assert graph is not None
+    assert graph.slope_quantity_id is None
+    assert graph.index_quantity_id is None
+    assert graph.slope_index_relation_id is None
+    assert graph.expected_model.value == "affine"
+    assert graph.x_expression == "(r + L.mean()/2)**2"
+    assert graph.y_expression == "T_0**2"
+    assert assess_expectation_sufficiency(graph).is_analyzable
     assert project.uncertainty_expectation_set is None
+    series_expectation = project.quantity_series_expectation_set.get("dynamic_periods")
+    assert series_expectation is not None
+    assert series_expectation.canonical_symbol == "T_0"
+    assert series_expectation.canonical_unit == "s"
+    assert series_expectation.expected_length == 8
     assert {item.stable_id for item in project.experimental_manipulations} == {
         "dynamic-study", "static-study"
     }
-    assert len(project.quantity_expectation_set) == 0
+    assert len(project.quantity_expectation_set) == 2
+    mass_expectation = project.quantity_expectation_set.get("dynamic_mass")
+    assert isinstance(mass_expectation, ExpectedQuantity)
+    assert mass_expectation.canonical_symbol == "m"
+    assert mass_expectation.canonical_unit == "kg"
+    assert mass_expectation.uncertainty_requirement is PresenceRequirement.OPTIONAL
+    thickness_expectation = project.quantity_expectation_set.get("dynamic_thickness")
+    assert isinstance(thickness_expectation, ExpectedQuantity)
+    assert thickness_expectation.canonical_symbol == "L"
+    assert thickness_expectation.canonical_unit == "m"
+    assert thickness_expectation.uncertainty_requirement is PresenceRequirement.OPTIONAL
     assert len(project.derived_quantity_expectation_set) == 1
     assert project.derived_quantity_expectation_set.get("bar_inertia") is not None
     assert len(project.relation_expectation_set.relations) == 0
@@ -68,6 +103,115 @@ def test_torsion_factory_declares_structural_plan_and_bindings():
     diagnostics = assess_analysis_readiness_diagnostics(project)
     assert not any("bar_inertia: aucune attente quantitative" in item for item in diagnostics)
     assert not any("bar_inertia" in item for item in diagnostics)
+
+
+def test_graph_relation_is_optional_but_unknown_declared_relation_is_rejected():
+    project = torsion_pendulum_teacher_project()
+    graph = project.graph_expectation_set.get("dynamic_graph")
+    assert graph is not None and graph.slope_index_relation_id is None
+    invalid_graph = replace(
+        graph,
+        slope_quantity_id="dynamic_mass",
+        slope_index_relation_id="missing-relation",
+    )
+    invalid_set = GraphExpectationSet(project.scientific_production_plan, (invalid_graph,))
+    with pytest.raises(ValueError, match="relation.*inconnue"):
+        replace(project, graph_expectation_set=invalid_set)
+
+
+def test_dynamic_mass_quantity_is_scalar_and_unit_checked():
+    project = torsion_pendulum_teacher_project()
+    result = assess_quantity_text("m = 0.12 kg", "dynamic_mass", project.quantity_expectation_set)
+    assert result.selected_observation is not None
+    assert result.selected_observation.value == Decimal("0.12")
+    assert result.selected_observation.unit == "kg"
+    assert result.is_structurally_satisfied
+
+    missing_unit = assess_quantity_text("m = 0.12", "dynamic_mass", project.quantity_expectation_set)
+    assert not missing_unit.is_structurally_satisfied
+    assert any(d.code.value == "unit_missing" for d in missing_unit.diagnostics)
+
+
+def test_dynamic_thickness_quantity_is_scalar_and_unit_checked():
+    project = torsion_pendulum_teacher_project()
+    result = assess_quantity_text("L = 0.03 m", "dynamic_thickness", project.quantity_expectation_set)
+    assert result.selected_observation is not None
+    assert result.selected_observation.value == Decimal("0.03")
+    assert result.selected_observation.unit == "m"
+    assert result.is_structurally_satisfied
+
+    missing_unit = assess_quantity_text("L = 0.03", "dynamic_thickness", project.quantity_expectation_set)
+    assert not missing_unit.is_structurally_satisfied
+    assert any(d.code.value == "unit_missing" for d in missing_unit.diagnostics)
+
+
+def test_dynamic_thickness_reduces_a_notebook_measurement_series_to_mean():
+    project = torsion_pendulum_teacher_project()
+    notebook = nbformat.v4.new_notebook()
+    notebook.cells = [nbformat.v4.new_code_cell(
+        "import numpy as np\n# L = ?\nL = np.array([0.029, 0.030, 0.031])"
+    )]
+    resolution_set = resolve_notebook_bindings(notebook, project.notebook_binding_plan)
+    resolution = resolution_set.get("dynamic-thickness-cell")
+    assert resolution is not None and resolution.resolved
+    production = project.scientific_production_plan.get("dynamic_thickness")
+    expectation = project.quantity_expectation_set.get("dynamic_thickness")
+    assert production is not None and expectation is not None
+    detection = detect_observed_values(
+        notebook, resolution, production, expectation=expectation,
+        inspect_saved_outputs=False,
+    )
+    assert detection.selected is not None
+    assert detection.selected.value == Decimal("0.03")
+    assert detection.selected.unit == "m"
+
+
+def test_raw_series_without_declared_reduction_is_not_silently_scalarized():
+    assert code_literal_values(
+        "import numpy as np\nL = np.array([0.029, 0.030, 0.031])",
+        "dynamic_thickness",
+        0,
+    ) == ()
+
+
+def test_dynamic_periods_is_extracted_as_eight_values_without_reduction():
+    project = torsion_pendulum_teacher_project()
+    notebook = nbformat.v4.new_notebook()
+    notebook.cells = [nbformat.v4.new_code_cell(
+        "import numpy as np\n# T_0 =\nT_0 = np.array([1, 2, 3, 4, 5, 6, 7, 8])"
+    )]
+    resolutions = resolve_notebook_bindings(notebook, project.notebook_binding_plan)
+    resolution = resolutions.get("dynamic-periods-cell")
+    production = project.scientific_production_plan.get("dynamic_periods")
+    expectation = project.quantity_series_expectation_set.get("dynamic_periods")
+    assert resolution is not None and production is not None and expectation is not None
+    observed = detect_observed_quantity_series(notebook, resolution, production, expectation)
+    assert len(observed) == 1
+    assert observed[0].values == tuple(Decimal(str(value)) for value in range(1, 9))
+    assert observed[0].unit == "s"
+    assert observed[0].is_valid
+
+
+def test_dynamic_periods_wrong_cardinality_is_diagnosed():
+    project = torsion_pendulum_teacher_project()
+    production = project.scientific_production_plan.get("dynamic_periods")
+    expectation = project.quantity_series_expectation_set.get("dynamic_periods")
+    assert production is not None and expectation is not None
+    for count in (7, 9):
+        notebook = nbformat.v4.new_notebook()
+        values = ", ".join(str(index) for index in range(1, count + 1))
+        notebook.cells = [nbformat.v4.new_code_cell(
+            f"import numpy as np\n# T_0 =\nT_0 = np.array([{values}])"
+        )]
+        resolution = resolve_notebook_bindings(
+            notebook, project.notebook_binding_plan
+        ).get("dynamic-periods-cell")
+        assert resolution is not None
+        observed = detect_observed_quantity_series(
+            notebook, resolution, production, expectation
+        )
+        assert len(observed) == 1
+        assert not observed[0].is_valid
 
 
 def test_bar_inertia_derived_expectation_is_valid_analyzable_and_non_competing():

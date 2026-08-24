@@ -90,10 +90,12 @@ from .notebook_inspection import (
 )
 from .observed_values import (
     ObservedScalarValue,
+    ObservedQuantitySeries,
     ObservedValueDetection,
     ObservedValueSource,
     code_literal_values,
     detect_observed_values,
+    detect_observed_quantity_series,
 )
 
 __all__ = [name for name in globals() if not name.startswith("_")]

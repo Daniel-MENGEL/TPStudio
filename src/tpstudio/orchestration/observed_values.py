@@ -11,7 +11,12 @@ import re
 
 from nbformat.notebooknode import NotebookNode
 
-from tpstudio.expectations import ExpectedQuantity, ScientificProductionSpec
+from tpstudio.expectations import (
+    ExpectedQuantity,
+    ExpectedQuantitySeries,
+    NotebookValueTransform,
+    ScientificProductionSpec,
+)
 from tpstudio.notebooks import NotebookBindingResolution
 from tpstudio.reasoning import extract_expected_quantity
 
@@ -48,6 +53,34 @@ class ObservedScalarValue:
             raise TypeError("La preuve brute doit être une chaîne.")
         if (self.start is None) != (self.end is None):
             raise ValueError("Les offsets sont simultanément présents ou absents.")
+
+
+@dataclass(frozen=True, slots=True)
+class ObservedQuantitySeries:
+    """Safe immutable observation of one ordered numeric quantity series."""
+
+    production_id: str
+    values: tuple[Decimal, ...]
+    unit: str | None
+    cell_index: int
+    raw_text: str
+    diagnostics: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.production_id.strip() or not self.values:
+            raise ValueError("Une série observée doit avoir une identité et des valeurs.")
+        if any(type(value) is not Decimal for value in self.values):
+            raise TypeError("Les valeurs de série doivent être des Decimal.")
+        if type(self.cell_index) is not int or self.cell_index < 0:
+            raise ValueError("L'indice de cellule est invalide.")
+        if not isinstance(self.raw_text, str):
+            raise TypeError("La preuve brute doit être une chaîne.")
+        object.__setattr__(self, "values", tuple(self.values))
+        object.__setattr__(self, "diagnostics", tuple(self.diagnostics))
+
+    @property
+    def is_valid(self) -> bool:
+        return not self.diagnostics
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,13 +131,36 @@ def _decimal(node: ast.AST) -> Decimal | None:
     return sign * Decimal(str(node.value))
 
 
+def _numeric_series(node: ast.AST) -> tuple[Decimal, ...] | None:
+    """Read a deliberately small, literal numeric series grammar."""
+
+    if isinstance(node, (ast.List, ast.Tuple)):
+        values = tuple(_decimal(item) for item in node.elts)
+        return values if values and all(value is not None for value in values) else None
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+        if (
+            isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "np"
+            and node.func.attr in {"array", "asarray"}
+            and len(node.args) == 1
+            and not node.keywords
+        ):
+            return _numeric_series(node.args[0])
+    return None
+
+
 def code_literal_values(
     source: str,
     production_id: str,
     cell_index: int,
     symbols: tuple[str, ...] | None = None,
+    transform: NotebookValueTransform = NotebookValueTransform.IDENTITY,
+    unit: str | None = None,
 ) -> tuple[ObservedScalarValue, ...]:
-    """Return only simple named assignments to scalar numeric literals."""
+    """Return declared scalar values, optionally reducing a literal series."""
+
+    if not isinstance(transform, NotebookValueTransform):
+        raise TypeError("La transformation de valeur est invalide.")
 
     try:
         tree = ast.parse(source)
@@ -121,14 +177,65 @@ def code_literal_values(
         if symbols is not None and target not in symbols:
             continue
         value = _decimal(statement.value)
+        if transform is NotebookValueTransform.MEAN:
+            series = _numeric_series(statement.value)
+            value = sum(series, Decimal(0)) / Decimal(len(series)) if series else None
         if value is None:
             continue
         raw = ast.get_source_segment(source, statement) or ""
         observed.append(ObservedScalarValue(
-            production_id, ObservedValueSource.CODE_LITERAL, value, None,
+            production_id, ObservedValueSource.CODE_LITERAL, value,
+            unit if transform is NotebookValueTransform.MEAN else None,
             cell_index, raw,
         ))
     return tuple(observed)
+
+
+def detect_observed_quantity_series(
+    notebook: NotebookNode,
+    resolution: NotebookBindingResolution,
+    production: ScientificProductionSpec,
+    expectation: ExpectedQuantitySeries,
+) -> tuple[ObservedQuantitySeries, ...]:
+    """Extract a declared numeric series without executing notebook code."""
+
+    if expectation.production_id != production.id:
+        raise ValueError("L'attente série vise une autre production.")
+    if not resolution.resolved or resolution.cell is None:
+        return ()
+    cell = notebook.cells[resolution.cell.index]
+    if cell.cell_type != "code":
+        return ()
+    try:
+        tree = ast.parse(resolution.text or "")
+    except SyntaxError:
+        return ()
+    results: list[ObservedQuantitySeries] = []
+    for statement in tree.body:
+        if not isinstance(statement, ast.Assign) or len(statement.targets) != 1:
+            continue
+        target = statement.targets[0]
+        if not isinstance(target, ast.Name) or target.id != expectation.canonical_symbol:
+            continue
+        series = _numeric_series(statement.value)
+        if series is None:
+            continue
+        values = tuple(value for value in series if value is not None)
+        if len(values) != len(series):
+            continue
+        if any(not value.is_finite() for value in values):
+            continue
+        diagnostics: list[str] = []
+        if expectation.expected_length is not None and len(values) != expectation.expected_length:
+            diagnostics.append(
+                f"expected_length={expectation.expected_length}, observed={len(values)}"
+            )
+        results.append(ObservedQuantitySeries(
+            production.id, values, expectation.canonical_unit,
+            resolution.cell.index, ast.get_source_segment(resolution.text or "", statement) or "",
+            tuple(diagnostics),
+        ))
+    return tuple(results)
 
 
 _NUMBER = re.compile(r"(?<![\w.])[+-]?\d+(?:[.,]\d+)?(?:[eE][+-]?\d+)?")
@@ -236,8 +343,14 @@ def detect_observed_values(
     for code_resolution in code_resolutions:
         assert code_resolution.cell is not None
         code_text = code_resolution.text or ""
+        transform = code_resolution.binding.value_transform
         candidates.extend(code_literal_values(
-            code_text, production.id, code_resolution.cell.index, symbols
+            code_text,
+            production.id,
+            code_resolution.cell.index,
+            symbols,
+            transform=transform,
+            unit=expectation.canonical_unit if expectation is not None else None,
         ))
     if inspect_saved_outputs:
         for code_resolution in code_resolutions:

@@ -4,12 +4,22 @@ from pathlib import Path
 import pytest
 
 from tpstudio.projects import (
+    ExpectedGraphModel,
+    GraphExpectation,
+    GraphExpectationSet,
     NotebookReference,
     NotebookReferenceRole,
     TeacherProjectIdentity,
     snells_laws_teacher_project,
     summarize_teacher_project_configuration,
     validate_teacher_project_configuration,
+)
+from tpstudio.expectations import (
+    EvaluationBasis,
+    ScientificProductionKind,
+    ScientificProductionPlan,
+    ScientificProductionSpec,
+    assess_expectation_sufficiency,
 )
 
 
@@ -123,3 +133,21 @@ def test_project_model_has_no_file_reading_imports() -> None:
     assert "import nbformat" not in source
     assert "from pathlib" not in source
     assert ".read_text(" not in source
+
+
+def test_autonomous_graph_expectation_needs_no_slope_contract() -> None:
+    plan = ScientificProductionPlan(
+        "autonomous-graph-plan", "Autonomous graph plan", (
+            ScientificProductionSpec(
+                "plot", "Plot", ScientificProductionKind.PLOT,
+                (EvaluationBasis.STRUCTURAL,),
+            ),
+        ),
+    )
+    graph = GraphExpectation(
+        "plot", "x", "y", ("x",), ("y",), True,
+        expected_model=ExpectedGraphModel.AFFINE,
+    )
+    graph_set = GraphExpectationSet(plan, (graph,))
+    assert graph_set.get("plot") is graph
+    assert assess_expectation_sufficiency(graph).is_analyzable

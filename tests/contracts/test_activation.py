@@ -137,4 +137,4 @@ def test_pendulum_m_jb_and_en_can_be_activated_without_fixed_values():
         assert result.expectation is not None
         assert result.expectation.canonical_symbol == symbol
         assert result.source_document == contract.source_document
-    assert len(project.quantity_expectation_set) == 0
+    assert project.quantity_expectation_set.get("dynamic_mass") is not None

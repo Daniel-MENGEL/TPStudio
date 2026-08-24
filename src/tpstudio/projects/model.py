@@ -12,6 +12,7 @@ from tpstudio.expectations import (
     ExpectationSet,
     NotebookBindingPlan,
     QuantityComparisonExpectationSet,
+    QuantitySeriesExpectationSet,
     DerivedQuantityExpectationSet,
     validate_derived_quantity_expectation,
     QuantityExpectationSet,
@@ -97,9 +98,9 @@ class GraphExpectation:
     accepted_x_labels: tuple[str, ...]
     accepted_y_labels: tuple[str, ...]
     regression_required: bool
-    slope_quantity_id: str
-    index_quantity_id: str | None
-    slope_index_relation_id: str
+    slope_quantity_id: str | None = None
+    index_quantity_id: str | None = None
+    slope_index_relation_id: str | None = None
     title_required: bool = False
     legend_required: bool = True
     description: str = ""
@@ -107,12 +108,19 @@ class GraphExpectation:
 
     def __post_init__(self) -> None:
         for name in (
-            "production_id", "x_expression", "y_expression", "slope_quantity_id",
-            "slope_index_relation_id",
+            "production_id", "x_expression", "y_expression",
         ):
             _required_text(getattr(self, name), name)
+        if self.slope_quantity_id is not None:
+            _required_text(self.slope_quantity_id, "slope_quantity_id")
         if self.index_quantity_id is not None:
             _required_text(self.index_quantity_id, "index_quantity_id")
+        if self.slope_index_relation_id is not None:
+            _required_text(self.slope_index_relation_id, "slope_index_relation_id")
+        if self.index_quantity_id is not None and self.slope_quantity_id is None:
+            raise ValueError("index_quantity_id exige slope_quantity_id.")
+        if self.slope_index_relation_id is not None and self.slope_quantity_id is None:
+            raise ValueError("Une relation de pente exige slope_quantity_id.")
         for name in ("accepted_x_labels", "accepted_y_labels"):
             value = getattr(self, name)
             if isinstance(value, (str, bytes)):
@@ -199,6 +207,7 @@ class TeacherProjectConfiguration:
     derived_quantity_expectation_set: DerivedQuantityExpectationSet = field(
         default_factory=DerivedQuantityExpectationSet
     )
+    quantity_series_expectation_set: QuantitySeriesExpectationSet | None = None
 
     def __post_init__(self) -> None:
         validate_teacher_project_configuration(self, normalize=True)
@@ -269,6 +278,11 @@ def validate_teacher_project_configuration(
     quantities = configuration.quantity_expectation_set
     if type(quantities) is not QuantityExpectationSet or quantities.plan is not plan:
         raise ValueError("Les quantités doivent partager le plan scientifique.")
+    series = configuration.quantity_series_expectation_set
+    if series is not None and (
+        type(series) is not QuantitySeriesExpectationSet or series.production_plan is not plan
+    ):
+        raise ValueError("Les attentes série doivent partager le plan scientifique.")
     relations = configuration.relation_expectation_set
     if type(relations) is not ExpectationSet:
         raise TypeError("Les relations doivent former un ExpectationSet.")
@@ -291,7 +305,9 @@ def validate_teacher_project_configuration(
     ):
         raise ValueError("Les graphes doivent partager le plan scientifique.")
     if graphs is not None and any(
-        relations.relation_by_id(graph.slope_index_relation_id) is None for graph in graphs
+        graph.slope_index_relation_id is not None
+        and relations.relation_by_id(graph.slope_index_relation_id) is None
+        for graph in graphs
     ):
         raise ValueError("La relation pente–indice du graphe est inconnue.")
     comparisons = configuration.quantity_comparison_expectation_set

@@ -20,12 +20,16 @@ from tpstudio.expectations import (
     NotebookBindingPlan,
     NotebookCellSelector,
     NotebookCellSelectorKind,
+    NotebookValueTransform,
     ExpectedDerivedQuantity,
+    ExpectedQuantity,
+    ExpectedQuantitySeries,
     Multiply,
     OperandRef,
     ProductionValue,
     QuantityComparisonExpectationSet,
     QuantityExpectationSet,
+    QuantitySeriesExpectationSet,
     ScientificProductionKind,
     ScientificProductionPlan,
     ScientificProductionSpec,
@@ -37,6 +41,9 @@ from tpstudio.expectations import (
 from tpstudio.protocol import ExperimentalManipulation
 
 from .model import (
+    ExpectedGraphModel,
+    GraphExpectation,
+    GraphExpectationSet,
     NotebookReference,
     NotebookReferenceRole,
     TeacherProjectConfiguration,
@@ -127,20 +134,30 @@ def _cell(identifier: str, production_id: str, cell_id: str) -> CellProductionBi
     )
 
 
-def _marker(identifier: str, production_id: str, marker: str) -> CellProductionBinding:
+def _marker(
+    identifier: str,
+    production_id: str,
+    marker: str,
+    *,
+    value_transform: NotebookValueTransform = NotebookValueTransform.IDENTITY,
+) -> CellProductionBinding:
     return CellProductionBinding(
         identifier,
         production_id,
         NotebookCellSelector(NotebookCellSelectorKind.SOURCE_MARKER, marker),
         CellTextScope.full_source(),
         "Binding structurel par marqueur source stable.",
+        value_transform,
     )
 
 
 def _bindings(plan: ScientificProductionPlan) -> NotebookBindingPlan:
     bindings = (
         _marker("dynamic-mass-cell", "dynamic_mass", "m = ?"),
-        _marker("dynamic-thickness-cell", "dynamic_thickness", "L = ?"),
+        _marker(
+            "dynamic-thickness-cell", "dynamic_thickness", "L = ?",
+            value_transform=NotebookValueTransform.MEAN,
+        ),
         _marker("dynamic-periods-cell", "dynamic_periods", "T_0 ="),
         _marker("dynamic-graph-cell", "dynamic_graph", "plt.plot(?, ?,"),
         _marker("dynamic-regression-cell", "dynamic_graph", "np.polyfit"),
@@ -167,7 +184,23 @@ def _bindings(plan: ScientificProductionPlan) -> NotebookBindingPlan:
 
 
 def _empty_expectations(plan: ScientificProductionPlan):
-    quantities = QuantityExpectationSet(plan, ())
+    quantities = QuantityExpectationSet(
+        plan,
+        (
+            ExpectedQuantity(
+                production_id="dynamic_mass",
+                canonical_symbol="m",
+                canonical_unit="kg",
+                description="Masse moyenne des masses hexagonales, exprimée en kilogrammes.",
+            ),
+            ExpectedQuantity(
+                production_id="dynamic_thickness",
+                canonical_symbol="L",
+                canonical_unit="m",
+                description="Épaisseur moyenne des masses hexagonales, exprimée en mètres.",
+            ),
+        ),
+    )
     relations = ExpectationSet(
         "torsion-pendulum-relations",
         "Relations déclarées — Pendule de torsion",
@@ -177,13 +210,31 @@ def _empty_expectations(plan: ScientificProductionPlan):
     student_errors = StudentNormalizedErrorExpectationSet(comparisons, ())
     interpretations = ComparisonInterpretationExpectationSet(comparisons, ())
     justifications = ComparisonJustificationExpectationSet(comparisons, ())
-    return quantities, relations, comparisons, student_errors, interpretations, justifications
+    graphs = GraphExpectationSet(
+        plan,
+        (
+            GraphExpectation(
+                production_id="dynamic_graph",
+                x_expression="(r + L.mean()/2)**2",
+                y_expression="T_0**2",
+                accepted_x_labels=("(r+L/2)^2 en m^2", "(r + L/2)^2"),
+                accepted_y_labels=("T_0^2 en s^2", "T_0^2"),
+                regression_required=True,
+                slope_quantity_id=None,
+                index_quantity_id=None,
+                slope_index_relation_id=None,
+                description="Graphe affine de T_0^2 en fonction de (r+L/2)^2.",
+                expected_model=ExpectedGraphModel.AFFINE,
+            ),
+        ),
+    )
+    return quantities, relations, graphs, comparisons, student_errors, interpretations, justifications
 
 
 def torsion_pendulum_teacher_project() -> TeacherProjectConfiguration:
     """Build the structural A76e2a configuration for the torsion pendulum."""
     plan = _plan()
-    quantities, relations, comparisons, student_errors, interpretations, justifications = _empty_expectations(plan)
+    quantities, relations, graphs, comparisons, student_errors, interpretations, justifications = _empty_expectations(plan)
     intercept = RegressionParameter("dynamic_graph", RegressionParameterKind.INTERCEPT)
     dynamic_constant = ProductionValue("dynamic_torsion_constant")
     four_pi_squared = TeacherConstant(
@@ -202,6 +253,16 @@ def torsion_pendulum_teacher_project() -> TeacherProjectConfiguration:
             "de la régression dynamique."
         ),
     ),))
+    series_expectations = QuantitySeriesExpectationSet(
+        plan,
+        (ExpectedQuantitySeries(
+            production_id="dynamic_periods",
+            canonical_symbol="T_0",
+            canonical_unit="s",
+            expected_length=8,
+            description="Huit périodes propres mesurées pour les huit valeurs de r.",
+        ),),
+    )
     configuration = TeacherProjectConfiguration(
         TeacherProjectIdentity(
             "torsion-pendulum",
@@ -223,7 +284,7 @@ def torsion_pendulum_teacher_project() -> TeacherProjectConfiguration:
         quantities,
         relations,
         None,
-        None,
+        graphs,
         comparisons,
         student_errors,
         interpretations,
@@ -235,6 +296,7 @@ def torsion_pendulum_teacher_project() -> TeacherProjectConfiguration:
             ExperimentalManipulation("static-study", "Étude statique", "2. Étude statique"),
         ),
         derived_quantity_expectation_set=derived_expectations,
+        quantity_series_expectation_set=series_expectations,
     )
     validate_teacher_project_configuration(configuration)
     return configuration
