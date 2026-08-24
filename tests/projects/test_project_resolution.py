@@ -16,7 +16,7 @@ def notebook(*markdown: str, code: tuple[str, ...] = ()):
 
 
 def test_registry_contains_projects_in_stable_order() -> None:
-    assert known_project_ids() == ("snells-laws-mvp", "thin-lens-image", "torsion-pendulum")
+    assert known_project_ids() == ("snells-laws-mvp", "thin-lens-image", "torsion-pendulum", "first-order-transient")
 
 
 def test_snell_clear_resolves_high() -> None:
