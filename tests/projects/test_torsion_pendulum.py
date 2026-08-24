@@ -16,6 +16,7 @@ from tpstudio.expectations import (
     ExpectedQuantity,
     OperandRef,
     PresenceRequirement,
+    RegressionParameterKind,
     ScientificProductionKind,
     TeacherConstant,
     assess_expectation_sufficiency,
@@ -91,7 +92,15 @@ def test_torsion_factory_declares_structural_plan_and_bindings():
     assert thickness_expectation.canonical_symbol == "L"
     assert thickness_expectation.canonical_unit == "m"
     assert thickness_expectation.uncertainty_requirement is PresenceRequirement.OPTIONAL
-    assert len(project.derived_quantity_expectation_set) == 1
+    assert len(project.derived_quantity_expectation_set) == 2
+    dynamic_expectation = project.derived_quantity_expectation_set.get("dynamic_torsion_constant")
+    assert dynamic_expectation is not None
+    assert dynamic_expectation.canonical_symbol == "C"
+    assert dynamic_expectation.canonical_unit is None
+    assert any(
+        getattr(source, "parameter", None) is RegressionParameterKind.SLOPE
+        for source in dynamic_expectation.sources
+    )
     assert project.derived_quantity_expectation_set.get("bar_inertia") is not None
     assert len(project.relation_expectation_set.relations) == 0
     assert len(project.quantity_comparison_expectation_set) == 0
@@ -218,10 +227,39 @@ def test_bar_inertia_derived_expectation_is_valid_analyzable_and_non_competing()
     project = torsion_pendulum_teacher_project()
     expectation = project.derived_quantity_expectation_set.get("bar_inertia")
     assert expectation is not None
-    assert project.derived_quantity_expectation_set.get("dynamic_torsion_constant") is None
+    dynamic = project.derived_quantity_expectation_set.get("dynamic_torsion_constant")
+    assert dynamic is not None
     assert project.quantity_expectation_set.get("bar_inertia") is None
     assert assess_expectation_sufficiency(expectation).is_analyzable
     assert project.derived_quantity_expectation_set.get("bar_inertia") is expectation
+
+
+def test_dynamic_torsion_constant_derived_expectation_calculates_from_mass_and_slope():
+    project = torsion_pendulum_teacher_project()
+    expectation = project.derived_quantity_expectation_set.get("dynamic_torsion_constant")
+    assert expectation is not None
+    mass = ObservedScalarValue(
+        "dynamic_mass", ObservedValueSource.CODE_LITERAL,
+        Decimal("0.100"), "kg", 0, "m = 0.100 kg",
+    )
+    copy_result = SimpleNamespace(
+        quantity_evaluations=(SimpleNamespace(
+            production_id="dynamic_mass",
+            assessment=SimpleNamespace(selected_observation=mass),
+        ),),
+        graph_analyses=(SimpleNamespace(
+            production_id="dynamic_graph", slope=Decimal("4.0"), intercept=Decimal("1.2"),
+        ),),
+        regression_model_analyses=(),
+        graph_evaluations=(),
+    )
+    results = evaluate_configured_derived_quantities(project, copy_result)
+    runtime = next(item for item in results if item.production_id == "dynamic_torsion_constant")
+    assert runtime.expectation is expectation
+    assert runtime.resolution.status is DerivedSourceResolutionStatus.RESOLVED
+    assert runtime.evaluation is not None
+    expected = Decimal("78.9568352087148689506759279990") * Decimal("0.100") / Decimal("4.0")
+    assert runtime.evaluation.value == expected
 
 
 def test_configured_bar_inertia_runs_isolated_without_analyze_copy_activation():
@@ -250,7 +288,7 @@ def test_configured_bar_inertia_runs_isolated_without_analyze_copy_activation():
         ),),
     )
     results = evaluate_configured_derived_quantities(project, copy_result)
-    assert len(results) == 1
+    assert len(results) == 2
     runtime = next(result for result in results if result.production_id == "bar_inertia")
     expectation = project.derived_quantity_expectation_set.get("bar_inertia")
     assert runtime.expectation is expectation

@@ -235,24 +235,41 @@ def torsion_pendulum_teacher_project() -> TeacherProjectConfiguration:
     """Build the structural A76e2a configuration for the torsion pendulum."""
     plan = _plan()
     quantities, relations, graphs, comparisons, student_errors, interpretations, justifications = _empty_expectations(plan)
+    slope = RegressionParameter("dynamic_graph", RegressionParameterKind.SLOPE)
     intercept = RegressionParameter("dynamic_graph", RegressionParameterKind.INTERCEPT)
+    dynamic_mass = ProductionValue("dynamic_mass")
     dynamic_constant = ProductionValue("dynamic_torsion_constant")
+    eight_pi_squared = TeacherConstant(
+        "eight_pi_squared", Decimal("78.9568352087148689506759279990")
+    )
     four_pi_squared = TeacherConstant(
         "four_pi_squared", Decimal("39.4784176043574344753379639995")
     )
-    derived_expectations = DerivedQuantityExpectationSet((ExpectedDerivedQuantity(
-        production_id="bar_inertia",
-        canonical_symbol="J_b",
-        sources=(intercept, dynamic_constant, four_pi_squared),
-        rule=Divide(
-            Multiply(OperandRef(intercept), OperandRef(dynamic_constant)),
-            OperandRef(four_pi_squared),
+    derived_expectations = DerivedQuantityExpectationSet((
+        ExpectedDerivedQuantity(
+            production_id="dynamic_torsion_constant",
+            canonical_symbol="C",
+            sources=(dynamic_mass, slope, eight_pi_squared),
+            rule=Divide(
+                Multiply(OperandRef(eight_pi_squared), OperandRef(dynamic_mass)),
+                OperandRef(slope),
+            ),
+            description="Constante de torsion dynamique déduite de la pente et de m.",
         ),
-        description=(
-            "Moment d'inertie de la barre déduit de l'ordonnée à l'origine "
-            "de la régression dynamique."
+        ExpectedDerivedQuantity(
+            production_id="bar_inertia",
+            canonical_symbol="J_b",
+            sources=(intercept, dynamic_constant, four_pi_squared),
+            rule=Divide(
+                Multiply(OperandRef(intercept), OperandRef(dynamic_constant)),
+                OperandRef(four_pi_squared),
+            ),
+            description=(
+                "Moment d'inertie de la barre déduit de l'ordonnée à l'origine "
+                "de la régression dynamique."
+            ),
         ),
-    ),))
+    ))
     series_expectations = QuantitySeriesExpectationSet(
         plan,
         (ExpectedQuantitySeries(
