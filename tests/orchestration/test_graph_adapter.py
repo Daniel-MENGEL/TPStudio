@@ -1,6 +1,7 @@
 import nbformat
 import numpy as np
 import pytest
+from dataclasses import replace
 
 from tpstudio.notebooks import resolve_notebook_bindings
 from tpstudio.orchestration import (
@@ -20,7 +21,10 @@ def _evaluate(code: str, *, image: bool = False):
     notebook = nbformat.v4.new_notebook(cells=[cell])
     resolution = resolve_notebook_bindings(notebook, project.notebook_binding_plan).get("regression-graph-cell")
     observation = observe_saved_graph(notebook, resolution)
-    expectation = project.graph_expectation_set.get("regression_graph")
+    expectation = replace(
+        project.graph_expectation_set.get("regression_graph"),
+        x_expression="np.sin(i2)", y_expression="np.sin(i1)",
+    )
     return evaluate_saved_graph(expectation, observation)
 
 
@@ -114,3 +118,91 @@ def test_preloaded_series_rejects_non_numeric_values() -> None:
     notebook = nbformat.v4.new_notebook(cells=[nbformat.v4.new_code_cell("plt.plot(t, uC)")])
     with pytest.raises((TypeError, ValueError)):
         extract_all_graph_series_data(notebook, {"t": (0.0, "bad"), "uC": (0.0, 1.0)})
+
+
+def test_multiplot_selects_expected_curve_by_expressions_not_plot_order() -> None:
+    project = snells_laws_teacher_project()
+    expectation = replace(
+        project.graph_expectation_set.get("regression_graph"),
+        x_expression="np.sin(i2)", y_expression="np.sin(i1)",
+    )
+    code = "# Vérification graphique\nplt.plot(np.sin(i1), np.sin(i2))\nplt.plot(np.sin(i2), np.sin(i1))\na = np.polyfit(np.sin(i2), np.sin(i1), 1)"
+    notebook = nbformat.v4.new_notebook(cells=[nbformat.v4.new_code_cell(code)])
+    resolution = resolve_notebook_bindings(notebook, project.notebook_binding_plan).get("regression-graph-cell")
+    observation = observe_saved_graph(
+        notebook, resolution,
+        {"i1": (0.0, 1.0, 2.0), "i2": (0.0, 3.0, 5.0)},
+    )
+    result = evaluate_saved_graph(expectation, observation)
+    assert result.orientation_status is GraphCheckStatus.MATCHES
+    assert result.observation.series_data[0].y_expression == "np.sin(i1)"
+
+
+def test_multiplot_duplicate_expected_curve_is_ambiguous() -> None:
+    project = snells_laws_teacher_project()
+    expectation = replace(
+        project.graph_expectation_set.get("regression_graph"),
+        x_expression="np.sin(i2)", y_expression="np.sin(i1)",
+    )
+    notebook = nbformat.v4.new_notebook(cells=[nbformat.v4.new_code_cell(
+        "# Vérification graphique\nplt.plot(np.sin(i2), np.sin(i1))\nplt.plot(np.sin(i2), np.sin(i1))\n"
+        "a = np.polyfit(np.sin(i2), np.sin(i1), 1)"
+    )])
+    resolution = resolve_notebook_bindings(notebook, project.notebook_binding_plan).get("regression-graph-cell")
+    observation = observe_saved_graph(notebook, resolution, {"i1": (0.0, 1.0), "i2": (0.0, 1.0)})
+    result = evaluate_saved_graph(expectation, observation)
+    assert result.orientation_status is GraphCheckStatus.NOT_EVALUABLE
+    assert "courbe_attendue_ambiguë" in result.reasons
+
+
+@pytest.mark.parametrize("actual_y", ("uc", "UC", "np.uC"))
+def test_graph_identity_is_case_sensitive_and_does_not_strip_np(actual_y: str) -> None:
+    project = snells_laws_teacher_project()
+    expectation = replace(
+        project.graph_expectation_set.get("regression_graph"),
+        x_expression="t", y_expression="uC",
+        accepted_x_labels=("t",), accepted_y_labels=("uC",),
+    )
+    notebook = nbformat.v4.new_notebook(cells=[nbformat.v4.new_code_cell(
+        f"# Vérification graphique\nplt.plot(t, {actual_y})\n"
+        "a = np.polyfit(t, " + actual_y + ", 1)"
+    )])
+    resolution = resolve_notebook_bindings(notebook, project.notebook_binding_plan).get("regression-graph-cell")
+    observation = observe_saved_graph(notebook, resolution, {"t": (0.0, 1.0), actual_y: (0.0, 1.0)})
+    result = evaluate_saved_graph(expectation, observation)
+    assert result.orientation_status is GraphCheckStatus.NOT_EVALUABLE
+
+
+def test_multiplot_case_collision_selects_only_exact_expression() -> None:
+    project = snells_laws_teacher_project()
+    expectation = replace(
+        project.graph_expectation_set.get("regression_graph"),
+        x_expression="t", y_expression="uC",
+        accepted_x_labels=("t",), accepted_y_labels=("uC",),
+    )
+    notebook = nbformat.v4.new_notebook(cells=[nbformat.v4.new_code_cell(
+        "# Vérification graphique\nplt.plot(t, uc)\nplt.plot(t, uC)"
+    )])
+    resolution = resolve_notebook_bindings(notebook, project.notebook_binding_plan).get("regression-graph-cell")
+    observation = observe_saved_graph(
+        notebook, resolution, {"t": (0.0, 1.0), "uc": (0.0, 1.0), "uC": (0.0, 2.0)}
+    )
+    result = evaluate_saved_graph(expectation, observation)
+    assert result.orientation_status is GraphCheckStatus.MATCHES
+    assert result.observation.series_data[0].y_expression == "uC"
+
+
+def test_single_wrong_curve_does_not_fallback_to_first_series() -> None:
+    project = snells_laws_teacher_project()
+    expectation = replace(
+        project.graph_expectation_set.get("regression_graph"),
+        x_expression="t", y_expression="uC",
+        accepted_x_labels=("t",), accepted_y_labels=("uC",),
+    )
+    notebook = nbformat.v4.new_notebook(cells=[nbformat.v4.new_code_cell(
+        "# Vérification graphique\nplt.plot(t, uG)"
+    )])
+    resolution = resolve_notebook_bindings(notebook, project.notebook_binding_plan).get("regression-graph-cell")
+    observation = observe_saved_graph(notebook, resolution, {"t": (0.0, 1.0), "uG": (0.0, 1.0)})
+    result = evaluate_saved_graph(expectation, observation)
+    assert "courbe_attendue_absente" in result.reasons

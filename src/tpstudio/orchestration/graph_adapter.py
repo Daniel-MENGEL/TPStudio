@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import ast
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 import math
 from numbers import Real
@@ -690,7 +690,7 @@ def observe_saved_graph(
     series_data = _extract_series(
         tree, source, bindings, resolution.cell.index, cell.get("id")
     )
-    if series_data:
+    if len(series_data) == 1:
         x, y = series_data[0].x_expression, series_data[0].y_expression
     series_limitations = tuple(
         diagnostic
@@ -705,7 +705,7 @@ def observe_saved_graph(
 
 
 def _normalized(value: str | None) -> str:
-    return "".join((value or "").split()).lower().replace("np.", "")
+    return "".join((value or "").split())
 
 
 def evaluate_saved_graph(expectation: GraphExpectation, observation: GraphObservation | None) -> GraphEvaluation:
@@ -713,8 +713,31 @@ def evaluate_saved_graph(expectation: GraphExpectation, observation: GraphObserv
         missing = GraphCheckStatus.MISSING
         return GraphEvaluation(expectation, None, missing, missing, missing, missing, False, ("graphe_absent",))
     expected_x, expected_y = _normalized(expectation.x_expression), _normalized(expectation.y_expression)
+    selection_reason: str | None = None
+    if observation.series_data and any(
+        series.technical_status is GraphSeriesStatus.EXTRACTED
+        for series in observation.series_data
+    ):
+        matches = tuple(
+            series for series in observation.series_data
+            if (_normalized(series.x_expression), _normalized(series.y_expression))
+            == (expected_x, expected_y)
+        )
+        if len(matches) == 1:
+            observation = replace(
+                observation,
+                x_expression=matches[0].x_expression,
+                y_expression=matches[0].y_expression,
+                series_data=(matches[0],),
+            )
+        elif len(matches) > 1:
+            selection_reason = "courbe_attendue_ambiguë"
+        else:
+            selection_reason = "courbe_attendue_absente"
     actual_x, actual_y = _normalized(observation.x_expression), _normalized(observation.y_expression)
-    if not actual_x or not actual_y:
+    if selection_reason is not None:
+        orientation = GraphCheckStatus.NOT_EVALUABLE
+    elif not actual_x or not actual_y:
         orientation = GraphCheckStatus.NOT_EVALUABLE
     elif (actual_x, actual_y) == (expected_x, expected_y):
         orientation = GraphCheckStatus.MATCHES
@@ -743,8 +766,11 @@ def evaluate_saved_graph(expectation: GraphExpectation, observation: GraphObserv
             else GraphCheckStatus.NOT_EVALUABLE
         )
     slope_status = GraphCheckStatus.MATCHES if observation.slope_target else GraphCheckStatus.NOT_EVALUABLE
-    evaluable = orientation is not GraphCheckStatus.NOT_EVALUABLE
+    evaluable = orientation is not GraphCheckStatus.NOT_EVALUABLE and selection_reason is None
+    reasons = observation.analysis_limitations
+    if selection_reason is not None:
+        reasons = (*reasons, selection_reason)
     return GraphEvaluation(
         expectation, observation, orientation, labels, regression, slope_status, evaluable,
-        observation.analysis_limitations,
+        reasons,
     )
