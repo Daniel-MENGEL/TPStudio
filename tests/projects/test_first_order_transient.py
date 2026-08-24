@@ -30,10 +30,6 @@ def test_minimal_project_declares_only_charge_graph_and_is_not_ready():
     assert "objective" not in production_ids
     assert {"charge_objective", "energy_objective", "leakage_objective", "leakage_protocol"} <= production_ids
     assert "protocol" not in production_ids
-    assert not any(
-        project.notebook_binding_plan.for_production(item)
-        for item in ("charge_objective", "energy_objective", "leakage_objective", "leakage_protocol")
-    )
 
 
 def test_binding_resolves_multitrace_charge_cell():
@@ -42,6 +38,21 @@ def test_binding_resolves_multitrace_charge_cell():
     resolved = resolve_notebook_bindings(notebook, project.notebook_binding_plan)
     binding = resolved.get("charge-graph-cell")
     assert binding is not None
+
+
+def test_text_response_bindings_use_stable_markers():
+    project = first_order_transient_teacher_project()
+    expected = {
+        "charge_objective": "charge-objective-response",
+        "energy_objective": "energy-objective-response",
+        "leakage_objective": "leakage-objective-response",
+        "leakage_protocol": "leakage-protocol-response",
+    }
+    for production_id, marker in expected.items():
+        bindings = project.notebook_binding_plan.for_production(production_id)
+        assert len(bindings) == 1
+        assert bindings[0].selector.value == marker
+        assert bindings[0].selector.kind.value == "source_marker"
 
 
 def test_charge_graph_selects_uc_with_preloaded_series():

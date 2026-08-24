@@ -14,7 +14,10 @@ from .model import (
 from .snells_laws import snells_laws_teacher_project
 from .thin_lens import thin_lens_teacher_project
 from .torsion_pendulum import torsion_pendulum_teacher_project
-from .first_order_transient import first_order_transient_teacher_project
+from .first_order_transient import (
+    LEAKAGE_PROTOCOL_SEMANTIC_CONTRACT,
+    first_order_transient_teacher_project,
+)
 from .graph_model_inference import (
     ExpectedGraphModelProposal,
     ExpectedModelProposalConfidence,
@@ -47,6 +50,7 @@ __all__ = [
     "thin_lens_teacher_project",
     "torsion_pendulum_teacher_project",
     "first_order_transient_teacher_project",
+    "LEAKAGE_PROTOCOL_SEMANTIC_CONTRACT",
     "summarize_teacher_project_configuration",
     "validate_teacher_project_configuration",
     "ExpectedGraphModelProposal",

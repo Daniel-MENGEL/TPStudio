@@ -14,8 +14,42 @@ from .model import (
     GraphExpectation, GraphExpectationSet, NotebookReference, NotebookReferenceRole,
     TeacherProjectConfiguration, TeacherProjectIdentity,
 )
+from tpstudio.semantic_analysis import (
+    ExpectedSemanticResponse,
+    SemanticCriterion,
+    SemanticCriterionImportance,
+    SemanticRole,
+)
 
 NOTEBOOK_FILENAME = "Systeme-du-premier-ordre-en-regime-transitoire-TPStudio-v2.1.ipynb"
+
+
+LEAKAGE_PROTOCOL_SEMANTIC_CONTRACT = ExpectedSemanticResponse(
+    production_id="leakage_protocol",
+    semantic_role=SemanticRole.PROTOCOL,
+    criteria=(
+        SemanticCriterion(
+            "discharge_observation",
+            "Proposer d'observer ou d'acquérir la décharge du condensateur.",
+            SemanticCriterionImportance.REQUIRED,
+        ),
+        SemanticCriterion(
+            "falling_edge_trigger",
+            "Identifier qu'un déclenchement adapté à un signal descendant est nécessaire.",
+            SemanticCriterionImportance.REQUIRED,
+        ),
+        SemanticCriterion(
+            "timebase_adaptation",
+            "Prévoir d'adapter la base de temps ou la sensibilité horizontale à la décharge plus lente.",
+            SemanticCriterionImportance.REQUIRED,
+        ),
+        SemanticCriterion(
+            "exploitable_acquisition",
+            "Viser une acquisition exploitable pour déterminer ensuite la constante de temps de fuite ou la résistance de fuite.",
+            SemanticCriterionImportance.RECOMMENDED,
+        ),
+    ),
+)
 
 
 def _plan() -> ScientificProductionPlan:
@@ -60,9 +94,24 @@ def first_order_transient_teacher_project() -> TeacherProjectConfiguration:
         CellTextScope.full_source(),
         "Cellule multitracée ; sélection stricte par identité x/y.",
     )
+    text_bindings = tuple(
+        CellProductionBinding(
+            f"{production_id.replace('_', '-')}-response",
+            production_id,
+            NotebookCellSelector(NotebookCellSelectorKind.SOURCE_MARKER, marker),
+            CellTextScope.full_source(),
+            "Binding par marqueur stable de cellule de réponse textuelle.",
+        )
+        for production_id, marker in (
+            ("charge_objective", "charge-objective-response"),
+            ("energy_objective", "energy-objective-response"),
+            ("leakage_objective", "leakage-objective-response"),
+            ("leakage_protocol", "leakage-protocol-response"),
+        )
+    )
     bindings = NotebookBindingPlan(
         "first-order-transient-bindings", "Associations du TP Premier ordre", plan,
-        (binding,), "Le CSV est une source technique injectée séparément.",
+        (binding, *text_bindings), "Le CSV est une source technique injectée séparément.",
     )
     quantities = QuantityExpectationSet(plan, ())
     graphs = GraphExpectationSet(plan, (GraphExpectation(
