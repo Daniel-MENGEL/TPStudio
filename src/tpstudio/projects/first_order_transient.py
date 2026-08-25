@@ -24,6 +24,29 @@ from tpstudio.semantic_analysis import (
 NOTEBOOK_FILENAME = "Systeme-du-premier-ordre-en-regime-transitoire-TPStudio-v2.1.ipynb"
 
 
+CHARGE_OBJECTIVE_SEMANTIC_CONTRACT = ExpectedSemanticResponse(
+    production_id="charge_objective",
+    semantic_role=SemanticRole.OBJECTIVE,
+    criteria=(
+        SemanticCriterion(
+            "transient_charge_characterization",
+            "Identifier que la manipulation vise à observer ou caractériser le régime transitoire de charge du condensateur.",
+            SemanticCriterionImportance.REQUIRED,
+        ),
+        SemanticCriterion(
+            "experimental_time_constant",
+            "Prévoir de déterminer expérimentalement la constante de temps de la charge.",
+            SemanticCriterionImportance.REQUIRED,
+        ),
+        SemanticCriterion(
+            "model_comparison",
+            "Prévoir de confronter les mesures au modèle exponentiel du premier ordre et à la valeur théorique RC.",
+            SemanticCriterionImportance.RECOMMENDED,
+        ),
+    ),
+)
+
+
 LEAKAGE_PROTOCOL_SEMANTIC_CONTRACT = ExpectedSemanticResponse(
     production_id="leakage_protocol",
     semantic_role=SemanticRole.PROTOCOL,

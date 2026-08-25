@@ -1,4 +1,7 @@
-from tpstudio.projects import LEAKAGE_PROTOCOL_SEMANTIC_CONTRACT
+from tpstudio.projects import (
+    CHARGE_OBJECTIVE_SEMANTIC_CONTRACT,
+    LEAKAGE_PROTOCOL_SEMANTIC_CONTRACT,
+)
 from tpstudio.semantic_analysis import (
     FakeSemanticAnalysisProvider,
     OpenAISemanticAnalysisProvider,
@@ -25,6 +28,21 @@ def test_contract_is_compact_and_explicit():
     assert LEAKAGE_PROTOCOL_SEMANTIC_CONTRACT.semantic_role.value == "protocol"
     assert [item.criterion_id for item in LEAKAGE_PROTOCOL_SEMANTIC_CONTRACT.criteria] == [
         "discharge_observation", "falling_edge_trigger", "timebase_adaptation", "exploitable_acquisition",
+    ]
+
+
+def test_charge_objective_contract_is_compact_and_distinct_from_protocol():
+    assert CHARGE_OBJECTIVE_SEMANTIC_CONTRACT.production_id == "charge_objective"
+    assert CHARGE_OBJECTIVE_SEMANTIC_CONTRACT.semantic_role.value == "objective"
+    assert [item.criterion_id for item in CHARGE_OBJECTIVE_SEMANTIC_CONTRACT.criteria] == [
+        "transient_charge_characterization",
+        "experimental_time_constant",
+        "model_comparison",
+    ]
+    assert [item.importance.value for item in CHARGE_OBJECTIVE_SEMANTIC_CONTRACT.criteria] == [
+        "required",
+        "required",
+        "recommended",
     ]
 
 
