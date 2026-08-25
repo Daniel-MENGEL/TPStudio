@@ -1,5 +1,6 @@
 from tpstudio.projects import (
     CHARGE_OBJECTIVE_SEMANTIC_CONTRACT,
+    ENERGY_OBJECTIVE_SEMANTIC_CONTRACT,
     LEAKAGE_PROTOCOL_SEMANTIC_CONTRACT,
 )
 from tpstudio.semantic_analysis import (
@@ -40,6 +41,21 @@ def test_charge_objective_contract_is_compact_and_distinct_from_protocol():
         "model_comparison",
     ]
     assert [item.importance.value for item in CHARGE_OBJECTIVE_SEMANTIC_CONTRACT.criteria] == [
+        "required",
+        "required",
+        "recommended",
+    ]
+
+
+def test_energy_objective_contract_is_compact_and_distinct_from_protocol():
+    assert ENERGY_OBJECTIVE_SEMANTIC_CONTRACT.production_id == "energy_objective"
+    assert ENERGY_OBJECTIVE_SEMANTIC_CONTRACT.semantic_role.value == "objective"
+    assert [item.criterion_id for item in ENERGY_OBJECTIVE_SEMANTIC_CONTRACT.criteria] == [
+        "energy_evolution_study",
+        "energy_roles_comparison",
+        "final_energy_balance",
+    ]
+    assert [item.importance.value for item in ENERGY_OBJECTIVE_SEMANTIC_CONTRACT.criteria] == [
         "required",
         "required",
         "recommended",

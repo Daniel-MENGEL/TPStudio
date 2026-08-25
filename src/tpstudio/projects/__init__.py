@@ -16,6 +16,7 @@ from .thin_lens import thin_lens_teacher_project
 from .torsion_pendulum import torsion_pendulum_teacher_project
 from .first_order_transient import (
     CHARGE_OBJECTIVE_SEMANTIC_CONTRACT,
+    ENERGY_OBJECTIVE_SEMANTIC_CONTRACT,
     LEAKAGE_PROTOCOL_SEMANTIC_CONTRACT,
     first_order_transient_teacher_project,
 )
@@ -52,6 +53,7 @@ __all__ = [
     "torsion_pendulum_teacher_project",
     "first_order_transient_teacher_project",
     "CHARGE_OBJECTIVE_SEMANTIC_CONTRACT",
+    "ENERGY_OBJECTIVE_SEMANTIC_CONTRACT",
     "LEAKAGE_PROTOCOL_SEMANTIC_CONTRACT",
     "summarize_teacher_project_configuration",
     "validate_teacher_project_configuration",

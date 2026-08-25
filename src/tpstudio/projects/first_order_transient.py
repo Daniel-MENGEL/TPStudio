@@ -47,6 +47,29 @@ CHARGE_OBJECTIVE_SEMANTIC_CONTRACT = ExpectedSemanticResponse(
 )
 
 
+ENERGY_OBJECTIVE_SEMANTIC_CONTRACT = ExpectedSemanticResponse(
+    production_id="energy_objective",
+    semantic_role=SemanticRole.OBJECTIVE,
+    criteria=(
+        SemanticCriterion(
+            "energy_evolution_study",
+            "Identifier que la manipulation vise à étudier l'évolution des énergies pendant la charge.",
+            SemanticCriterionImportance.REQUIRED,
+        ),
+        SemanticCriterion(
+            "energy_roles_comparison",
+            "Prévoir de comparer l'énergie fournie par le générateur, l'énergie stockée dans le condensateur et l'énergie dissipée dans la résistance.",
+            SemanticCriterionImportance.REQUIRED,
+        ),
+        SemanticCriterion(
+            "final_energy_balance",
+            "Prévoir de confronter le bilan final des énergies aux résultats théoriques établis en cours.",
+            SemanticCriterionImportance.RECOMMENDED,
+        ),
+    ),
+)
+
+
 LEAKAGE_PROTOCOL_SEMANTIC_CONTRACT = ExpectedSemanticResponse(
     production_id="leakage_protocol",
     semantic_role=SemanticRole.PROTOCOL,
