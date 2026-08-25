@@ -7,8 +7,11 @@ from tpstudio.orchestration import (
     evaluate_saved_graph,
     observe_saved_graph,
 )
-from tpstudio.projects.first_order_transient import first_order_transient_teacher_project
+from tpstudio.projects.first_order_transient import (
+    first_order_transient_teacher_project,
+)
 from tpstudio.projects.project_resolution import resolve_project_for_copy
+from tpstudio.semantic_analysis import SemanticRole
 
 
 def _notebook(source: str):
@@ -29,7 +32,18 @@ def test_minimal_project_declares_only_charge_graph_and_is_not_ready():
     assert "charge_protocol" not in production_ids
     assert "objective" not in production_ids
     assert {"charge_objective", "energy_objective", "leakage_objective", "leakage_protocol"} <= production_ids
-    assert "protocol" not in production_ids
+
+
+def test_project_attaches_semantic_contracts_in_pedagogical_order():
+    project = first_order_transient_teacher_project()
+    assert tuple(
+        item.production_id for item in project.semantic_response_expectations
+    ) == ("charge_objective", "energy_objective", "leakage_protocol")
+    assert tuple(item.semantic_role for item in project.semantic_response_expectations) == (
+        SemanticRole.OBJECTIVE,
+        SemanticRole.OBJECTIVE,
+        SemanticRole.PROTOCOL,
+    )
 
 
 def test_binding_resolves_multitrace_charge_cell():

@@ -181,4 +181,9 @@ def first_order_transient_teacher_project() -> TeacherProjectConfiguration:
         ComparisonInterpretationExpectationSet(comparisons, ()),
         ComparisonJustificationExpectationSet(comparisons, ()), (),
         "Premier ordre A79a : graphe uC(t) uniquement.",
+        semantic_response_expectations=(
+            CHARGE_OBJECTIVE_SEMANTIC_CONTRACT,
+            ENERGY_OBJECTIVE_SEMANTIC_CONTRACT,
+            LEAKAGE_PROTOCOL_SEMANTIC_CONTRACT,
+        ),
     )

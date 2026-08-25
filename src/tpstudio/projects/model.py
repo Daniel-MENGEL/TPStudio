@@ -18,6 +18,7 @@ from tpstudio.expectations import (
     QuantityExpectationSet,
     ScientificProductionKind,
     ScientificProductionPlan,
+    EvaluationBasis,
     StudentNormalizedErrorExpectationSet,
     UncertaintyQualityExpectationSet,
 )
@@ -28,6 +29,7 @@ from tpstudio.feedback import (
     QuantityFeedbackCatalog,
 )
 from tpstudio.protocol import ExperimentalManipulation
+from tpstudio.semantic_analysis import ExpectedSemanticResponse
 
 
 def _required_text(value: object, field_name: str) -> None:
@@ -208,6 +210,7 @@ class TeacherProjectConfiguration:
         default_factory=DerivedQuantityExpectationSet
     )
     quantity_series_expectation_set: QuantitySeriesExpectationSet | None = None
+    semantic_response_expectations: tuple[ExpectedSemanticResponse, ...] = ()
 
     def __post_init__(self) -> None:
         validate_teacher_project_configuration(self, normalize=True)
@@ -283,6 +286,35 @@ def validate_teacher_project_configuration(
         type(series) is not QuantitySeriesExpectationSet or series.production_plan is not plan
     ):
         raise ValueError("Les attentes série doivent partager le plan scientifique.")
+    semantic_expectations = configuration.semantic_response_expectations
+    if isinstance(semantic_expectations, (str, bytes)):
+        raise TypeError("Les attentes sémantiques doivent former une collection.")
+    semantic_expectations = tuple(semantic_expectations)
+    if any(type(item) is not ExpectedSemanticResponse for item in semantic_expectations):
+        raise TypeError(
+            "Chaque attente sémantique doit être un ExpectedSemanticResponse."
+        )
+    semantic_ids = tuple(item.production_id for item in semantic_expectations)
+    if len(semantic_ids) != len(set(semantic_ids)):
+        raise ValueError("Les productions sémantiques doivent être uniques.")
+    for expectation in semantic_expectations:
+        production = plan.get(expectation.production_id)
+        if production is None:
+            raise ValueError(
+                f"Production inconnue pour l'attente sémantique : {expectation.production_id!r}."
+            )
+        if EvaluationBasis.SEMANTIC not in production.evaluation_bases:
+            raise ValueError(
+                f"La production {expectation.production_id!r} ne déclare pas "
+                "la base d'évaluation SEMANTIC."
+            )
+        if not configuration.notebook_binding_plan.for_production(expectation.production_id):
+            raise ValueError(
+                f"Aucun binding notebook pour l'attente sémantique "
+                f"{expectation.production_id!r}."
+            )
+    if normalize:
+        object.__setattr__(configuration, "semantic_response_expectations", semantic_expectations)
     relations = configuration.relation_expectation_set
     if type(relations) is not ExpectationSet:
         raise TypeError("Les relations doivent former un ExpectationSet.")

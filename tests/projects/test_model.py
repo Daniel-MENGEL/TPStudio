@@ -14,6 +14,10 @@ from tpstudio.projects import (
     summarize_teacher_project_configuration,
     validate_teacher_project_configuration,
 )
+from tpstudio.projects.first_order_transient import (
+    CHARGE_OBJECTIVE_SEMANTIC_CONTRACT,
+    first_order_transient_teacher_project,
+)
 from tpstudio.expectations import (
     EvaluationBasis,
     ScientificProductionKind,
@@ -99,6 +103,48 @@ def test_configuration_rejects_foreign_expectation_set() -> None:
     foreign = snells_laws_teacher_project().quantity_expectation_set
     with pytest.raises(ValueError):
         replace(project, quantity_expectation_set=foreign)
+
+
+def test_semantic_expectations_default_to_empty_for_legacy_projects() -> None:
+    assert snells_laws_teacher_project().semantic_response_expectations == ()
+
+
+def test_semantic_expectation_rejects_duplicate_production_ids() -> None:
+    project = first_order_transient_teacher_project()
+    with pytest.raises(ValueError, match="uniques"):
+        replace(
+            project,
+            semantic_response_expectations=(
+                CHARGE_OBJECTIVE_SEMANTIC_CONTRACT,
+                CHARGE_OBJECTIVE_SEMANTIC_CONTRACT,
+            ),
+        )
+
+
+def test_semantic_expectation_rejects_unknown_production() -> None:
+    project = first_order_transient_teacher_project()
+    unknown = replace(
+        CHARGE_OBJECTIVE_SEMANTIC_CONTRACT,
+        production_id="unknown",
+    )
+    with pytest.raises(ValueError, match="Production inconnue"):
+        replace(project, semantic_response_expectations=(unknown,))
+
+
+def test_semantic_expectation_rejects_nonsemantic_production() -> None:
+    project = first_order_transient_teacher_project()
+    wrong_basis = replace(
+        CHARGE_OBJECTIVE_SEMANTIC_CONTRACT,
+        production_id="charge_graph",
+    )
+    with pytest.raises(ValueError, match="SEMANTIC"):
+        replace(project, semantic_response_expectations=(wrong_basis,))
+
+
+def test_semantic_expectation_rejects_wrong_element_type() -> None:
+    project = first_order_transient_teacher_project()
+    with pytest.raises(TypeError, match="ExpectedSemanticResponse"):
+        replace(project, semantic_response_expectations=("not a contract",))
 
 
 def test_configuration_apis_return_declared_objects() -> None:
