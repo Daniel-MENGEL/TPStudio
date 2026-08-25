@@ -17,8 +17,10 @@ from tpstudio.orchestration import (
     run_batch,
 )
 from tpstudio.projects import snells_laws_teacher_project
+from tpstudio.projects.first_order_transient import first_order_transient_teacher_project
+from tpstudio.web.presenters import exportable_count
 
-from tests.orchestration.test_copy_analysis import _notebook
+from tests.orchestration.test_copy_analysis import _first_order_notebook, _notebook, _RecordingSemanticProvider
 
 
 def _source(tmp_path: Path, notebook, name: str) -> NotebookCopySource:
@@ -218,6 +220,29 @@ def test_semantic_provider_is_not_forwarded_to_skipped_requests(tmp_path: Path, 
     assert [item.status for item in result.copies] == [
         BatchCopyDispatchStatus.ERROR, BatchCopyDispatchStatus.SKIPPED,
     ]
+
+
+def test_run_batch_keeps_not_ready_status_with_semantic_preview(tmp_path: Path) -> None:
+    notebook = _first_order_notebook()
+    source = _source(tmp_path, notebook, "first-order.ipynb")
+    before = source.path.read_bytes()
+    provider = _RecordingSemanticProvider()
+    result = run_batch(
+        (BatchCopyRequest(
+            "first-order", source, first_order_transient_teacher_project()
+        ),),
+        semantic_provider=provider,
+    )
+    item = result.copies[0]
+    assert item.status is BatchCopyDispatchStatus.RESOLVED_NOT_READY
+    assert item.dispatch is not None
+    assert item.dispatch.analysis is None
+    assert [analysis.contract.production_id for analysis in item.dispatch.semantic_response_analyses] == [
+        "charge_objective", "energy_objective", "leakage_protocol",
+    ]
+    assert len(provider.calls) == 3
+    assert source.path.read_bytes() == before
+    assert exportable_count(result, {}) == 0
 
 
 def test_explicit_and_auto_projects_coexist_per_copy(tmp_path: Path) -> None:

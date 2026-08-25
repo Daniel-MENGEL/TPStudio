@@ -19,6 +19,7 @@ from .copy_analysis import (
     assess_analysis_readiness_diagnostics,
     evaluate_configured_derived_quantities,
     analyze_configured_semantic_responses,
+    analyze_semantic_preview,
     analyze_snells_laws_copy,
     summarize_copy_analysis,
 )

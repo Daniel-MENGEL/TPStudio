@@ -636,6 +636,8 @@ class CopyAnalysisDispatchResult:
     provenance: ProjectSelectionProvenance
     analysis: CopyAnalysisResult | None
     readiness: AnalysisReadiness | None = None
+    semantic_response_analyses: tuple[SemanticResponseAnalysis, ...] = ()
+    semantic_project: TeacherProjectConfiguration | None = None
 
     def __post_init__(self) -> None:
         if type(self.resolution) is not ProjectResolutionResult:
@@ -644,20 +646,55 @@ class CopyAnalysisDispatchResult:
             raise TypeError("La provenance du projet est invalide.")
         if self.analysis is not None and type(self.analysis) is not CopyAnalysisResult:
             raise TypeError("L'analyse de copie est invalide.")
+        if self.semantic_project is not None and type(self.semantic_project) is not TeacherProjectConfiguration:
+            raise TypeError("La configuration de l'aperçu sémantique est invalide.")
+        semantic_analyses = tuple(self.semantic_response_analyses)
+        if any(type(item) is not SemanticResponseAnalysis for item in semantic_analyses):
+            raise TypeError("Les analyses sémantiques du dispatch sont invalides.")
+        object.__setattr__(self, "semantic_response_analyses", semantic_analyses)
         if self.provenance is ProjectSelectionProvenance.UNRESOLVED and self.analysis is not None:
             raise ValueError("Une résolution non aboutie ne peut pas porter d'analyse.")
+        if self.provenance is ProjectSelectionProvenance.UNRESOLVED and semantic_analyses:
+            raise ValueError("Une résolution non aboutie ne peut pas porter d'aperçu sémantique.")
         if self.provenance is ProjectSelectionProvenance.UNRESOLVED:
             if self.readiness is not None:
                 raise ValueError("Une résolution non aboutie ne peut pas porter de readiness.")
+            if self.semantic_project is not None:
+                raise ValueError("Une résolution non aboutie ne peut pas porter de configuration d'aperçu.")
         elif self.analysis is None:
             if self.readiness is not AnalysisReadiness.NOT_READY:
                 raise ValueError("Une analyse absente exige une readiness NOT_READY.")
+            if self.semantic_project is not None and (
+                self.semantic_project.identity.project_id != self.resolution.selected_project_id
+            ):
+                raise ValueError("La configuration de l'aperçu ne correspond pas au projet résolu.")
+            if semantic_analyses:
+                if self.semantic_project is None:
+                    raise ValueError("Un aperçu sémantique non vide exige sa configuration exacte.")
+                production_ids = tuple(item.contract.production_id for item in semantic_analyses)
+                if len(production_ids) != len(set(production_ids)):
+                    raise ValueError("Les productions de l'aperçu sémantique doivent être uniques.")
+                configured = self.semantic_project.semantic_response_expectations
+                if tuple(item.contract for item in semantic_analyses) != configured:
+                    raise ValueError(
+                        "L'aperçu sémantique ne correspond pas à la configuration exacte résolue."
+                    )
         elif self.readiness is None:
             # Preserve the historical three-argument constructor while making
             # the derived state explicit for all newly dispatched analyses.
             object.__setattr__(self, "readiness", AnalysisReadiness.READY)
         elif self.readiness is not AnalysisReadiness.READY:
             raise ValueError("Une analyse exécutée exige une readiness READY.")
+        if self.analysis is not None:
+            if self.semantic_project is not None and self.semantic_project != self.analysis.project:
+                raise ValueError("La configuration de l'aperçu diverge de l'analyse complète.")
+            if self.semantic_project is None:
+                object.__setattr__(self, "semantic_project", self.analysis.project)
+            complete = self.analysis.semantic_response_analyses
+            if semantic_analyses and semantic_analyses != complete:
+                raise ValueError("L'aperçu sémantique diverge de l'analyse complète.")
+            if not semantic_analyses:
+                object.__setattr__(self, "semantic_response_analyses", complete)
 
 
 def _catalog(project: TeacherProjectConfiguration, expected_type):
@@ -761,6 +798,20 @@ def analyze_configured_semantic_responses(
             SemanticResponseAnalysis(contract, resolutions, student_response, result)
         )
     return tuple(analyses)
+
+
+def analyze_semantic_preview(
+    source: NotebookCopySource,
+    project: TeacherProjectConfiguration,
+    provider: SemanticAnalysisProvider | None,
+) -> tuple[SemanticResponseAnalysis, ...]:
+    """Run only configured semantic contracts for a not-ready project."""
+
+    if provider is None or not project.semantic_response_expectations:
+        return ()
+    notebook = load_notebook_copy(source)
+    resolution_set = resolve_notebook_bindings(notebook, project.notebook_binding_plan)
+    return analyze_configured_semantic_responses(project, resolution_set, provider)
 
 
 class SnellsLawsCopyAnalyzer:
@@ -1087,8 +1138,10 @@ def analyze_copy(
         )
         readiness = assess_analysis_readiness(project)
         if readiness is AnalysisReadiness.NOT_READY:
+            semantic_preview = analyze_semantic_preview(source, project, semantic_provider)
             return CopyAnalysisDispatchResult(
-                resolution, ProjectSelectionProvenance.EXPLICIT, None, readiness
+                resolution, ProjectSelectionProvenance.EXPLICIT, None, readiness,
+                semantic_preview, project,
             )
         analyzer = SnellsLawsCopyAnalyzer()
         if semantic_provider is None:
@@ -1112,8 +1165,10 @@ def analyze_copy(
     resolved_project = descriptor.factory()
     readiness = assess_analysis_readiness(resolved_project)
     if readiness is AnalysisReadiness.NOT_READY:
+        semantic_preview = analyze_semantic_preview(source, resolved_project, semantic_provider)
         return CopyAnalysisDispatchResult(
-            resolution, ProjectSelectionProvenance.AUTO_RESOLVED, None, readiness
+            resolution, ProjectSelectionProvenance.AUTO_RESOLVED, None, readiness,
+            semantic_preview, resolved_project,
         )
     analyzer = SnellsLawsCopyAnalyzer()
     if semantic_provider is None:
