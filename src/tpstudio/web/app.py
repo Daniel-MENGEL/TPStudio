@@ -5,10 +5,15 @@ from __future__ import annotations
 from pathlib import Path
 from dataclasses import replace
 from datetime import datetime, timezone
+import os
 
 from tpstudio.batch import BatchCopyStatus, render_batch_report_markdown
 from tpstudio.export import CopyExportOptions
 from tpstudio.orchestration import BatchCopyDispatchStatus
+from tpstudio.semantic_analysis import (
+    DEFAULT_OPENAI_SEMANTIC_MODEL,
+    OpenAISemanticAnalysisProvider,
+)
 from tpstudio.web.execution import analyze_selected_copy, can_run_batch, export_active_copies, run_selected_dispatch
 from tpstudio.web.model import WebBatchOptions
 from tpstudio.web.identity import (
@@ -22,6 +27,7 @@ from tpstudio.web.presenters import (
     batch_plan_rows, graph_summary_rows,
     identity_resolution_candidates, active_analysis_for_source, batch_dispatch_rows,
     project_choices_for_source, exportable_count, non_exportable_count,
+    semantic_response_rows,
 )
 from tpstudio.web.roster import (
     default_roster_path, load_roster, parse_roster_csv, save_roster,
@@ -47,8 +53,10 @@ from tpstudio.web.state import (
     default_output_dir,
     REVIEW_FILTER_KEY, REVIEW_INDEX_KEY, REVIEW_MESSAGE_KEY,
     get_current_dispatch_result, set_dispatch_result, clear_dispatch_result,
+    invalidate_dispatch_if_signature_changed,
     get_project_overrides, set_project_override, remove_project_override,
     get_export_results, set_export_results,
+    SEMANTIC_ANALYSIS_ENABLED_KEY,
 )
 from tpstudio.web.workspace import WebWorkspace
 
@@ -57,6 +65,25 @@ def _input_signature(copies, output_dir: Path, options: WebBatchOptions) -> tupl
     return tuple((item.source_id, item.original_filename, item.content_sha256,
                   getattr(getattr(item, "identity", None), "status", None),
                   tuple(getattr(getattr(item, "identity", None), "students", ()))) for item in copies), str(output_dir), options
+
+
+def _analysis_signature(input_signature: tuple, semantic_enabled: bool, model: str) -> tuple:
+    """Signature for analysis results; planning remains independent of AI."""
+    return input_signature, bool(semantic_enabled), model
+
+
+def _semantic_model() -> str:
+    return os.getenv("TPSTUDIO_OPENAI_MODEL") or DEFAULT_OPENAI_SEMANTIC_MODEL
+
+
+def _build_semantic_provider(enabled: bool, *, environ=None):
+    """Build a provider only from an explicit Analyze action."""
+    if not enabled:
+        return None
+    environment = os.environ if environ is None else environ
+    if not str(environment.get("OPENAI_API_KEY", "")).strip():
+        return None
+    return OpenAISemanticAnalysisProvider(model=_semantic_model())
 
 
 def web_error_message(exc: BaseException) -> str:
@@ -214,6 +241,14 @@ def main() -> None:
     with st.sidebar:
         st.header("Options")
         st.caption("Les options d’export seront disponibles après la phase d’analyse.")
+        semantic_enabled = st.checkbox(
+            "Activer l’analyse sémantique (API OpenAI)",
+            value=False,
+            key=SEMANTIC_ANALYSIS_ENABLED_KEY,
+        )
+        semantic_model = _semantic_model()
+        if semantic_enabled:
+            st.caption(f"Modèle sémantique : {semantic_model}")
         try:
             roster = load_roster()
             st.caption(f"Étudiants : {len(roster)} chargés")
@@ -338,9 +373,24 @@ def main() -> None:
         if st.button("Analyser", type="primary", disabled=not can_run or st.session_state[RUN_IN_PROGRESS_KEY]):
             st.session_state[RUN_IN_PROGRESS_KEY] = True
             try:
-                with st.spinner("Analyse du lot en cours…"):
-                    result = run_selected_dispatch(copies)
-                set_dispatch_result(st.session_state, result, signature)
+                provider = _build_semantic_provider(semantic_enabled)
+                if semantic_enabled and provider is None:
+                    clear_dispatch_result(st.session_state)
+                    st.warning(
+                        "Analyse sémantique activée, mais OPENAI_API_KEY est absente. "
+                        "Le lot n’a pas été analysé."
+                    )
+                else:
+                    with st.spinner("Analyse du lot en cours…"):
+                        if provider is None:
+                            result = run_selected_dispatch(copies)
+                        else:
+                            result = run_selected_dispatch(copies, semantic_provider=provider)
+                    set_dispatch_result(
+                        st.session_state,
+                        result,
+                        _analysis_signature(signature, semantic_enabled, semantic_model),
+                    )
                 clear_run_result(st.session_state)
                 st.session_state[REVIEW_INDEX_KEY] = 0
             except Exception:
@@ -348,7 +398,9 @@ def main() -> None:
                 st.error("Impossible d'analyser le lot.")
             finally:
                 st.session_state[RUN_IN_PROGRESS_KEY] = False
-        dispatch_result = get_current_dispatch_result(st.session_state, signature)
+        current_analysis_signature = _analysis_signature(signature, semantic_enabled, semantic_model)
+        invalidate_dispatch_if_signature_changed(st.session_state, current_analysis_signature)
+        dispatch_result = get_current_dispatch_result(st.session_state, current_analysis_signature)
         if dispatch_result is not None:
             st.subheader("Résultat de l'analyse")
             st.write(
@@ -380,9 +432,49 @@ def main() -> None:
                         st.warning(row.error_message)
                     if item.status is BatchCopyDispatchStatus.RESOLVED_NOT_READY:
                         st.info(
-                            "TP reconnu. La correction automatique de ce TP "
+                            "TP reconnu. La correction automatique complète de ce TP "
                             "n’est pas encore disponible."
                         )
+                    semantic_rows = semantic_response_rows(
+                        item.dispatch.semantic_response_analyses if item.dispatch else (),
+                        source_id=item.source_id,
+                    )
+                    if semantic_rows:
+                        st.markdown("### Analyse des réponses scientifiques")
+                        st.caption(
+                            "Aperçu sémantique partiel : les résultats sont soumis à la validation du professeur "
+                            "et ne constituent ni une note ni une correction complète."
+                        )
+                        for semantic_row in semantic_rows:
+                            with st.container(border=True):
+                                st.markdown(
+                                    f"**{semantic_row.production_id}** · {semantic_row.role_label} · "
+                                    f"{semantic_row.binding_label}"
+                                )
+                                st.text_area(
+                                    "Réponse étudiante",
+                                    value=semantic_row.student_response or "",
+                                    height=100,
+                                    disabled=True,
+                                    key=f"{semantic_row.stable_key}-response",
+                                )
+                                for criterion in semantic_row.criteria:
+                                    st.markdown(
+                                        f"**{criterion.description}** · {criterion.status_label} · "
+                                        f"{criterion.importance_label}"
+                                    )
+                                    st.caption(f"Critère : {criterion.criterion_id}")
+                                    if criterion.evidence:
+                                        st.caption(f"Preuve : {criterion.evidence}")
+                                if semantic_row.contradictions:
+                                    st.warning(
+                                        "Contradictions à examiner par le professeur : "
+                                        + " ; ".join(semantic_row.contradictions)
+                                    )
+                                if semantic_row.confidence:
+                                    st.caption(f"Confiance déclarée : {semantic_row.confidence}")
+                                for diagnostic in semantic_row.diagnostics:
+                                    st.info(diagnostic)
                     if row.evidence:
                         st.markdown("**Détails de la détection**")
                         with st.container():
@@ -448,7 +540,18 @@ def main() -> None:
                                         request.source for request in build_dispatch_requests_from_web_selection(tuple(copies))
                                         if request.source_id == item.source_id
                                     )
-                                    explicit_dispatch = analyze_selected_copy(source, chosen)
+                                    provider = _build_semantic_provider(semantic_enabled)
+                                    if semantic_enabled and provider is None:
+                                        st.warning(
+                                            "Analyse sémantique activée, mais OPENAI_API_KEY est absente."
+                                        )
+                                        continue
+                                    if provider is None:
+                                        explicit_dispatch = analyze_selected_copy(source, chosen)
+                                    else:
+                                        explicit_dispatch = analyze_selected_copy(
+                                            source, chosen, semantic_provider=provider,
+                                        )
                                     if explicit_dispatch.analysis is None:
                                         raise ValueError("Le projet choisi n'a pas permis d'analyser cette copie.")
                                     set_project_override(st.session_state, WebCopyOverride(

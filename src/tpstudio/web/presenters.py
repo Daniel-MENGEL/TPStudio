@@ -8,8 +8,16 @@ from pathlib import Path
 
 from tpstudio.batch import BatchPlan
 from tpstudio.batch import BatchCopyStatus, BatchRunResult
-from tpstudio.orchestration import BatchCopyDispatchStatus, BatchDispatchResult, ProjectSelectionProvenance
+from tpstudio.orchestration import (
+    BatchCopyDispatchStatus, BatchDispatchResult, ProjectSelectionProvenance,
+    SemanticResponseAnalysis,
+)
 from tpstudio.projects import known_project_ids, project_descriptor
+from tpstudio.semantic_analysis import (
+    SemanticAnalysisResult,
+    SemanticCriterionImportance,
+    SemanticCriterionStatus,
+)
 from tpstudio.interpretation import InterpretationClassification, InterpretationReviewTrace
 from tpstudio.reporting import TeacherCopyReport, TeacherGraphHeadlineStatus
 from .model import WebCopyOverride
@@ -91,6 +99,150 @@ class BatchDispatchRow:
     error_message: str | None
     evidence: tuple[tuple[str, str], ...]
     validated_by_teacher: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class SemanticCriterionRow:
+    criterion_id: str
+    description: str
+    importance: str
+    importance_label: str
+    status: str
+    status_label: str
+    evidence: str
+    stable_key: str
+
+
+@dataclass(frozen=True, slots=True)
+class SemanticResponseRow:
+    source_id: str
+    production_id: str
+    role: str
+    role_label: str
+    binding_status: str
+    binding_label: str
+    student_response: str | None
+    criteria: tuple[SemanticCriterionRow, ...]
+    contradictions: tuple[str, ...]
+    confidence: str | None
+    diagnostics: tuple[str, ...]
+    stable_key: str
+
+
+_SEMANTIC_STATUS_LABELS = {
+    SemanticCriterionStatus.SATISFIED: "Présent",
+    SemanticCriterionStatus.PARTIAL: "Partiel",
+    SemanticCriterionStatus.NOT_FOUND: "Non repéré",
+    SemanticCriterionStatus.UNCERTAIN: "À vérifier",
+}
+_SEMANTIC_IMPORTANCE_LABELS = {
+    SemanticCriterionImportance.REQUIRED: "Requis",
+    SemanticCriterionImportance.RECOMMENDED: "Recommandé",
+}
+_SEMANTIC_BINDING_LABELS = {
+    "resolved": "Réponse localisée",
+    "absent": "Cellule de réponse introuvable",
+    "ambiguous": "Cellule de réponse ambiguë",
+}
+_SEMANTIC_ROLE_LABELS = {
+    "objective": "Objectif",
+    "protocol": "Protocole",
+    "interpretation": "Interprétation",
+    "conclusion": "Conclusion",
+}
+
+
+def _semantic_stable_key(source_id: str, production_id: str, criterion_id: str | None = None) -> str:
+    import re
+
+    parts = [source_id, production_id]
+    if criterion_id is not None:
+        parts.append(criterion_id)
+    safe = re.sub(r"[^a-zA-Z0-9_-]+", "-", "-".join(parts)).strip("-") or "copy"
+    return f"semantic-{safe}"
+
+
+def _safe_semantic_diagnostic(value: str) -> str:
+    if value == "EMPTY_RESPONSE":
+        return "Réponse vide."
+    if value == "SEMANTIC_PROVIDER_UNAVAILABLE":
+        return "Fournisseur sémantique indisponible."
+    if value.startswith("SEMANTIC_PROVIDER_ERROR:"):
+        return "Erreur contrôlée du fournisseur sémantique."
+    if value == "SEMANTIC_INVALID_PROVIDER_RESULT":
+        return "Résultat sémantique invalide."
+    if value == "SEMANTIC_PRODUCTION_MISMATCH":
+        return "Résultat sémantique incohérent avec la production."
+    if value == "SEMANTIC_CRITERIA_MISMATCH":
+        return "Critères sémantiques incomplets ou incohérents."
+    return "Diagnostic sémantique contrôlé."
+
+
+def _semantic_confidence_label(value: str | None) -> str | None:
+    if value is None:
+        return None
+    return {
+        "high": "Haute",
+        "medium": "Moyenne",
+        "low": "Faible",
+        "none": "Non renseignée",
+        "unknown": "Non renseignée",
+    }.get(value.casefold(), "Non renseignée")
+
+
+def semantic_response_rows(
+    analyses: tuple[SemanticResponseAnalysis, ...] | list[SemanticResponseAnalysis],
+    *,
+    source_id: str,
+) -> tuple[SemanticResponseRow, ...]:
+    """Build immutable, non-scoring views of semantic response analyses."""
+    rows: list[SemanticResponseRow] = []
+    for analysis in tuple(analyses):
+        if type(analysis) is not SemanticResponseAnalysis:
+            raise TypeError("Les analyses sémantiques sont invalides.")
+        result: SemanticAnalysisResult | None = analysis.result
+        result_by_id = {item.criterion_id: item for item in result.criterion_results} if result else {}
+        criteria = tuple(
+            SemanticCriterionRow(
+                criterion.criterion_id,
+                criterion.description,
+                criterion.importance.value,
+                _SEMANTIC_IMPORTANCE_LABELS[criterion.importance],
+                result_by_id[criterion.criterion_id].status.value
+                if result is not None and criterion.criterion_id in result_by_id
+                else "not_evaluated",
+                _SEMANTIC_STATUS_LABELS.get(
+                    result_by_id[criterion.criterion_id].status if result is not None and criterion.criterion_id in result_by_id else "not_evaluated",
+                    "Non évalué",
+                ),
+                result_by_id[criterion.criterion_id].evidence if criterion.criterion_id in result_by_id else "",
+                _semantic_stable_key(source_id, analysis.contract.production_id, criterion.criterion_id),
+            )
+            for criterion in analysis.contract.criteria
+        )
+        if result is not None:
+            diagnostics = tuple(_safe_semantic_diagnostic(item) for item in result.diagnostics)
+        elif analysis.binding_absent:
+            diagnostics = ("La cellule contenant la réponse n’a pas été trouvée.",)
+        elif analysis.binding_ambiguous:
+            diagnostics = ("Plusieurs cellules peuvent correspondre à cette réponse.",)
+        else:
+            diagnostics = ()
+        rows.append(SemanticResponseRow(
+            source_id,
+            analysis.contract.production_id,
+            analysis.contract.semantic_role.value,
+            _SEMANTIC_ROLE_LABELS.get(analysis.contract.semantic_role.value, analysis.contract.semantic_role.value),
+            "resolved" if analysis.binding_resolved else "ambiguous" if analysis.binding_ambiguous else "absent",
+            _SEMANTIC_BINDING_LABELS["resolved" if analysis.binding_resolved else "ambiguous" if analysis.binding_ambiguous else "absent"],
+            analysis.student_response,
+            criteria,
+            result.contradictions if result else (),
+            _semantic_confidence_label(result.confidence) if result else None,
+            diagnostics,
+            _semantic_stable_key(source_id, analysis.contract.production_id),
+        ))
+    return tuple(rows)
 
 
 def _confidence_label(value) -> str | None:

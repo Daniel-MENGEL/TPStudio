@@ -9,12 +9,14 @@ from tpstudio.orchestration import (
 )
 from tpstudio.export import CopyExportOptions, export_analyzed_copy as real_export_analyzed_copy
 from tpstudio.projects import known_project_ids
+from tpstudio.projects import first_order_transient_teacher_project
 from tpstudio.web.execution import analyze_selected_copy, export_active_copies, run_selected_dispatch
 import tpstudio.web.execution as execution
 from tpstudio.web.model import SelectedCopy, WebCopyExportState, WebCopyOverride
 from tpstudio.web.planning import build_dispatch_requests_from_web_selection
-from tpstudio.web.presenters import active_analysis_for_source, batch_dispatch_rows, project_choices_for_source
+from tpstudio.web.presenters import active_analysis_for_source, batch_dispatch_rows, project_choices_for_source, semantic_response_rows
 from tpstudio.projects import torsion_pendulum_teacher_project
+from tests.orchestration.test_copy_analysis import _first_order_notebook, _RecordingSemanticProvider
 from tpstudio.web.state import (
     DISPATCH_RESULT_KEY, DISPATCH_SIGNATURE_KEY, initialize_session_state,
     PROJECT_OVERRIDES_KEY, get_project_overrides, invalidate_if_signature_changed,
@@ -163,6 +165,29 @@ def test_resolved_not_ready_row_keeps_project_and_never_looks_analyzed(tmp_path)
     assert row.project_id == "torsion-pendulum"
     assert row.project_title == "Pendule de torsion"
     assert active_analysis_for_source(result, {}, "copy-004") is None
+
+
+def test_resolved_not_ready_dispatch_exposes_semantic_rows(tmp_path):
+    path = tmp_path / "first-order.ipynb"
+    nbformat.write(_first_order_notebook(), path)
+    source = NotebookCopySource("copy-semantic", path.name, path)
+    dispatch = analyze_copy(
+        source,
+        project=first_order_transient_teacher_project(),
+        semantic_provider=_RecordingSemanticProvider(),
+    )
+    result = BatchDispatchResult((BatchCopyDispatchResult(
+        "copy-semantic", BatchCopyDispatchStatus.RESOLVED_NOT_READY, dispatch,
+    ),))
+    rows = semantic_response_rows(
+        result.copies[0].dispatch.semantic_response_analyses,
+        source_id="copy-semantic",
+    )
+    assert result.resolved_not_ready_count == 1
+    assert result.copies[0].dispatch.analysis is None
+    assert [row.production_id for row in rows] == [
+        "charge_objective", "energy_objective", "leakage_protocol",
+    ]
 
 
 def test_export_active_analyses_skips_resolved_not_ready(tmp_path):

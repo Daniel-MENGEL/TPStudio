@@ -21,6 +21,7 @@ RUN_IN_PROGRESS_KEY = "tpstudio_web_run_in_progress"
 REVIEW_INDEX_KEY = "tpstudio_web_review_index"
 REVIEW_FILTER_KEY = "tpstudio_web_review_only_pending"
 REVIEW_MESSAGE_KEY = "tpstudio_web_review_message"
+SEMANTIC_ANALYSIS_ENABLED_KEY = "tpstudio_semantic_analysis_enabled"
 
 
 def default_output_dir() -> Path:
@@ -43,6 +44,7 @@ def initialize_session_state(state: MutableMapping) -> None:
     state.setdefault(REVIEW_INDEX_KEY, 0)
     state.setdefault(REVIEW_FILTER_KEY, True)
     state.setdefault(REVIEW_MESSAGE_KEY, None)
+    state.setdefault(SEMANTIC_ANALYSIS_ENABLED_KEY, False)
 
 
 def clear_prepared_batch(state: MutableMapping) -> None:
@@ -110,6 +112,15 @@ def get_current_dispatch_result(state: MutableMapping, signature: tuple):
     if state.get(DISPATCH_SIGNATURE_KEY) == signature:
         return state.get(DISPATCH_RESULT_KEY)
     return None
+
+
+def invalidate_dispatch_if_signature_changed(state: MutableMapping, signature: tuple) -> bool:
+    """Drop stale analysis results without invalidating the prepared plan."""
+    previous = state.get(DISPATCH_SIGNATURE_KEY)
+    if previous is not None and previous != signature:
+        clear_dispatch_result(state)
+        return True
+    return False
 
 
 def run_result_is_current(state: MutableMapping, signature: tuple) -> bool:

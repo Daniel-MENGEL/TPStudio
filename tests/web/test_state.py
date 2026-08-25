@@ -5,7 +5,10 @@ from tpstudio.web.state import (
     RUN_IN_PROGRESS_KEY, RUN_RESULT_KEY, RUN_SIGNATURE_KEY,
     clear_run_result, get_current_run_result, set_run_result, default_output_dir,
     REVIEW_INDEX_KEY,
+    DISPATCH_RESULT_KEY, DISPATCH_SIGNATURE_KEY, invalidate_dispatch_if_signature_changed,
+    set_dispatch_result,
 )
+from tpstudio.orchestration import BatchDispatchResult
 
 
 def test_state_initialization_and_invalidation():
@@ -50,3 +53,16 @@ def test_run_result_lifecycle_and_reset():
 def test_default_output_dir_is_local_home_path():
     from pathlib import Path
     assert default_output_dir() == Path.home() / "Documents" / "Sup" / "TP" / "Notebooks-corrigés"
+
+
+def test_dispatch_signature_change_clears_analysis_without_clearing_plan():
+    state = {}
+    initialize_session_state(state)
+    set_prepared_batch(state, "plan", ("plan-signature",))
+    set_dispatch_result(state, BatchDispatchResult(()), (("plan-signature",), False, "gpt-5-mini"))
+    assert invalidate_dispatch_if_signature_changed(
+        state, (("plan-signature",), True, "gpt-5-mini")
+    )
+    assert state[DISPATCH_RESULT_KEY] is None
+    assert state[DISPATCH_SIGNATURE_KEY] is None
+    assert state[PLAN_KEY] == "plan"
