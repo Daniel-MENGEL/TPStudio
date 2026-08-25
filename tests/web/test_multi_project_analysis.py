@@ -69,6 +69,41 @@ def test_web_analysis_dispatches_snell_and_lens_per_copy(tmp_path):
     assert all(isinstance(kind, str) and isinstance(text, str) for kind, text in rows[0].evidence)
 
 
+def test_run_selected_dispatch_forwards_semantic_provider_exactly(tmp_path, monkeypatch):
+    copies = _copies(tmp_path)
+    provider = object()
+    observed = {}
+    expected = BatchDispatchResult(())
+
+    def fake_run_batch(requests, *, options=None, continue_on_error=True, semantic_provider=None):
+        observed["requests"] = tuple(requests)
+        observed["provider"] = semantic_provider
+        return expected
+
+    monkeypatch.setattr(execution, "run_batch", fake_run_batch)
+    assert run_selected_dispatch(copies, semantic_provider=provider) is expected
+    assert observed["provider"] is provider
+
+
+def test_analyze_selected_copy_forwards_semantic_provider_exactly(tmp_path, monkeypatch):
+    selected = _copies(tmp_path)[0]
+    provider = object()
+    observed = {}
+    expected = object()
+
+    def fake_analyze(source, *, project=None, options=None, semantic_provider=None):
+        observed.update(source=source, project=project, provider=semantic_provider)
+        return expected
+
+    monkeypatch.setattr(execution, "analyze_copy", fake_analyze)
+    assert analyze_selected_copy(
+        NotebookCopySource(selected.source_id, selected.original_filename, selected.workspace_path),
+        "snells-laws-mvp",
+        semantic_provider=provider,
+    ) is expected
+    assert observed["provider"] is provider
+
+
 def test_dispatch_result_state_is_invalidated_on_signature_change():
     state = {}
     initialize_session_state(state)

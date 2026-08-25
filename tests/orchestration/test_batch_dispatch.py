@@ -177,6 +177,49 @@ def test_options_same_object_is_forwarded_to_every_copy(tmp_path: Path, monkeypa
     assert all(item.status is BatchCopyDispatchStatus.ANALYZED for item in result.copies)
 
 
+def test_semantic_provider_same_instance_is_forwarded_in_request_order(tmp_path: Path, monkeypatch) -> None:
+    first = _source(tmp_path, _snell_notebook(), "first.ipynb")
+    second = _source(tmp_path, _snell_notebook(), "second.ipynb")
+    base = analyze_copy(first, project=snells_laws_teacher_project())
+    provider = object()
+    calls = []
+
+    def fake_analyze(source, *, project=None, options=None, semantic_provider=None):
+        calls.append((source.path.stem, semantic_provider))
+        return base
+
+    monkeypatch.setattr(batch_dispatch, "analyze_copy", fake_analyze)
+    result = run_batch(
+        (BatchCopyRequest("first", first), BatchCopyRequest("second", second)),
+        semantic_provider=provider,
+    )
+    assert calls == [("first", provider), ("second", provider)]
+    assert result.analyzed_count == 2
+
+
+def test_semantic_provider_is_not_forwarded_to_skipped_requests(tmp_path: Path, monkeypatch) -> None:
+    provider = object()
+    calls = []
+
+    def failing(source, *, project=None, options=None, semantic_provider=None):
+        calls.append((source.path.stem, semantic_provider))
+        raise RuntimeError("controlled failure")
+
+    monkeypatch.setattr(batch_dispatch, "analyze_copy", failing)
+    result = run_batch(
+        (
+            BatchCopyRequest("bad", _source(tmp_path, _snell_notebook(), "bad.ipynb")),
+            BatchCopyRequest("last", _source(tmp_path, _lens_notebook(), "last.ipynb")),
+        ),
+        continue_on_error=False,
+        semantic_provider=provider,
+    )
+    assert calls == [("bad", provider)]
+    assert [item.status for item in result.copies] == [
+        BatchCopyDispatchStatus.ERROR, BatchCopyDispatchStatus.SKIPPED,
+    ]
+
+
 def test_explicit_and_auto_projects_coexist_per_copy(tmp_path: Path) -> None:
     result = run_batch((
         BatchCopyRequest("forced-snell", _source(tmp_path, _lens_notebook(), "forced.ipynb"), snells_laws_teacher_project()),

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from tpstudio.projects import TeacherProjectConfiguration
+from tpstudio.semantic_analysis import SemanticAnalysisProvider
 
 from .copy_analysis import (
     AnalysisReadiness,
@@ -152,6 +153,7 @@ def run_batch(
     *,
     options: CopyAnalysisOptions | None = None,
     continue_on_error: bool = True,
+    semantic_provider: SemanticAnalysisProvider | None = None,
 ) -> BatchDispatchResult:
     """Analyze requests sequentially, without exporting or selecting a global project."""
     requests = tuple(requests)
@@ -176,7 +178,15 @@ def run_batch(
             ))
             continue
         try:
-            dispatch = analyze_copy(request.source, project=request.project, options=options)
+            if semantic_provider is None:
+                dispatch = analyze_copy(
+                    request.source, project=request.project, options=options
+                )
+            else:
+                dispatch = analyze_copy(
+                    request.source, project=request.project, options=options,
+                    semantic_provider=semantic_provider,
+                )
         except Exception as exc:
             results.append(BatchCopyDispatchResult(
                 request.source_id,

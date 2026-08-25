@@ -9,6 +9,7 @@ from tpstudio.batch import BatchPlan, BatchRunResult, run_snells_laws_batch
 from tpstudio.export import CopyExportOptions, export_analyzed_copy
 from tpstudio.orchestration import BatchDispatchResult, CopyAnalysisOptions, NotebookCopySource, analyze_copy, run_batch
 from tpstudio.projects import project_descriptor
+from tpstudio.semantic_analysis import SemanticAnalysisProvider
 
 from .planning import build_dispatch_requests_from_web_selection
 from .model import WebCopyExportState, WebCopyOverride
@@ -21,12 +22,26 @@ def run_prepared_batch(plan: BatchPlan) -> BatchRunResult:
     return run_snells_laws_batch(plan)
 
 
-def run_selected_dispatch(copies, *, options: CopyAnalysisOptions | None = None, continue_on_error: bool = True) -> BatchDispatchResult:
+def run_selected_dispatch(
+    copies,
+    *,
+    options: CopyAnalysisOptions | None = None,
+    continue_on_error: bool = True,
+    semantic_provider: SemanticAnalysisProvider | None = None,
+) -> BatchDispatchResult:
     """Analyze selected copies generically, without export side effects."""
+    requests = build_dispatch_requests_from_web_selection(tuple(copies))
+    if semantic_provider is None:
+        return run_batch(
+            requests,
+            options=options,
+            continue_on_error=continue_on_error,
+        )
     return run_batch(
-        build_dispatch_requests_from_web_selection(tuple(copies)),
+        requests,
         options=options,
         continue_on_error=continue_on_error,
+        semantic_provider=semantic_provider,
     )
 
 
@@ -35,12 +50,19 @@ def analyze_selected_copy(
     project_id: str,
     *,
     options: CopyAnalysisOptions | None = None,
+    semantic_provider: SemanticAnalysisProvider | None = None,
 ):
     """Re-analyze one copy with the teacher-selected project."""
     descriptor = project_descriptor(project_id)
     if descriptor is None:
         raise ValueError("Projet inconnu.")
-    return analyze_copy(source, project=descriptor.factory(), options=options)
+    project = descriptor.factory()
+    if semantic_provider is None:
+        return analyze_copy(source, project=project, options=options)
+    return analyze_copy(
+        source, project=project, options=options,
+        semantic_provider=semantic_provider,
+    )
 
 
 def export_output_stem(analysis) -> str:
