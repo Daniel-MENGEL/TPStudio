@@ -15,6 +15,7 @@ from tpstudio.orchestration import (
     CopyAnalysisOptions,
     NotebookCopySource,
     SnellsLawsCopyAnalyzer,
+    SemanticResponseAnalysis,
     ObservedValueSource,
     analyze_snells_laws_copy,
     summarize_copy_analysis,
@@ -23,6 +24,12 @@ from tpstudio.orchestration.copy_analysis import _constrained_linear_slopes
 from tpstudio.graph_analysis import GraphScientificClassification
 from tpstudio.regression import RegressionTargetKind
 from tpstudio.projects import ExpectedGraphModel, snells_laws_teacher_project
+from tpstudio.projects.first_order_transient import first_order_transient_teacher_project
+from tpstudio.semantic_analysis import (
+    SemanticAnalysisResult,
+    SemanticCriterionResult,
+    SemanticCriterionStatus,
+)
 from tpstudio.projects.model import GraphExpectationSet
 from tpstudio.reporting import build_teacher_copy_report
 from tpstudio.protocol import (
@@ -115,6 +122,205 @@ def _cell_with(notebook, marker: str):
 def _quantity_value(result, production_id: str):
     item = result.quantity_evaluations.for_production(production_id)[0]
     return item.assessment.selected_observation.value if item.assessment.selected_observation else None
+
+
+def _first_order_notebook(*, omit_marker=None, duplicate_marker=None, empty_marker=None):
+    cells = [nbformat.v4.new_code_cell("plt.plot(t, uG)\nplt.plot(t, uC)")]
+    project = first_order_transient_teacher_project()
+    for binding in project.notebook_binding_plan:
+        if binding.production_id == "charge_graph":
+            continue
+        marker = binding.selector.value
+        if marker == omit_marker:
+            continue
+        response = "À compléter" if marker == empty_marker else f"Réponse pour {binding.production_id}."
+        cell = nbformat.v4.new_markdown_cell(
+            f"<!-- {marker} -->\nConsigne professeur\n### Réponse :\n{response}"
+        )
+        cells.append(cell)
+        if marker == duplicate_marker:
+            cells.append(nbformat.v4.new_markdown_cell(cell.source))
+    return nbformat.v4.new_notebook(cells=cells)
+
+
+class _RecordingSemanticProvider:
+    def __init__(self, *, raises=False):
+        self.calls = []
+        self.raises = raises
+
+    def analyze(self, contract, student_response):
+        self.calls.append((contract.production_id, student_response))
+        if self.raises:
+            raise RuntimeError("controlled provider failure")
+        return SemanticAnalysisResult(
+            contract.production_id,
+            student_response,
+            tuple(
+                SemanticCriterionResult(
+                    criterion.criterion_id,
+                    SemanticCriterionStatus.NOT_FOUND,
+                    "",
+                )
+                for criterion in contract.criteria
+            ),
+        )
+
+
+def _analyze_first_order(tmp_path: Path, notebook, provider=None):
+    path = tmp_path / "first-order-copy.ipynb"
+    nbformat.write(notebook, path)
+    source = NotebookCopySource("first-order-copy", "Copie Premier ordre", path)
+    return SnellsLawsCopyAnalyzer().analyze(
+        source,
+        project=first_order_transient_teacher_project(),
+        semantic_provider=provider,
+    )
+
+
+def test_first_order_semantic_contracts_run_in_project_order_and_extract_answer_only(tmp_path: Path) -> None:
+    provider = _RecordingSemanticProvider()
+    result = _analyze_first_order(tmp_path, _first_order_notebook(), provider)
+    assert [item.contract.production_id for item in result.semantic_response_analyses] == [
+        "charge_objective", "energy_objective", "leakage_protocol"
+    ]
+    assert result.semantic_response_analyses[0].result is not None
+    assert result.semantic_response_analyses[0].result.criterion_results
+    assert [item[0] for item in provider.calls] == [
+        "charge_objective", "energy_objective", "leakage_protocol"
+    ]
+    assert all("Consigne professeur" not in response for _, response in provider.calls)
+    assert all("Réponse pour" in response for _, response in provider.calls)
+    assert all("<!--" not in response and "###" not in response for _, response in provider.calls)
+
+
+def test_empty_semantic_response_does_not_call_provider(tmp_path: Path) -> None:
+    provider = _RecordingSemanticProvider()
+    result = _analyze_first_order(
+        tmp_path,
+        _first_order_notebook(empty_marker="energy-objective-response"),
+        provider,
+    )
+    assert len(provider.calls) == 2
+    empty = next(item for item in result.semantic_response_analyses if item.contract.production_id == "energy_objective")
+    assert empty.result is not None
+    assert "EMPTY_RESPONSE" in empty.result.diagnostics
+
+
+def test_semantic_provider_absent_is_controlled(tmp_path: Path) -> None:
+    result = _analyze_first_order(tmp_path, _first_order_notebook())
+    assert len(result.semantic_response_analyses) == 3
+    assert all(
+        item.result is not None and "SEMANTIC_PROVIDER_UNAVAILABLE" in item.result.diagnostics
+        for item in result.semantic_response_analyses
+    )
+
+
+def test_semantic_provider_exception_is_controlled(tmp_path: Path) -> None:
+    result = _analyze_first_order(tmp_path, _first_order_notebook(), _RecordingSemanticProvider(raises=True))
+    assert all(
+        item.result is not None
+        and any(diagnostic.startswith("SEMANTIC_PROVIDER_ERROR:") for diagnostic in item.result.diagnostics)
+        for item in result.semantic_response_analyses
+    )
+
+
+def test_missing_or_ambiguous_semantic_binding_never_calls_provider(tmp_path: Path) -> None:
+    provider = _RecordingSemanticProvider()
+    result = _analyze_first_order(
+        tmp_path,
+        _first_order_notebook(
+            omit_marker="energy-objective-response",
+            duplicate_marker="leakage-protocol-response",
+        ),
+        provider,
+    )
+    assert len(provider.calls) == 1
+    missing = next(item for item in result.semantic_response_analyses if item.contract.production_id == "energy_objective")
+    ambiguous = next(item for item in result.semantic_response_analyses if item.contract.production_id == "leakage_protocol")
+    assert missing.binding_absent and missing.result is None
+    assert ambiguous.binding_ambiguous and ambiguous.result is None
+
+
+def test_historical_project_keeps_empty_semantic_analysis_collection(tmp_path: Path) -> None:
+    path = tmp_path / "snell-copy.ipynb"
+    notebook = _notebook()
+    nbformat.write(notebook, path)
+    result = SnellsLawsCopyAnalyzer().analyze(
+        NotebookCopySource("snell-copy", "Copie Snell", path),
+        project=snells_laws_teacher_project(),
+        semantic_provider=_RecordingSemanticProvider(),
+    )
+    assert result.semantic_response_analyses == ()
+
+
+def test_semantic_analysis_preserves_notebook_source_read_only(tmp_path: Path) -> None:
+    notebook = _first_order_notebook()
+    path = tmp_path / "readonly.ipynb"
+    nbformat.write(notebook, path)
+    before = path.read_bytes()
+    _analyze_first_order(tmp_path, notebook, _RecordingSemanticProvider())
+    assert path.read_bytes() == before
+
+
+def test_semantic_analysis_rejects_resolution_from_other_production(tmp_path: Path) -> None:
+    result = _analyze_first_order(tmp_path, _first_order_notebook(), _RecordingSemanticProvider())
+    first, second = result.semantic_response_analyses[:2]
+    with pytest.raises(ValueError, match="production du contrat"):
+        SemanticResponseAnalysis(first.contract, second.resolutions, None, None)
+
+
+def test_semantic_analysis_resolved_binding_requires_response_and_result(tmp_path: Path) -> None:
+    result = _analyze_first_order(tmp_path, _first_order_notebook(), _RecordingSemanticProvider())
+    item = result.semantic_response_analyses[0]
+    with pytest.raises(ValueError, match="réponse étudiante"):
+        SemanticResponseAnalysis(item.contract, item.resolutions, None, None)
+
+
+def test_semantic_analysis_absent_binding_rejects_result(tmp_path: Path) -> None:
+    result = _analyze_first_order(
+        tmp_path,
+        _first_order_notebook(omit_marker="charge-objective-response"),
+        _RecordingSemanticProvider(),
+    )
+    item = result.semantic_response_analyses[0]
+    valid_result = SemanticAnalysisResult(
+        item.contract.production_id,
+        "",
+        tuple(
+            SemanticCriterionResult(
+                criterion.criterion_id,
+                SemanticCriterionStatus.NOT_FOUND,
+                "",
+            )
+            for criterion in item.contract.criteria
+        ),
+        diagnostics=("EMPTY_RESPONSE",),
+    )
+    with pytest.raises(ValueError, match="absente ou ambiguë"):
+        SemanticResponseAnalysis(item.contract, item.resolutions, None, valid_result)
+
+
+def test_semantic_analysis_ambiguous_binding_rejects_response(tmp_path: Path) -> None:
+    result = _analyze_first_order(
+        tmp_path,
+        _first_order_notebook(duplicate_marker="charge-objective-response"),
+        _RecordingSemanticProvider(),
+    )
+    item = result.semantic_response_analyses[0]
+    with pytest.raises(ValueError, match="absente ou ambiguë"):
+        SemanticResponseAnalysis(item.contract, item.resolutions, "réponse", None)
+
+
+def test_semantic_analysis_accepts_empty_response_result(tmp_path: Path) -> None:
+    result = _analyze_first_order(
+        tmp_path,
+        _first_order_notebook(empty_marker="charge-objective-response"),
+        _RecordingSemanticProvider(),
+    )
+    item = result.semantic_response_analyses[0]
+    accepted = SemanticResponseAnalysis(item.contract, item.resolutions, "", item.result)
+    assert accepted.result is not None
+    assert "EMPTY_RESPONSE" in accepted.result.diagnostics
 
 
 def test_synthetic_copy_runs_all_declared_chains_read_only(tmp_path: Path) -> None:

@@ -65,6 +65,13 @@ from tpstudio.projects import (
     snells_laws_teacher_project,
     validate_teacher_project_configuration,
 )
+from tpstudio.semantic_analysis import (
+    ExpectedSemanticResponse,
+    SemanticAnalysisProvider,
+    SemanticAnalysisResult,
+    analyze_semantic_response,
+    extract_student_response,
+)
 from tpstudio.protocol import (
     ProtocolDiagnostic,
     ProtocolEvaluation,
@@ -242,6 +249,77 @@ class CopyProductionResolutionSet:
         return bool(self.ambiguous)
 
 
+@dataclass(frozen=True, slots=True)
+class SemanticResponseAnalysis:
+    """Auditable result of one configured semantic production analysis."""
+
+    contract: ExpectedSemanticResponse
+    resolutions: tuple[NotebookBindingResolution, ...]
+    student_response: str | None
+    result: SemanticAnalysisResult | None
+
+    def __post_init__(self) -> None:
+        if type(self.contract) is not ExpectedSemanticResponse:
+            raise TypeError("Le contrat sémantique est invalide.")
+        resolutions = tuple(self.resolutions)
+        if any(type(item) is not NotebookBindingResolution for item in resolutions):
+            raise TypeError("Les résolutions sémantiques sont invalides.")
+        if any(
+            item.production_id != self.contract.production_id
+            for item in resolutions
+        ):
+            raise ValueError(
+                "Les résolutions sémantiques doivent cibler la production du contrat."
+            )
+        object.__setattr__(self, "resolutions", resolutions)
+        if self.student_response is not None and not isinstance(self.student_response, str):
+            raise TypeError("La réponse étudiante doit être textuelle ou None.")
+        binding_resolved = len(resolutions) == 1 and resolutions[0].resolved
+        if binding_resolved:
+            if self.student_response is None:
+                raise ValueError(
+                    "Une résolution sémantique réussie exige une réponse étudiante."
+                )
+            if self.result is None:
+                raise ValueError(
+                    "Une résolution sémantique réussie exige un résultat d'analyse."
+                )
+        elif self.student_response is not None or self.result is not None:
+            raise ValueError(
+                "Une résolution sémantique absente ou ambiguë ne peut pas porter "
+                "de réponse ni de résultat."
+            )
+        if self.result is not None:
+            if type(self.result) is not SemanticAnalysisResult:
+                raise TypeError("Le résultat sémantique est invalide.")
+            if self.result.production_id != self.contract.production_id:
+                raise ValueError("Le résultat sémantique cible une production différente.")
+
+    @property
+    def resolution(self) -> NotebookBindingResolution | None:
+        """The single notebook resolution when binding analysis was possible."""
+
+        return self.resolutions[0] if len(self.resolutions) == 1 else None
+
+    @property
+    def binding_resolved(self) -> bool:
+        return len(self.resolutions) == 1 and self.resolutions[0].resolved
+
+    @property
+    def binding_ambiguous(self) -> bool:
+        return len(self.resolutions) > 1 or any(
+            item.status in (
+                NotebookBindingResolutionStatus.CELL_AMBIGUOUS,
+                NotebookBindingResolutionStatus.TEXT_MARKER_AMBIGUOUS,
+            )
+            for item in self.resolutions
+        )
+
+    @property
+    def binding_absent(self) -> bool:
+        return not self.binding_resolved and not self.binding_ambiguous
+
+
 class RelationObservationStatus(str, Enum):
     OBSERVED = "observed"
     MISSING = "missing"
@@ -317,6 +395,7 @@ class CopyAnalysisResult:
     regression_plot_consistency_analyses: tuple[RegressionPlotConsistencyAnalysis, ...] = ()
     derived_quantity_evaluations: tuple[DerivedQuantityRuntimeEvaluation, ...] = ()
     quantity_series_evaluations: tuple[ObservedQuantitySeries, ...] = ()
+    semantic_response_analyses: tuple[SemanticResponseAnalysis, ...] = ()
 
     def __post_init__(self) -> None:
         detections = tuple(self.observed_value_detections)
@@ -336,6 +415,10 @@ class CopyAnalysisResult:
         object.__setattr__(self, "regression_plot_consistency_analyses", tuple(self.regression_plot_consistency_analyses))
         object.__setattr__(self, "derived_quantity_evaluations", tuple(self.derived_quantity_evaluations))
         object.__setattr__(self, "quantity_series_evaluations", tuple(self.quantity_series_evaluations))
+        semantic_analyses = tuple(self.semantic_response_analyses)
+        if any(type(item) is not SemanticResponseAnalysis for item in semantic_analyses):
+            raise TypeError("Les analyses sémantiques sont invalides.")
+        object.__setattr__(self, "semantic_response_analyses", semantic_analyses)
         expected_ids = tuple(item.production_id for item in self.quantity_evaluations)
         observed_ids = tuple(item.production.id for item in detections)
         if observed_ids != expected_ids:
@@ -658,12 +741,35 @@ def evaluate_configured_derived_quantities(
     )
 
 
+def analyze_configured_semantic_responses(
+    project: TeacherProjectConfiguration,
+    resolution_set: NotebookBindingResolutionSet,
+    provider: SemanticAnalysisProvider | None = None,
+) -> tuple[SemanticResponseAnalysis, ...]:
+    """Analyze configured semantic responses from resolved notebook text only."""
+
+    analyses: list[SemanticResponseAnalysis] = []
+    for contract in project.semantic_response_expectations:
+        resolutions = resolution_set.for_production(contract.production_id)
+        if len(resolutions) != 1 or not resolutions[0].resolved:
+            analyses.append(SemanticResponseAnalysis(contract, resolutions, None, None))
+            continue
+        resolution = resolutions[0]
+        student_response = extract_student_response(resolution.text)
+        result = analyze_semantic_response(contract, student_response, provider)
+        analyses.append(
+            SemanticResponseAnalysis(contract, resolutions, student_response, result)
+        )
+    return tuple(analyses)
+
+
 class SnellsLawsCopyAnalyzer:
     def analyze(
         self,
         source: NotebookCopySource,
         project: TeacherProjectConfiguration | None = None,
         options: CopyAnalysisOptions | None = None,
+        semantic_provider: SemanticAnalysisProvider | None = None,
     ) -> CopyAnalysisResult:
         project = snells_laws_teacher_project() if project is None else project
         options = CopyAnalysisOptions() if options is None else options
@@ -678,6 +784,9 @@ class SnellsLawsCopyAnalyzer:
         technical = inspect_notebook(notebook)
         resolution_set = resolve_notebook_bindings(
             notebook, project.notebook_binding_plan
+        )
+        semantic_response_analyses = analyze_configured_semantic_responses(
+            project, resolution_set, semantic_provider
         )
         protocol_evaluations = evaluate_protocol_cells(
             notebook, tuple(project.experimental_manipulations)
@@ -844,23 +953,26 @@ class SnellsLawsCopyAnalyzer:
                 relation.id, status, resolved[0] if len(resolved) == 1 else None
             ))
 
-        conclusion_candidates = resolution_set.for_production("final_conclusion")
-        resolved_conclusions = tuple(item for item in conclusion_candidates if item.resolved)
-        has_ambiguous_conclusion = any(
-            item.status in (
-                NotebookBindingResolutionStatus.CELL_AMBIGUOUS,
-                NotebookBindingResolutionStatus.TEXT_MARKER_AMBIGUOUS,
+        if project.scientific_production_plan.get("final_conclusion") is None:
+            conclusion = FinalConclusionObservation("final_conclusion", (), None, None)
+        else:
+            conclusion_candidates = resolution_set.for_production("final_conclusion")
+            resolved_conclusions = tuple(item for item in conclusion_candidates if item.resolved)
+            has_ambiguous_conclusion = any(
+                item.status in (
+                    NotebookBindingResolutionStatus.CELL_AMBIGUOUS,
+                    NotebookBindingResolutionStatus.TEXT_MARKER_AMBIGUOUS,
+                )
+                for item in conclusion_candidates
             )
-            for item in conclusion_candidates
-        )
-        conclusion_source = (
-            resolved_conclusions[0]
-            if len(resolved_conclusions) == 1 and not has_ambiguous_conclusion else None
-        )
-        conclusion = FinalConclusionObservation(
-            "final_conclusion", conclusion_candidates, conclusion_source,
-            conclusion_source.text if conclusion_source else None,
-        )
+            conclusion_source = (
+                resolved_conclusions[0]
+                if len(resolved_conclusions) == 1 and not has_ambiguous_conclusion else None
+            )
+            conclusion = FinalConclusionObservation(
+                "final_conclusion", conclusion_candidates, conclusion_source,
+                conclusion_source.text if conclusion_source else None,
+            )
         uncertainty_evaluations = tuple(
             item.assessment.uncertainty_evaluation
             for item in quantity_set
@@ -946,6 +1058,7 @@ class SnellsLawsCopyAnalyzer:
             regression_plot_consistency_analyses=regression_plot_consistency_analyses,
             derived_quantity_evaluations=derived_quantity_evaluations,
             quantity_series_evaluations=tuple(quantity_series_evaluations),
+            semantic_response_analyses=semantic_response_analyses,
         )
 
 
@@ -954,6 +1067,7 @@ def analyze_copy(
     *,
     project: TeacherProjectConfiguration | None = None,
     options: CopyAnalysisOptions | None = None,
+    semantic_provider: SemanticAnalysisProvider | None = None,
 ) -> CopyAnalysisDispatchResult:
     """Analyze one copy with an explicit or safely auto-resolved project."""
     if type(source) is not NotebookCopySource:
@@ -976,7 +1090,14 @@ def analyze_copy(
             return CopyAnalysisDispatchResult(
                 resolution, ProjectSelectionProvenance.EXPLICIT, None, readiness
             )
-        analysis = SnellsLawsCopyAnalyzer().analyze(source, project=project, options=options)
+        analyzer = SnellsLawsCopyAnalyzer()
+        if semantic_provider is None:
+            analysis = analyzer.analyze(source, project=project, options=options)
+        else:
+            analysis = analyzer.analyze(
+                source, project=project, options=options,
+                semantic_provider=semantic_provider,
+            )
         return CopyAnalysisDispatchResult(
             resolution, ProjectSelectionProvenance.EXPLICIT, analysis, readiness
         )
@@ -994,17 +1115,31 @@ def analyze_copy(
         return CopyAnalysisDispatchResult(
             resolution, ProjectSelectionProvenance.AUTO_RESOLVED, None, readiness
         )
-    analysis = SnellsLawsCopyAnalyzer().analyze(source, project=resolved_project, options=options)
+    analyzer = SnellsLawsCopyAnalyzer()
+    if semantic_provider is None:
+        analysis = analyzer.analyze(source, project=resolved_project, options=options)
+    else:
+        analysis = analyzer.analyze(
+            source, project=resolved_project, options=options,
+            semantic_provider=semantic_provider,
+        )
     return CopyAnalysisDispatchResult(
         resolution, ProjectSelectionProvenance.AUTO_RESOLVED, analysis, readiness
     )
 
 
-def analyze_snells_laws_copy(source, project=None, options=None) -> CopyAnalysisResult:
+def analyze_snells_laws_copy(
+    source, project=None, options=None, semantic_provider=None
+) -> CopyAnalysisResult:
     checked_project = snells_laws_teacher_project() if project is None else project
     if assess_analysis_readiness(checked_project) is AnalysisReadiness.NOT_READY:
         raise ValueError("La configuration fournie n'est pas prête pour l'analyse Snell legacy.")
-    return SnellsLawsCopyAnalyzer().analyze(source, checked_project, options)
+    analyzer = SnellsLawsCopyAnalyzer()
+    if semantic_provider is None:
+        return analyzer.analyze(source, checked_project, options)
+    return analyzer.analyze(
+        source, checked_project, options, semantic_provider=semantic_provider
+    )
 
 
 def summarize_copy_analysis(result: CopyAnalysisResult) -> str:
