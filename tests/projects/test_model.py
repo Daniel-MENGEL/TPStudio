@@ -10,6 +10,7 @@ from tpstudio.projects import (
     NotebookReference,
     NotebookReferenceRole,
     TeacherProjectIdentity,
+    thin_lens_teacher_project,
     snells_laws_teacher_project,
     summarize_teacher_project_configuration,
     validate_teacher_project_configuration,
@@ -106,7 +107,7 @@ def test_configuration_rejects_foreign_expectation_set() -> None:
 
 
 def test_semantic_expectations_default_to_empty_for_legacy_projects() -> None:
-    assert snells_laws_teacher_project().semantic_response_expectations == ()
+    assert thin_lens_teacher_project().semantic_response_expectations == ()
 
 
 def test_semantic_expectation_rejects_duplicate_production_ids() -> None:

@@ -36,6 +36,7 @@ def _module():
 
 def test_default_plan_uses_only_existing_student_feedback(tmp_path) -> None:
     module = _module(); result = module._analyze(tmp_path, module._notebook(omit_marker="# Méthode statistique"))
+    result = replace(result, semantic_response_analyses=())
     plan = build_annotation_plan(result)
     assert all(item.audience is FeedbackAudience.STUDENT for item in plan.annotations)
     assert all(item.kind is AnnotationKind.FEEDBACK for item in plan.annotations)

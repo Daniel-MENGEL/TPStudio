@@ -92,7 +92,7 @@ def test_each_graph_carries_its_own_expectation(tmp_path) -> None:
 
 def test_generic_graph_transport_does_not_drop_other_report_sections(tmp_path) -> None:
     report = build_teacher_copy_report(_result(tmp_path))
-    assert len(report.productions) == 19
+    assert len(report.productions) == 25
     assert len(report.quantities) == 7
     assert len(report.relations) == 5
     assert len(report.comparisons) == 2

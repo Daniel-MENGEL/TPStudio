@@ -13,7 +13,7 @@ def _module():
 
 def test_favorable_synthetic_copy_has_complete_structured_report(tmp_path) -> None:
     module = _module(); report = build_teacher_copy_report(module._analyze(tmp_path))
-    assert len(report.productions) == 19 and len(report.comparisons) == 2
+    assert len(report.productions) == 25 and len(report.comparisons) == 2
     assert report.final_conclusion.production_id == "final_conclusion"
     assert report.comparisons[-1].comparison_id != report.final_conclusion.production_id
 

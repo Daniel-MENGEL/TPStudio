@@ -322,9 +322,10 @@ def test_not_ready_preview_empty_response_is_controlled_without_provider_call(tm
 
 
 def test_historical_project_without_contract_keeps_empty_preview(tmp_path: Path):
+    project = replace(snells_laws_teacher_project(), semantic_response_expectations=())
     result = analyze_copy(
         _source(tmp_path, _snell_notebook(), "snell.ipynb"),
-        project=snells_laws_teacher_project(),
+        project=project,
         semantic_provider=_RecordingSemanticProvider(),
     )
     assert result.semantic_response_analyses == ()

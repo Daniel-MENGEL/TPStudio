@@ -1,4 +1,4 @@
-"""Explicit teacher configuration for the improved Snell-Descartes notebook."""
+"""Teacher configuration for the aligned Snell-Descartes notebook."""
 
 from __future__ import annotations
 
@@ -42,6 +42,12 @@ from tpstudio.feedback import (
     french_quantity_feedback_catalog,
 )
 from tpstudio.protocol import snells_laws_manipulations
+from tpstudio.semantic_analysis import (
+    ExpectedSemanticResponse,
+    SemanticCriterion,
+    SemanticCriterionImportance,
+    SemanticRole,
+)
 
 from .model import (
     ExpectedGraphModel,
@@ -74,6 +80,9 @@ def _production_plan() -> ScientificProductionPlan:
         "snells-laws-productions",
         "Productions scientifiques — Lois de Snell-Descartes",
         (
+            _spec("snell_objectives", "Objectifs du TP", interpretation, (semantic,)),
+            _spec("setup_understanding", "Compréhension du montage", interpretation, (semantic,)),
+            _spec("critical_protocol", "Protocole de mesure de l'angle limite", interpretation, (semantic,)),
             _spec("critical_angle", "Angle limite", quantity, (structural, derived)),
             _spec("incidence_angle", "Angle d'incidence", quantity, (structural, derived)),
             _spec("refraction_angle", "Angle de réfraction", quantity, (structural, derived)),
@@ -88,6 +97,7 @@ def _production_plan() -> ScientificProductionPlan:
                 "direct_result_comment", "Commentaire du premier résultat",
                 interpretation, (semantic,), ("direct_index",),
             ),
+            _spec("single_pair_protocol", "Protocole avec un couple d'angles", interpretation, (semantic,)),
             _spec(
                 "geometric_index", "Indice — couple d'angles", quantity,
                 (structural, derived),
@@ -97,6 +107,7 @@ def _production_plan() -> ScientificProductionPlan:
                 "geometric_result_comment", "Commentaire du deuxième résultat",
                 interpretation, (semantic,), ("geometric_index",),
             ),
+            _spec("series_protocol", "Protocole de la série angulaire", interpretation, (semantic,)),
             _spec(
                 "regression_graph", "Graphe de vérification de la réfraction",
                 ScientificProductionKind.PLOT, (structural, derived),
@@ -105,6 +116,10 @@ def _production_plan() -> ScientificProductionPlan:
             _spec(
                 "regression_slope", "Pente de la régression", quantity,
                 (structural, derived), ("regression_graph",),
+            ),
+            _spec(
+                "graph_analysis", "Analyse du graphe", interpretation,
+                (semantic,), ("regression_graph", "regression_slope"),
             ),
             _spec(
                 "slope_index_relation", "Relation entre pente et indice", relation,
@@ -155,18 +170,24 @@ def _marker_binding(identifier, production_id, marker):
 
 def _binding_plan(plan: ScientificProductionPlan) -> NotebookBindingPlan:
     bindings = (
+        _marker_binding("objectives-response", "snell_objectives", "snell-objectives-response"),
+        _marker_binding("setup-response", "setup_understanding", "snell-setup-response"),
+        _marker_binding("critical-protocol-response", "critical_protocol", "critical-protocol-response"),
         _marker_binding("critical-angle-cell", "critical_angle", "il= ? #degrés"),
         _marker_binding("incidence-angle-cell", "incidence_angle", "i1 = ?*np.pi/180"),
         _marker_binding("refraction-angle-cell", "refraction_angle", "i2 = ?*np.pi/180"),
         _marker_binding("snell-section", "snell_relation", "# Vérification de la loi de la réfraction"),
         _marker_binding("direct-relation-cell", "direct_index_relation", "n=1/np.sin(il)"),
         _marker_binding("geometric-relation-cell", "geometric_index_relation", "n=np.sin(i1)/np.sin(i2)"),
-        _marker_binding("direct-index-response", "direct_index", "### Résultat — Première méthode de mesure de l'indice"),
+        _marker_binding("direct-index-cell", "direct_index", "### Résultat — Première méthode de mesure de l'indice"),
         _marker_binding("direct-comment-response", "direct_result_comment", "### Résultat — Première méthode de mesure de l'indice"),
-        _marker_binding("geometric-index-response", "geometric_index", "### Résultat — Seconde méthode de mesure de l'indice"),
+        _marker_binding("single-pair-protocol-response", "single_pair_protocol", "single-pair-protocol-response"),
+        _marker_binding("geometric-index-cell", "geometric_index", "### Résultat — Seconde méthode de mesure de l'indice"),
         _marker_binding("geometric-comment-response", "geometric_result_comment", "### Résultat — Seconde méthode de mesure de l'indice"),
+        _marker_binding("series-protocol-response", "series_protocol", "series-protocol-response"),
         _marker_binding("regression-graph-cell", "regression_graph", "# Vérification graphique"),
         _marker_binding("regression-slope-cell", "regression_slope", "# Affichage de l'équation de la droite"),
+        _marker_binding("graph-analysis-response", "graph_analysis", "graph-analysis-response"),
         _marker_binding("slope-index-cell", "slope_index_relation", "# Affichage de l'équation de la droite"),
         _marker_binding("regression-index-cell", "regression_index", "# Méthode statistique"),
         _marker_binding("normalized-error-cell", "normalized_error_relation", "En=abs(n.mean()-n0)"),
@@ -177,7 +198,7 @@ def _binding_plan(plan: ScientificProductionPlan) -> NotebookBindingPlan:
     )
     return NotebookBindingPlan(
         "snells-laws-bindings",
-        "Associations de l'énoncé amélioré",
+        "Associations du notebook aligné",
         plan,
         bindings,
         "Une absence ou une ambiguïté reste un échec explicite de résolution.",
@@ -366,6 +387,95 @@ def _justifications(comparisons):
     )
 
 
+def _criterion(identifier, description, importance=SemanticCriterionImportance.REQUIRED):
+    return SemanticCriterion(identifier, description, importance)
+
+
+SEMANTIC_RESPONSE_EXPECTATIONS = (
+    ExpectedSemanticResponse(
+        "snell_objectives", SemanticRole.OBJECTIVE,
+        (
+            _criterion("verify_snell_laws", "Identifier la vérification expérimentale des lois de Snell-Descartes comme objectif."),
+            _criterion("determine_refractive_index", "Identifier la détermination de l'indice du Plexiglas comme objectif."),
+            _criterion("state_refraction_relation", "Mobiliser la relation n1 sin(i1) = n2 sin(i2)."),
+        ),
+    ),
+    ExpectedSemanticResponse(
+        "setup_understanding", SemanticRole.PROTOCOL,
+        (
+            _criterion("own_annotated_diagram", "Présenter le schéma personnel annoté du montage et des rayons utiles."),
+            _criterion("center_normal_incidence", "Expliquer que le passage par le centre impose une incidence normale sur la face courbe."),
+            _criterion("simplified_angle_reading", "Relier cette géométrie à l'absence de déviation sur la face courbe et à une lecture plus simple des angles."),
+        ),
+    ),
+    ExpectedSemanticResponse(
+        "critical_protocol", SemanticRole.PROTOCOL,
+        (
+            _criterion("identify_total_reflection_onset", "Décrire le repérage expérimental de l'apparition de la réflexion totale."),
+            _criterion("measure_critical_angle", "Prévoir la mesure de l'angle limite sur le disque gradué."),
+            _criterion("estimate_critical_uncertainty", "Justifier une incertitude-type tenant compte de la transition et de la lecture angulaire."),
+        ),
+    ),
+    ExpectedSemanticResponse(
+        "direct_result_comment", SemanticRole.INTERPRETATION,
+        (
+            _criterion("direct_result_with_uncertainty", "Donner l'indice obtenu par angle limite avec son incertitude et un arrondi cohérent."),
+            _criterion("direct_precision_comment", "Commenter la précision et les difficultés expérimentales de la méthode."),
+            _criterion("documented_value_comparison", "Discuter la cohérence avec une valeur documentée du Plexiglas.", SemanticCriterionImportance.RECOMMENDED),
+        ),
+    ),
+    ExpectedSemanticResponse(
+        "single_pair_protocol", SemanticRole.PROTOCOL,
+        (
+            _criterion("measure_angle_pair", "Prévoir la mesure d'un couple angle d'incidence et angle de réfraction."),
+            _criterion("justify_incidence_choice", "Justifier un angle d'incidence ni trop petit ni associé à une lecture ambiguë."),
+            _criterion("justify_pair_uncertainties", "Justifier les incertitudes-types affectées aux deux angles."),
+        ),
+    ),
+    ExpectedSemanticResponse(
+        "geometric_result_comment", SemanticRole.INTERPRETATION,
+        (
+            _criterion("geometric_result_with_uncertainty", "Donner l'indice obtenu avec un couple d'angles et son incertitude."),
+            _criterion("first_normalized_error", "Utiliser l'écart normalisé et le seuil 2 pour comparer les deux premières méthodes."),
+            _criterion("plausible_difference_cause", "Proposer une cause expérimentale plausible en cas d'écart.", SemanticCriterionImportance.RECOMMENDED),
+        ),
+    ),
+    ExpectedSemanticResponse(
+        "series_protocol", SemanticRole.PROTOCOL,
+        (
+            _criterion("at_least_fifteen_pairs", "Prévoir au moins quinze couples d'angles."),
+            _criterion("span_useful_angle_range", "Répartir les mesures sur une plage angulaire exploitable."),
+            _criterion("consistent_geometry_and_reading", "Conserver la géométrie et les conventions de lecture pendant la série."),
+        ),
+    ),
+    ExpectedSemanticResponse(
+        "graph_analysis", SemanticRole.INTERPRETATION,
+        (
+            _criterion("assess_point_alignment", "Examiner l'alignement des points expérimentaux."),
+            _criterion("assess_zero_intercept", "Examiner si l'ordonnée à l'origine est compatible avec zéro."),
+            _criterion("conclude_snell_verified", "Conclure sur la vérification de la loi dans le domaine étudié."),
+            _criterion("interpret_slope_as_index", "Interpréter la pente comme l'indice du Plexiglas."),
+        ),
+    ),
+    ExpectedSemanticResponse(
+        "compare_geometric_regression", SemanticRole.INTERPRETATION,
+        (
+            _criterion("series_result_with_uncertainty", "Donner l'indice moyen de la série avec son incertitude."),
+            _criterion("series_precision_comment", "Commenter la précision de cette détermination."),
+            _criterion("second_normalized_error", "Utiliser l'écart normalisé et le seuil 2 pour comparer aux résultats précédents."),
+        ),
+    ),
+    ExpectedSemanticResponse(
+        "final_conclusion", SemanticRole.CONCLUSION,
+        (
+            _criterion("answer_both_objectives", "Répondre explicitement à la vérification de la loi et à la détermination de l'indice."),
+            _criterion("summarize_results_and_choice", "Rappeler les résultats et justifier la valeur finalement retenue."),
+            _criterion("limitations_and_improvement", "Présenter les principales limites expérimentales et une amélioration possible."),
+        ),
+    ),
+)
+
+
 def snells_laws_teacher_project() -> TeacherProjectConfiguration:
     """Build a fresh deterministic configuration without any file access."""
 
@@ -375,10 +485,10 @@ def snells_laws_teacher_project() -> TeacherProjectConfiguration:
     configuration = TeacherProjectConfiguration(
         TeacherProjectIdentity(
             "snells-laws-mvp", "Lois de Snell-Descartes", "Physique", "CPGE",
-            "A71b", "fr", "Configuration professeur du support amélioré.",
+            "A79e1", "fr", "Configuration professeur du notebook aligné avec l'énoncé TeX.",
         ),
         (
-            NotebookReference("statement", NotebookReferenceRole.STATEMENT, "Lois-de-Snell-Descartes-ameliore.ipynb"),
+            NotebookReference("statement", NotebookReferenceRole.STATEMENT, "Lois-de-Snell-Descartes.ipynb"),
             NotebookReference("correction", NotebookReferenceRole.CORRECTION, "Correction-Lois-de-Snell-Descartes.ipynb"),
             NotebookReference("control-copy", NotebookReferenceRole.CONTROL_COPY, "Fausse-copie-etudiant-Lois-de-Snell-Descartes-ameliore.ipynb"),
         ),
@@ -400,6 +510,7 @@ def snells_laws_teacher_project() -> TeacherProjectConfiguration:
         ),
         "Configuration déclarative ; aucune copie, évaluation ou note n'est stockée.",
         experimental_manipulations=snells_laws_manipulations(),
+        semantic_response_expectations=SEMANTIC_RESPONSE_EXPECTATIONS,
     )
     validate_teacher_project_configuration(configuration)
     return configuration

@@ -30,6 +30,7 @@ def _result(tmp_path):
 
 
 def _plan_with_report(monkeypatch, result, report, *, reason=None):
+    result = replace(result, semantic_response_analyses=())
     monkeypatch.setattr(planning, "build_teacher_copy_report", lambda _result: report)
     if reason is not None:
         monkeypatch.setattr(

@@ -29,8 +29,8 @@ def test_conforming_synthetic_statement_resolves_all_bindings(tmp_path: Path) ->
     _synthetic_statement(path)
     result = validate_snells_laws_notebooks(path)
     assert result.all_resolved
-    assert len(result.resolved_binding_ids) == 19
-    assert len(result.covered_production_ids) == 19
+    assert len(result.resolved_binding_ids) == 25
+    assert len(result.covered_production_ids) == 25
 
 
 def test_missing_section_is_reported(tmp_path: Path) -> None:
@@ -87,4 +87,4 @@ def test_report_is_deterministic_and_contains_counts_only(tmp_path: Path) -> Non
     _synthetic_statement(path)
     result = validate_snells_laws_notebooks(path)
     assert format_snells_laws_validation_report(result) == format_snells_laws_validation_report(result)
-    assert "Bindings résolus : 19" in format_snells_laws_validation_report(result)
+    assert "Bindings résolus : 25" in format_snells_laws_validation_report(result)

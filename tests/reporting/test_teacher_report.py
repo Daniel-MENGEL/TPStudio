@@ -28,7 +28,7 @@ def test_builder_projects_analysis_without_path_or_mutation(tmp_path) -> None:
     assert type(report) is TeacherCopyReport
     assert report.project_id == "snells-laws-mvp"
     assert report.source_id == "synthetic"
-    assert len(report.productions) == 19
+    assert len(report.productions) == 25
     assert str(tmp_path) not in repr(report)
     assert not hasattr(report, "score") and not hasattr(report, "grade")
     with pytest.raises(FrozenInstanceError): report.title = "x"

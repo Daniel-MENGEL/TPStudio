@@ -321,7 +321,7 @@ def test_missing_or_ambiguous_semantic_binding_never_calls_provider(tmp_path: Pa
     assert ambiguous.binding_ambiguous and ambiguous.result is None
 
 
-def test_historical_project_keeps_empty_semantic_analysis_collection(tmp_path: Path) -> None:
+def test_snell_project_runs_semantic_contracts_in_declared_order(tmp_path: Path) -> None:
     path = tmp_path / "snell-copy.ipynb"
     notebook = _notebook()
     nbformat.write(notebook, path)
@@ -330,7 +330,19 @@ def test_historical_project_keeps_empty_semantic_analysis_collection(tmp_path: P
         project=snells_laws_teacher_project(),
         semantic_provider=_RecordingSemanticProvider(),
     )
-    assert result.semantic_response_analyses == ()
+    assert tuple(item.contract.production_id for item in result.semantic_response_analyses) == (
+        "snell_objectives",
+        "setup_understanding",
+        "critical_protocol",
+        "direct_result_comment",
+        "single_pair_protocol",
+        "geometric_result_comment",
+        "series_protocol",
+        "graph_analysis",
+        "compare_geometric_regression",
+        "final_conclusion",
+    )
+    assert all(item.result is not None for item in result.semantic_response_analyses)
 
 
 def test_semantic_analysis_preserves_notebook_source_read_only(tmp_path: Path) -> None:
@@ -405,8 +417,8 @@ def test_semantic_analysis_accepts_empty_response_result(tmp_path: Path) -> None
 
 def test_synthetic_copy_runs_all_declared_chains_read_only(tmp_path: Path) -> None:
     result = _analyze(tmp_path)
-    assert len(result.production_resolutions) == 19
-    assert len(result.production_resolutions.resolved) == 19
+    assert len(result.production_resolutions) == 25
+    assert len(result.production_resolutions.resolved) == 25
     assert len(result.quantity_comparison_evaluations) == 2
     assert len(result.student_normalized_error_evaluations) == 2
     assert len(result.comparison_interpretation_evaluations) == 2

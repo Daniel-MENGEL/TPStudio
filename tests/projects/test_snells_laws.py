@@ -10,6 +10,7 @@ from tpstudio.expectations import (
 )
 from tpstudio.projects import ExpectedGraphModel, snells_laws_teacher_project
 from tpstudio.reasoning import extract_comparison_justification
+from tpstudio.semantic_analysis import SemanticRole
 
 
 def test_factory_is_deterministic_and_returns_fresh_equal_objects() -> None:
@@ -25,9 +26,9 @@ def test_project_identity_and_notebook_references_are_public_safe() -> None:
     assert project.identity.project_id == "snells-laws-mvp"
     assert project.identity.title == "Lois de Snell-Descartes"
     assert project.identity.level == "CPGE"
-    assert project.identity.version == "A71b"
+    assert project.identity.version == "A79e1"
     assert [item.expected_filename for item in project.notebook_references] == [
-        "Lois-de-Snell-Descartes-ameliore.ipynb",
+        "Lois-de-Snell-Descartes.ipynb",
         "Correction-Lois-de-Snell-Descartes.ipynb",
         "Fausse-copie-etudiant-Lois-de-Snell-Descartes-ameliore.ipynb",
     ]
@@ -38,7 +39,7 @@ def test_production_and_comparison_ids_are_unique_and_semantic() -> None:
     project = snells_laws_teacher_project()
     production_ids = tuple(item.id for item in project.scientific_production_plan)
     comparison_ids = tuple(item.production_id for item in project.quantity_comparison_expectation_set)
-    assert len(production_ids) == len(set(production_ids)) == 19
+    assert len(production_ids) == len(set(production_ids)) == 25
     assert comparison_ids == ("compare_direct_geometric", "compare_geometric_regression")
     assert all("cell" not in identifier and "partie" not in identifier for identifier in production_ids)
 
@@ -46,8 +47,26 @@ def test_production_and_comparison_ids_are_unique_and_semantic() -> None:
 def test_bindings_use_source_markers_and_share_the_project_plan() -> None:
     project = snells_laws_teacher_project()
     assert project.notebook_binding_plan.production_plan is project.scientific_production_plan
-    assert len(project.notebook_binding_plan.bindings) == 19
+    assert len(project.notebook_binding_plan.bindings) == 25
     assert all(binding.selector.kind.value == "source_marker" for binding in project.notebook_binding_plan)
+
+
+def test_semantic_contracts_follow_the_aligned_notebook_order() -> None:
+    project = snells_laws_teacher_project()
+    assert tuple(item.production_id for item in project.semantic_response_expectations) == (
+        "snell_objectives",
+        "setup_understanding",
+        "critical_protocol",
+        "direct_result_comment",
+        "single_pair_protocol",
+        "geometric_result_comment",
+        "series_protocol",
+        "graph_analysis",
+        "compare_geometric_regression",
+        "final_conclusion",
+    )
+    assert project.semantic_response_expectations[0].semantic_role is SemanticRole.OBJECTIVE
+    assert project.semantic_response_expectations[-1].semantic_role is SemanticRole.CONCLUSION
 
 
 def test_quantities_declare_angles_and_dimensionless_results() -> None:
