@@ -164,13 +164,23 @@ SEMANTIC_RESPONSE_EXPECTATIONS = (
         ),
     ),
     ExpectedSemanticResponse(
-        "hooke_interpretation",
+        "hooke_law_validation",
         SemanticRole.INTERPRETATION,
         (
             _criterion(
-                "affine_model_assessment",
-                "Juger la compatibilité des points avec un modèle affine à partir du graphe et des incertitudes.",
+                "points_aligned_with_uncertainties",
+                "Constater que les points expérimentaux sont alignés, compte tenu de leurs incertitudes.",
             ),
+            _criterion(
+                "hooke_law_verified_in_studied_range",
+                "Conclure que la loi de Hooke est vérifiée dans le domaine étudié.",
+            ),
+        ),
+    ),
+    ExpectedSemanticResponse(
+        "hooke_interpretation",
+        SemanticRole.INTERPRETATION,
+        (
             _criterion(
                 "slope_and_intercept_meaning",
                 "Interpréter la pente a = g/k et l'ordonnée à l'origine comme la longueur à vide.",
@@ -240,9 +250,10 @@ def _plan() -> ScientificProductionPlan:
             ScientificProductionSpec("hooke_objective", "Objectif de l'étude statique", interpretation, (semantic,)),
             ScientificProductionSpec("hooke_protocol", "Protocole de l'étude statique", interpretation, (semantic,)),
             ScientificProductionSpec("hooke_graph", "Graphe statique de la loi de Hooke", ScientificProductionKind.PLOT, (structural,)),
+            ScientificProductionSpec("hooke_law_validation", "Conclusion sur la vérification de la loi de Hooke", interpretation, (semantic,), ("hooke_graph",)),
             ScientificProductionSpec("hooke_slope", "Pente de l'ajustement affine", quantity, (structural,)),
             ScientificProductionSpec("static_stiffness", "Raideur statique", quantity, (structural,)),
-            ScientificProductionSpec("hooke_interpretation", "Interprétation de l'étude statique", interpretation, (semantic,), ("hooke_graph", "static_stiffness")),
+            ScientificProductionSpec("hooke_interpretation", "Détermination statique de la raideur", interpretation, (semantic,), ("hooke_law_validation", "static_stiffness")),
             ScientificProductionSpec("stiffness_comparison", "Comparaison des deux raideurs", ScientificProductionKind.COMPARISON, (structural,), ("dynamic_stiffness", "static_stiffness")),
             ScientificProductionSpec("stiffness_comparison_interpretation", "Interprétation de la comparaison", interpretation, (semantic,), ("stiffness_comparison",)),
             ScientificProductionSpec("final_conclusion", "Conclusion générale", interpretation, (semantic,), ("stiffness_comparison_interpretation",)),
@@ -263,12 +274,12 @@ def _marker(identifier: str, production_id: str, marker: str) -> CellProductionB
 
 def _bindings(plan: ScientificProductionPlan) -> NotebookBindingPlan:
     bindings = (
-        _marker("period-result-cell", "period_result", 'print(f"T = {T_mean:.5f} s")'),
-        _marker("dynamic-stiffness-cell", "dynamic_stiffness", 'print(f"k dynamique = {k_dyn:.4f} ± {u_k_dyn:.4f} N/m")'),
+        _marker("period-result-cell", "period_result", "T_mean = T_values.mean()"),
+        _marker("dynamic-stiffness-cell", "dynamic_stiffness", "k_dyn = k_dyn_samples.mean()"),
         _marker("hooke-graph-cell", "hooke_graph", 'plt.title("Vérification statique de la loi de Hooke")'),
-        _marker("hooke-slope-cell", "hooke_slope", 'print(f"a = {a_fit:.5f} m/kg")'),
-        _marker("static-stiffness-cell", "static_stiffness", 'print(f"k statique  = {k_static:.4f} ± {u_k_static:.4f} N/m")'),
-        _marker("stiffness-comparison-cell", "stiffness_comparison", 'print(f"Écart normalisé = {E_N:.3f}")'),
+        _marker("hooke-slope-cell", "hooke_slope", "a_fit, l0_fit = np.polyfit(m_static, l_static, 1)"),
+        _marker("static-stiffness-cell", "static_stiffness", "k_static = k_static_samples.mean()"),
+        _marker("stiffness-comparison-cell", "stiffness_comparison", "E_N = abs(k_dyn - k_static)"),
         *(
             _marker(
                 f"{contract.production_id.replace('_', '-')}-response",
@@ -284,6 +295,7 @@ def _bindings(plan: ScientificProductionPlan) -> NotebookBindingPlan:
                     "dynamic-stiffness-interpretation-response",
                     "hooke-objective-response",
                     "hooke-protocol-response",
+                    "hooke-law-validation-response",
                     "hooke-interpretation-response",
                     "stiffness-comparison-response",
                     "final-conclusion-response",
@@ -368,7 +380,7 @@ def first_lab_measurements_teacher_project() -> TeacherProjectConfiguration:
             "Premières mesures au labo",
             "Physique",
             "Lycée",
-            "A79d1",
+            "A79d2",
             "fr",
             "TP-cours guidé sur les incertitudes, la loi de Hooke et la rédaction scientifique.",
         ),

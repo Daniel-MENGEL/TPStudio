@@ -10,7 +10,7 @@ from tpstudio.semantic_analysis import SemanticRole, extract_student_response
 def test_project_identity_references_and_readiness():
     project = first_lab_measurements_teacher_project()
     assert project.identity.project_id == "first-lab-measurements"
-    assert project.identity.version == "A79d1"
+    assert project.identity.version == "A79d2"
     assert project.statement_reference.expected_filename == "Premieres-mesures-au-labo.ipynb"
     assert project.correction_reference is not None
     assert project.correction_reference.expected_filename == "Premieres-mesures-au-labo-Correction.ipynb"
@@ -46,6 +46,7 @@ def test_semantic_contracts_follow_notebook_order():
         "dynamic_stiffness_interpretation",
         "hooke_objective",
         "hooke_protocol",
+        "hooke_law_validation",
         "hooke_interpretation",
         "stiffness_comparison_interpretation",
         "final_conclusion",
@@ -59,6 +60,7 @@ def test_semantic_contracts_follow_notebook_order():
         SemanticRole.PROTOCOL,
         SemanticRole.INTERPRETATION,
         SemanticRole.INTERPRETATION,
+        SemanticRole.INTERPRETATION,
         SemanticRole.CONCLUSION,
     )
 
@@ -66,12 +68,12 @@ def test_semantic_contracts_follow_notebook_order():
 def test_all_bindings_resolve_once_on_aligned_markers():
     project = first_lab_measurements_teacher_project()
     cells = [
-        nbformat.v4.new_code_cell('print(f"T = {T_mean:.5f} s")'),
-        nbformat.v4.new_code_cell('print(f"k dynamique = {k_dyn:.4f} ± {u_k_dyn:.4f} N/m")'),
+        nbformat.v4.new_code_cell("T_mean = T_values.mean()"),
+        nbformat.v4.new_code_cell("k_dyn = k_dyn_samples.mean()"),
         nbformat.v4.new_code_cell('plt.title("Vérification statique de la loi de Hooke")'),
-        nbformat.v4.new_code_cell('print(f"a = {a_fit:.5f} m/kg")'),
-        nbformat.v4.new_code_cell('print(f"k statique  = {k_static:.4f} ± {u_k_static:.4f} N/m")'),
-        nbformat.v4.new_code_cell('print(f"Écart normalisé = {E_N:.3f}")'),
+        nbformat.v4.new_code_cell("a_fit, l0_fit = np.polyfit(m_static, l_static, 1)"),
+        nbformat.v4.new_code_cell("k_static = k_static_samples.mean()"),
+        nbformat.v4.new_code_cell("E_N = abs(k_dyn - k_static)"),
     ]
     for marker in (
         "dynamic-objective-response",
@@ -80,6 +82,7 @@ def test_all_bindings_resolve_once_on_aligned_markers():
         "dynamic-stiffness-interpretation-response",
         "hooke-objective-response",
         "hooke-protocol-response",
+        "hooke-law-validation-response",
         "hooke-interpretation-response",
         "stiffness-comparison-response",
         "final-conclusion-response",
