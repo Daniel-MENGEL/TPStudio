@@ -331,7 +331,6 @@ def test_snell_project_runs_semantic_contracts_in_declared_order(tmp_path: Path)
         semantic_provider=_RecordingSemanticProvider(),
     )
     assert tuple(item.contract.production_id for item in result.semantic_response_analyses) == (
-        "snell_objectives",
         "setup_understanding",
         "critical_protocol",
         "direct_result_comment",
@@ -417,8 +416,8 @@ def test_semantic_analysis_accepts_empty_response_result(tmp_path: Path) -> None
 
 def test_synthetic_copy_runs_all_declared_chains_read_only(tmp_path: Path) -> None:
     result = _analyze(tmp_path)
-    assert len(result.production_resolutions) == 25
-    assert len(result.production_resolutions.resolved) == 25
+    assert len(result.production_resolutions) == 24
+    assert len(result.production_resolutions.resolved) == 24
     assert len(result.quantity_comparison_evaluations) == 2
     assert len(result.student_normalized_error_evaluations) == 2
     assert len(result.comparison_interpretation_evaluations) == 2

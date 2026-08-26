@@ -39,7 +39,7 @@ def test_production_and_comparison_ids_are_unique_and_semantic() -> None:
     project = snells_laws_teacher_project()
     production_ids = tuple(item.id for item in project.scientific_production_plan)
     comparison_ids = tuple(item.production_id for item in project.quantity_comparison_expectation_set)
-    assert len(production_ids) == len(set(production_ids)) == 25
+    assert len(production_ids) == len(set(production_ids)) == 24
     assert comparison_ids == ("compare_direct_geometric", "compare_geometric_regression")
     assert all("cell" not in identifier and "partie" not in identifier for identifier in production_ids)
 
@@ -47,14 +47,13 @@ def test_production_and_comparison_ids_are_unique_and_semantic() -> None:
 def test_bindings_use_source_markers_and_share_the_project_plan() -> None:
     project = snells_laws_teacher_project()
     assert project.notebook_binding_plan.production_plan is project.scientific_production_plan
-    assert len(project.notebook_binding_plan.bindings) == 25
+    assert len(project.notebook_binding_plan.bindings) == 24
     assert all(binding.selector.kind.value == "source_marker" for binding in project.notebook_binding_plan)
 
 
 def test_semantic_contracts_follow_the_aligned_notebook_order() -> None:
     project = snells_laws_teacher_project()
     assert tuple(item.production_id for item in project.semantic_response_expectations) == (
-        "snell_objectives",
         "setup_understanding",
         "critical_protocol",
         "direct_result_comment",
@@ -65,7 +64,7 @@ def test_semantic_contracts_follow_the_aligned_notebook_order() -> None:
         "compare_geometric_regression",
         "final_conclusion",
     )
-    assert project.semantic_response_expectations[0].semantic_role is SemanticRole.OBJECTIVE
+    assert project.semantic_response_expectations[0].semantic_role is SemanticRole.PROTOCOL
     assert project.semantic_response_expectations[-1].semantic_role is SemanticRole.CONCLUSION
 
 

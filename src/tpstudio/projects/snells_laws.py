@@ -80,7 +80,6 @@ def _production_plan() -> ScientificProductionPlan:
         "snells-laws-productions",
         "Productions scientifiques — Lois de Snell-Descartes",
         (
-            _spec("snell_objectives", "Objectifs du TP", interpretation, (semantic,)),
             _spec("setup_understanding", "Compréhension du montage", interpretation, (semantic,)),
             _spec("critical_protocol", "Protocole de mesure de l'angle limite", interpretation, (semantic,)),
             _spec("critical_angle", "Angle limite", quantity, (structural, derived)),
@@ -170,7 +169,6 @@ def _marker_binding(identifier, production_id, marker):
 
 def _binding_plan(plan: ScientificProductionPlan) -> NotebookBindingPlan:
     bindings = (
-        _marker_binding("objectives-response", "snell_objectives", "snell-objectives-response"),
         _marker_binding("setup-response", "setup_understanding", "snell-setup-response"),
         _marker_binding("critical-protocol-response", "critical_protocol", "critical-protocol-response"),
         _marker_binding("critical-angle-cell", "critical_angle", "il= ? #degrés"),
@@ -393,14 +391,6 @@ def _criterion(identifier, description, importance=SemanticCriterionImportance.R
 
 SEMANTIC_RESPONSE_EXPECTATIONS = (
     ExpectedSemanticResponse(
-        "snell_objectives", SemanticRole.OBJECTIVE,
-        (
-            _criterion("verify_snell_laws", "Identifier la vérification expérimentale des lois de Snell-Descartes comme objectif."),
-            _criterion("determine_refractive_index", "Identifier la détermination de l'indice du Plexiglas comme objectif."),
-            _criterion("state_refraction_relation", "Mobiliser la relation n1 sin(i1) = n2 sin(i2)."),
-        ),
-    ),
-    ExpectedSemanticResponse(
         "setup_understanding", SemanticRole.PROTOCOL,
         (
             _criterion("own_annotated_diagram", "Présenter le schéma personnel annoté du montage et des rayons utiles."),
@@ -411,6 +401,7 @@ SEMANTIC_RESPONSE_EXPECTATIONS = (
     ExpectedSemanticResponse(
         "critical_protocol", SemanticRole.PROTOCOL,
         (
+            _criterion("critical_method_objective", "Identifier la détermination de l'indice à partir de l'angle limite comme objectif de la manipulation."),
             _criterion("identify_total_reflection_onset", "Décrire le repérage expérimental de l'apparition de la réflexion totale."),
             _criterion("measure_critical_angle", "Prévoir la mesure de l'angle limite sur le disque gradué."),
             _criterion("estimate_critical_uncertainty", "Justifier une incertitude-type tenant compte de la transition et de la lecture angulaire."),
@@ -427,6 +418,7 @@ SEMANTIC_RESPONSE_EXPECTATIONS = (
     ExpectedSemanticResponse(
         "single_pair_protocol", SemanticRole.PROTOCOL,
         (
+            _criterion("single_pair_objective", "Identifier la détermination de l'indice avec un couple d'angles et sa comparaison à la première méthode comme objectifs."),
             _criterion("measure_angle_pair", "Prévoir la mesure d'un couple angle d'incidence et angle de réfraction."),
             _criterion("justify_incidence_choice", "Justifier un angle d'incidence ni trop petit ni associé à une lecture ambiguë."),
             _criterion("justify_pair_uncertainties", "Justifier les incertitudes-types affectées aux deux angles."),
@@ -443,6 +435,7 @@ SEMANTIC_RESPONSE_EXPECTATIONS = (
     ExpectedSemanticResponse(
         "series_protocol", SemanticRole.PROTOCOL,
         (
+            _criterion("series_method_objective", "Identifier la vérification graphique de la loi et une nouvelle détermination de l'indice comme objectifs."),
             _criterion("at_least_fifteen_pairs", "Prévoir au moins quinze couples d'angles."),
             _criterion("span_useful_angle_range", "Répartir les mesures sur une plage angulaire exploitable."),
             _criterion("consistent_geometry_and_reading", "Conserver la géométrie et les conventions de lecture pendant la série."),
