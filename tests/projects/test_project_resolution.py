@@ -16,7 +16,13 @@ def notebook(*markdown: str, code: tuple[str, ...] = ()):
 
 
 def test_registry_contains_projects_in_stable_order() -> None:
-    assert known_project_ids() == ("snells-laws-mvp", "thin-lens-image", "torsion-pendulum", "first-order-transient")
+    assert known_project_ids() == (
+        "snells-laws-mvp",
+        "thin-lens-image",
+        "torsion-pendulum",
+        "first-order-transient",
+        "first-lab-measurements",
+    )
 
 
 def test_snell_clear_resolves_high() -> None:
@@ -36,6 +42,17 @@ def test_thin_lens_clear_resolves_high() -> None:
         "Relation de conjugaison : 1/OA' - 1/OA = 1/f'.",
     ))
     assert result.selected_project_id == "thin-lens-image"
+    assert result.candidates[0].confidence is ProjectResolutionConfidence.HIGH
+
+
+def test_first_lab_measurements_clear_resolves_high() -> None:
+    result = resolve_project_for_copy(notebook(
+        "# Premières mesures au labo",
+        "Déterminer les raideurs dynamique et statique du ressort.",
+        code=("k_dyn_samples = ...\nk_static_samples = ...",),
+    ))
+    assert result.selected_project_id == "first-lab-measurements"
+    assert result.requires_teacher_choice is False
     assert result.candidates[0].confidence is ProjectResolutionConfidence.HIGH
 
 

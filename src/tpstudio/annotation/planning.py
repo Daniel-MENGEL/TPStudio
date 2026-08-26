@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 import hashlib
 
 from tpstudio.feedback import FeedbackAudience
 from tpstudio.orchestration import CopyAnalysisResult, ProductionResolutionStatus
 from tpstudio.reporting import (
     TeacherCopyReport, TeacherReportSeverity, build_teacher_copy_report,
+)
+from tpstudio.semantic_analysis import (
+    SemanticCriterionImportance,
+    SemanticCriterionStatus,
 )
 
 from .model import (
@@ -88,12 +93,19 @@ def _semantic_ids(result: CopyAnalysisResult, production_id, comparison_id):
     return production_id, comparison_id
 
 
-def _feedback_severity(priority: str) -> TeacherReportSeverity:
+def _feedback_severity(
+    priority: str,
+    source_key: str = "",
+) -> TeacherReportSeverity:
+    if ":quantity_missing:" in source_key:
+        return TeacherReportSeverity.BLOCKING
     priority = getattr(priority, "value", priority)
     return {
         "high": TeacherReportSeverity.IMPORTANT,
         "normal": TeacherReportSeverity.ATTENTION,
-        "low": TeacherReportSeverity.INFO,
+        # A low-priority corrective remark is still something to check. INFO
+        # is reserved for genuinely positive or neutral information.
+        "low": TeacherReportSeverity.ATTENTION,
     }.get(str(priority).lower(), TeacherReportSeverity.ATTENTION)
 
 
@@ -121,6 +133,58 @@ def _summary_candidate(item, production, reason: SkippedAnnotationReason):
 def _production_summary_severity(report: TeacherCopyReport, production_id: str) -> TeacherReportSeverity:
     priorities = tuple(item for item in report.priorities if item.production_id == production_id)
     return priorities[0].severity if priorities else TeacherReportSeverity.ATTENTION
+
+
+def _semantic_annotation_message(analysis) -> tuple[str, TeacherReportSeverity]:
+    """Render a concise student-facing projection of one semantic result."""
+
+    result = analysis.result
+    contract = analysis.contract
+    assert result is not None
+    statuses = {item.criterion_id: item.status for item in result.criterion_results}
+    satisfied = [
+        item.description for item in contract.criteria
+        if statuses.get(item.criterion_id) is SemanticCriterionStatus.SATISFIED
+    ]
+    required_to_improve = [
+        item.description for item in contract.criteria
+        if item.importance is SemanticCriterionImportance.REQUIRED
+        and statuses.get(item.criterion_id) in {
+            SemanticCriterionStatus.PARTIAL,
+            SemanticCriterionStatus.NOT_FOUND,
+            SemanticCriterionStatus.UNCERTAIN,
+        }
+    ]
+    recommended_to_improve = [
+        item.description for item in contract.criteria
+        if item.importance is SemanticCriterionImportance.RECOMMENDED
+        and statuses.get(item.criterion_id) in {
+            SemanticCriterionStatus.PARTIAL,
+            SemanticCriterionStatus.NOT_FOUND,
+            SemanticCriterionStatus.UNCERTAIN,
+        }
+    ]
+    parts = ["Analyse sémantique assistée de cette réponse."]
+    if satisfied:
+        parts.append("Points repérés : " + " ; ".join(satisfied) + ".")
+    if required_to_improve:
+        parts.append("À compléter ou préciser : " + " ; ".join(required_to_improve) + ".")
+    if recommended_to_improve:
+        parts.append("Piste d'amélioration : " + " ; ".join(recommended_to_improve) + ".")
+    if result.contradictions:
+        parts.append(
+            "Contradictions à examiner : " + " ; ".join(result.contradictions) + "."
+        )
+    if not (satisfied or required_to_improve or recommended_to_improve or result.contradictions):
+        parts.append("Aucun élément suffisamment fiable n'a pu être dégagé.")
+    severity = (
+        TeacherReportSeverity.IMPORTANT
+        if result.contradictions
+        else TeacherReportSeverity.ATTENTION
+        if required_to_improve or recommended_to_improve
+        else TeacherReportSeverity.INFO
+    )
+    return "\n\n".join(parts), severity
 
 
 def build_annotation_plan(
@@ -170,7 +234,8 @@ def build_annotation_plan(
                 annotations.append(NotebookAnnotation(
                     annotation_id, AnnotationKind.FEEDBACK, item.audience, item.text,
                     (item.source_key,), None, None,
-                    item.cell_index, placement, _feedback_severity(item.priority),
+                    item.cell_index, placement,
+                    _feedback_severity(item.priority, item.source_key),
                 ))
                 continue
         else:
@@ -188,7 +253,7 @@ def build_annotation_plan(
                         annotation_id=f"tpstudio:student-summary:{len(summary_annotations):04d}",
                         audience=item.audience,
                         message=_summary_message(item, production, reason),
-                        severity=_feedback_severity(item.priority),
+                        severity=_feedback_severity(item.priority, item.source_key),
                         reason=reason,
                         production_id=production_id,
                         comparison_id=comparison_id,
@@ -207,7 +272,8 @@ def build_annotation_plan(
         annotations.append(NotebookAnnotation(
             annotation_id, AnnotationKind.FEEDBACK, item.audience, item.text,
             (item.source_key,), production_id, comparison_id,
-            resolution.cell.index, placement, _feedback_severity(item.priority),
+            resolution.cell.index, placement,
+            _feedback_severity(item.priority, item.source_key),
         ))
 
     # Some mandatory productions have a report status but no separate student
@@ -239,6 +305,75 @@ def build_annotation_plan(
             source_ids=(f"production:{production.production_id}",),
         ))
         summarized_productions.add(production.production_id)
+
+    # Semantic analyses are auditable analysis results rather than legacy
+    # feedback catalog items. Project them locally only when an actual provider
+    # result exists; empty responses and technical provider diagnostics never
+    # become student comments.
+    for semantic_analysis in result.semantic_response_analyses:
+        semantic_result = semantic_analysis.result
+        if semantic_result is None:
+            continue
+        empty_response = "EMPTY_RESPONSE" in semantic_result.diagnostics
+        if semantic_result.diagnostics and not empty_response:
+            continue
+        source_key = f"semantic:{semantic_analysis.contract.production_id}"
+        if not options.include_student_feedback:
+            skipped.append(SkippedAnnotation(
+                source_key,
+                AnnotationKind.FEEDBACK,
+                FeedbackAudience.STUDENT,
+                SkippedAnnotationReason.AUDIENCE_EXCLUDED,
+                semantic_analysis.contract.production_id,
+            ))
+            continue
+        resolution = semantic_analysis.resolution
+        if resolution is None or resolution.cell is None:
+            skipped.append(SkippedAnnotation(
+                source_key,
+                AnnotationKind.FEEDBACK,
+                FeedbackAudience.STUDENT,
+                SkippedAnnotationReason.TARGET_UNAVAILABLE,
+                semantic_analysis.contract.production_id,
+            ))
+            continue
+        placement = _placement(resolution.cell.cell_type, options)
+        if placement is None:
+            skipped.append(SkippedAnnotation(
+                source_key,
+                AnnotationKind.FEEDBACK,
+                FeedbackAudience.STUDENT,
+                SkippedAnnotationReason.PLACEMENT_DISABLED,
+                semantic_analysis.contract.production_id,
+            ))
+            continue
+        if empty_response:
+            message = "La réponse attendue n’a pas été fournie."
+            severity = TeacherReportSeverity.BLOCKING
+        else:
+            message, severity = _semantic_annotation_message(semantic_analysis)
+        metadata = (("origin", "semantic_analysis"), *semantic_result.provider_metadata)
+        annotation_id = _stable_id(
+            result.project_id,
+            result.source_id,
+            AnnotationKind.FEEDBACK,
+            FeedbackAudience.STUDENT,
+            source_key,
+            resolution.cell.index,
+        )
+        annotations.append(NotebookAnnotation(
+            annotation_id,
+            AnnotationKind.FEEDBACK,
+            FeedbackAudience.STUDENT,
+            message,
+            (source_key,),
+            semantic_analysis.contract.production_id,
+            None,
+            resolution.cell.index,
+            placement,
+            severity,
+            metadata,
+        ))
 
     if options.include_diagnostics:
         for item in report.diagnostics:
@@ -272,6 +407,40 @@ def build_annotation_plan(
     for item in annotations:
         unique.setdefault(item.annotation_id, item)
     annotations = list(unique.values())
+    annotations.sort(key=lambda item: (
+        item.target_cell_index, _SEVERITY_ORDER[item.severity],
+        item.kind.value, item.source_ids, item.annotation_id,
+    ))
+    # Two productions can share one result cell. Merge identical localized
+    # messages instead of displaying the same corrective block twice.
+    consolidated: dict[tuple, NotebookAnnotation] = {}
+    for item in annotations:
+        key = (
+            item.target_cell_index,
+            item.kind,
+            item.audience,
+            item.message,
+            item.placement,
+            item.severity,
+            item.metadata,
+        )
+        previous = consolidated.get(key)
+        if previous is None:
+            consolidated[key] = item
+            continue
+        consolidated[key] = replace(
+            previous,
+            source_ids=tuple(dict.fromkeys((*previous.source_ids, *item.source_ids))),
+            production_id=(
+                previous.production_id
+                if previous.production_id == item.production_id else None
+            ),
+            comparison_id=(
+                previous.comparison_id
+                if previous.comparison_id == item.comparison_id else None
+            ),
+        )
+    annotations = list(consolidated.values())
     annotations.sort(key=lambda item: (
         item.target_cell_index, _SEVERITY_ORDER[item.severity],
         item.kind.value, item.source_ids, item.annotation_id,

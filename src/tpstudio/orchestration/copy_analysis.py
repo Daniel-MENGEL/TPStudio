@@ -69,7 +69,7 @@ from tpstudio.semantic_analysis import (
     ExpectedSemanticResponse,
     SemanticAnalysisProvider,
     SemanticAnalysisResult,
-    analyze_semantic_response,
+    analyze_semantic_responses,
     extract_student_response,
 )
 from tpstudio.protocol import (
@@ -785,19 +785,36 @@ def analyze_configured_semantic_responses(
 ) -> tuple[SemanticResponseAnalysis, ...]:
     """Analyze configured semantic responses from resolved notebook text only."""
 
-    analyses: list[SemanticResponseAnalysis] = []
+    pending: list[
+        tuple[ExpectedSemanticResponse, tuple[NotebookBindingResolution, ...], str]
+    ] = []
+    unresolved: dict[str, SemanticResponseAnalysis] = {}
     for contract in project.semantic_response_expectations:
         resolutions = resolution_set.for_production(contract.production_id)
         if len(resolutions) != 1 or not resolutions[0].resolved:
-            analyses.append(SemanticResponseAnalysis(contract, resolutions, None, None))
+            unresolved[contract.production_id] = SemanticResponseAnalysis(
+                contract, resolutions, None, None
+            )
             continue
         resolution = resolutions[0]
         student_response = extract_student_response(resolution.text)
-        result = analyze_semantic_response(contract, student_response, provider)
-        analyses.append(
-            SemanticResponseAnalysis(contract, resolutions, student_response, result)
+        pending.append((contract, resolutions, student_response))
+    results = analyze_semantic_responses(
+        tuple((contract, response) for contract, _, response in pending), provider
+    )
+    completed = {
+        contract.production_id: SemanticResponseAnalysis(
+            contract, resolutions, response, result
         )
-    return tuple(analyses)
+        for (contract, resolutions, response), result in zip(
+            pending, results, strict=True
+        )
+    }
+    return tuple(
+        unresolved.get(contract.production_id)
+        or completed[contract.production_id]
+        for contract in project.semantic_response_expectations
+    )
 
 
 def analyze_semantic_preview(

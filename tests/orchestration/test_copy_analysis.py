@@ -31,7 +31,7 @@ from tpstudio.semantic_analysis import (
     SemanticCriterionStatus,
 )
 from tpstudio.projects.model import GraphExpectationSet
-from tpstudio.reporting import build_teacher_copy_report
+from tpstudio.reporting import TeacherReportSeverity, build_teacher_copy_report
 from tpstudio.protocol import (
     ProtocolStatus,
     prepare_notebook_with_protocol_cells,
@@ -166,6 +166,35 @@ class _RecordingSemanticProvider:
         )
 
 
+class _BatchRecordingSemanticProvider:
+    def __init__(self):
+        self.batch_calls = []
+
+    def analyze(self, contract, student_response):
+        raise AssertionError("Le chemin unitaire ne doit pas être utilisé.")
+
+    def analyze_many(self, requests):
+        requests = tuple(requests)
+        self.batch_calls.append(requests)
+        return tuple(
+            SemanticAnalysisResult(
+                contract.production_id,
+                student_response,
+                tuple(
+                    SemanticCriterionResult(
+                        criterion.criterion_id,
+                        SemanticCriterionStatus.SATISFIED,
+                        "élément repéré",
+                    )
+                    for criterion in contract.criteria
+                ),
+                confidence="high",
+                provider_metadata=(("model", "batch-test"),),
+            )
+            for contract, student_response in requests
+        )
+
+
 def _analyze_first_order(tmp_path: Path, notebook, provider=None):
     path = tmp_path / "first-order-copy.ipynb"
     nbformat.write(notebook, path)
@@ -193,6 +222,42 @@ def test_first_order_semantic_contracts_run_in_project_order_and_extract_answer_
     assert all("<!--" not in response and "###" not in response for _, response in provider.calls)
 
 
+def test_batch_semantic_provider_runs_once_and_preserves_contract_order(tmp_path: Path) -> None:
+    provider = _BatchRecordingSemanticProvider()
+    result = _analyze_first_order(tmp_path, _first_order_notebook(), provider)
+    assert len(provider.batch_calls) == 1
+    assert [contract.production_id for contract, _ in provider.batch_calls[0]] == [
+        "charge_objective", "energy_objective", "leakage_protocol",
+    ]
+    assert [item.contract.production_id for item in result.semantic_response_analyses] == [
+        "charge_objective", "energy_objective", "leakage_protocol",
+    ]
+
+
+def test_semantic_results_become_local_student_annotations(tmp_path: Path) -> None:
+    result = _analyze_first_order(
+        tmp_path, _first_order_notebook(), _BatchRecordingSemanticProvider()
+    )
+    annotations = tuple(
+        item for item in build_annotation_plan(result).annotations
+        if item.source_ids[0].startswith("semantic:")
+    )
+    assert len(annotations) == 3
+    assert all(item.audience is FeedbackAudience.STUDENT for item in annotations)
+    assert all("Points repérés" in item.message for item in annotations)
+    assert {item.production_id for item in annotations} == {
+        "charge_objective", "energy_objective", "leakage_protocol",
+    }
+
+
+def test_semantic_provider_diagnostics_do_not_become_student_annotations(tmp_path: Path) -> None:
+    result = _analyze_first_order(tmp_path, _first_order_notebook(), None)
+    assert not any(
+        item.source_ids[0].startswith("semantic:")
+        for item in build_annotation_plan(result).annotations
+    )
+
+
 def test_empty_semantic_response_does_not_call_provider(tmp_path: Path) -> None:
     provider = _RecordingSemanticProvider()
     result = _analyze_first_order(
@@ -204,6 +269,21 @@ def test_empty_semantic_response_does_not_call_provider(tmp_path: Path) -> None:
     empty = next(item for item in result.semantic_response_analyses if item.contract.production_id == "energy_objective")
     assert empty.result is not None
     assert "EMPTY_RESPONSE" in empty.result.diagnostics
+
+
+def test_empty_semantic_response_becomes_blocking_student_annotation(tmp_path: Path) -> None:
+    result = _analyze_first_order(
+        tmp_path,
+        _first_order_notebook(empty_marker="energy-objective-response"),
+        _BatchRecordingSemanticProvider(),
+    )
+    annotations = tuple(
+        item for item in build_annotation_plan(result).annotations
+        if item.source_ids == ("semantic:energy_objective",)
+    )
+    assert len(annotations) == 1
+    assert annotations[0].severity is TeacherReportSeverity.BLOCKING
+    assert annotations[0].message == "La réponse attendue n’a pas été fournie."
 
 
 def test_semantic_provider_absent_is_controlled(tmp_path: Path) -> None:

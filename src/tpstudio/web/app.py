@@ -600,7 +600,13 @@ def main() -> None:
                     )
                     set_export_results(
                         st.session_state,
-                        export_active_copies(dispatch_result, overrides, output_dir=output_dir, options=export_options),
+                        export_active_copies(
+                            dispatch_result,
+                            overrides,
+                            output_dir=output_dir,
+                            options=export_options,
+                            selected_copies=copies,
+                        ),
                     )
                     st.rerun()
                 except (TypeError, ValueError, OSError) as exc:

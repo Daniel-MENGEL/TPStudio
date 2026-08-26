@@ -12,7 +12,19 @@ from tpstudio.feedback import FeedbackAudience
 from tpstudio.reporting import TeacherReportSeverity, build_teacher_copy_report
 from tpstudio.annotation.model import SkippedAnnotationReason
 from tpstudio.annotation.planning import _placement
-from tpstudio.annotation.planning import _comparison_target, _stable_id, _target
+from tpstudio.annotation.planning import (
+    _comparison_target, _feedback_severity, _semantic_annotation_message,
+    _stable_id, _target,
+)
+from tpstudio.semantic_analysis import (
+    ExpectedSemanticResponse,
+    SemanticAnalysisResult,
+    SemanticCriterion,
+    SemanticCriterionImportance,
+    SemanticCriterionResult,
+    SemanticCriterionStatus,
+    SemanticRole,
+)
 
 
 def _module():
@@ -29,6 +41,55 @@ def test_default_plan_uses_only_existing_student_feedback(tmp_path) -> None:
     assert all(item.kind is AnnotationKind.FEEDBACK for item in plan.annotations)
     texts = {item.text for item in result.feedback if item.audience is FeedbackAudience.STUDENT}
     assert all(item.message in texts for item in plan.annotations)
+
+
+def test_low_priority_corrective_feedback_is_attention_not_positive_info() -> None:
+    assert _feedback_severity("low") is TeacherReportSeverity.ATTENTION
+
+
+def test_missing_quantity_feedback_is_blocking_red_severity() -> None:
+    assert _feedback_severity(
+        "high",
+        "feedback:QuantityFeedbackItem:quantity_missing:student:value:-:-:-",
+    ) is TeacherReportSeverity.BLOCKING
+
+
+def test_recommended_semantic_improvement_is_attention_not_positive_info() -> None:
+    contract = ExpectedSemanticResponse(
+        "interpretation",
+        SemanticRole.INTERPRETATION,
+        (
+            SemanticCriterion(
+                "required",
+                "Élément requis",
+                SemanticCriterionImportance.REQUIRED,
+            ),
+            SemanticCriterion(
+                "recommended",
+                "Élément recommandé",
+                SemanticCriterionImportance.RECOMMENDED,
+            ),
+        ),
+    )
+    result = SemanticAnalysisResult(
+        "interpretation",
+        "Réponse étudiante.",
+        (
+            SemanticCriterionResult(
+                "required", SemanticCriterionStatus.SATISFIED, "Présent."
+            ),
+            SemanticCriterionResult(
+                "recommended", SemanticCriterionStatus.NOT_FOUND, ""
+            ),
+        ),
+    )
+
+    message, severity = _semantic_annotation_message(
+        type("Analysis", (), {"contract": contract, "result": result})()
+    )
+
+    assert "Piste d'amélioration" in message
+    assert severity is TeacherReportSeverity.ATTENTION
 
 
 def test_teacher_and_diagnostics_require_explicit_options(tmp_path) -> None:

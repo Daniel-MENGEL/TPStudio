@@ -17,6 +17,7 @@ from .snells_laws import snells_laws_teacher_project
 from .thin_lens import thin_lens_teacher_project
 from .torsion_pendulum import torsion_pendulum_teacher_project
 from .first_order_transient import first_order_transient_teacher_project
+from .first_lab_measurements import first_lab_measurements_teacher_project
 
 
 class ProjectResolutionConfidence(str, Enum):
@@ -221,11 +222,26 @@ def _first_order_transient_evidence(markdown: str, code: str, filename: str) -> 
     return tuple(evidence)
 
 
+def _first_lab_measurements_evidence(markdown: str, code: str, filename: str) -> tuple[ProjectResolutionEvidence, ...]:
+    evidence: list[ProjectResolutionEvidence] = []
+    text = f"{markdown}\n{code}".casefold()
+    if re.search(r"premi[eè]res\s+mesures\s+au\s+labo", text):
+        evidence.append(_evidence("title", "Titre Premières mesures au labo", ProjectEvidenceCategory.STRONG))
+    if "dynamic-objective-response" in text and "hooke-objective-response" in text:
+        evidence.append(_evidence("markers", "Marqueurs des études dynamique et statique", ProjectEvidenceCategory.MEDIUM))
+    if "k_dyn_samples" in code and "k_static_samples" in code:
+        evidence.append(_evidence("code", "Calculs des raideurs dynamique et statique", ProjectEvidenceCategory.MEDIUM))
+    if re.search(r"premieres[- ]mesures[- ]au[- ]labo", filename.casefold()):
+        evidence.append(_evidence("filename", filename, ProjectEvidenceCategory.WEAK))
+    return tuple(evidence)
+
+
 PROJECT_DESCRIPTORS: tuple[ProjectDescriptor, ...] = (
     ProjectDescriptor("snells-laws-mvp", "Lois de Snell-Descartes", snells_laws_teacher_project, _snell_evidence),
     ProjectDescriptor("thin-lens-image", "Formation d'une image par une lentille mince", thin_lens_teacher_project, _thin_lens_evidence),
     ProjectDescriptor("torsion-pendulum", "Pendule de torsion", torsion_pendulum_teacher_project, _torsion_pendulum_evidence),
     ProjectDescriptor("first-order-transient", "Système du premier ordre en régime transitoire", first_order_transient_teacher_project, _first_order_transient_evidence),
+    ProjectDescriptor("first-lab-measurements", "Premières mesures au labo", first_lab_measurements_teacher_project, _first_lab_measurements_evidence),
 )
 
 

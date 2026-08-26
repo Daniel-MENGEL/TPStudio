@@ -5,7 +5,7 @@ import importlib.util
 import pytest
 
 from tpstudio.batch import BatchCopyResult, BatchCopySource, BatchCopyStatus, BatchOptions, BatchRunResult, build_batch_plan
-from tpstudio.web.execution import can_run_batch, run_prepared_batch
+from tpstudio.web.execution import can_run_batch, export_output_stem, run_prepared_batch
 from tpstudio.web.identity import CopyIdentity, CopyIdentityStatus, StudentIdentity
 from tpstudio.web.presenters import identity_resolution_candidates
 from tpstudio.web.model import SelectedCopy
@@ -48,6 +48,37 @@ def test_run_prepared_batch_delegates_to_a71g(monkeypatch, tmp_path):
 def test_run_prepared_batch_rejects_non_plan():
     with pytest.raises(TypeError):
         run_prepared_batch(object())
+
+
+def test_generic_export_name_uses_project_and_confirmed_students(tmp_path):
+    identity = CopyIdentity(
+        (StudentIdentity("Jules BERNARD"), StudentIdentity("Daniel MENGEL")),
+        None,
+        CopyIdentityStatus.CONFIRMED,
+    )
+    analysis = SimpleNamespace(
+        project=SimpleNamespace(
+            identity=SimpleNamespace(title="Premières mesures au labo")
+        ),
+        source=SimpleNamespace(
+            path=tmp_path / "copie.ipynb",
+            display_name="copie.ipynb",
+        ),
+    )
+    stem = export_output_stem(analysis, identity)
+    assert stem == (
+        "Premières-mesures-au-labo-Jules-BERNARD-Daniel-MENGEL-Correction"
+    )
+
+
+def test_generic_export_name_fallback_does_not_duplicate_correction(tmp_path):
+    source = tmp_path / "Premieres-mesures-au-labo-Correction.ipynb"
+    source.write_text("{}", encoding="utf-8")
+    analysis = SimpleNamespace(
+        project=SimpleNamespace(identity=SimpleNamespace(title="Premières mesures au labo")),
+        source=SimpleNamespace(path=source, display_name=source.name),
+    )
+    assert export_output_stem(analysis) == "Premieres-mesures-au-labo-Correction"
 
 
 def test_real_partial_filename_keeps_confirmed_identity_and_canonical_stem(tmp_path):

@@ -247,6 +247,32 @@ def test_export_active_analyses_excludes_unresolved(tmp_path):
     assert all(path.exists() for value in states.values() for path in value.result.output_paths)
 
 
+def test_export_active_copy_uses_confirmed_identity_in_html_name(tmp_path):
+    from dataclasses import replace
+    from tpstudio.web.identity import CopyIdentity, CopyIdentityStatus, StudentIdentity
+
+    copies = _copies(tmp_path)
+    result = run_selected_dispatch(copies)
+    identified = replace(
+        copies[0],
+        identity=CopyIdentity(
+            (StudentIdentity("Jules BERNARD"), StudentIdentity("Daniel MENGEL")),
+            None,
+            CopyIdentityStatus.CONFIRMED,
+        ),
+    )
+    states = export_active_copies(
+        result,
+        {},
+        output_dir=tmp_path / "named-exports",
+        options=CopyExportOptions(),
+        selected_copies=(identified, copies[1]),
+    )
+    assert states["copy-001"].result.html_artifact.path.name == (
+        "Lois-de-Snell-Descartes-Jules-BERNARD-Daniel-MENGEL-Correction.html"
+    )
+
+
 def test_export_uses_override_analysis_without_analysis_calls(tmp_path, monkeypatch):
     copies = _copies(tmp_path)
     result = run_selected_dispatch(copies)

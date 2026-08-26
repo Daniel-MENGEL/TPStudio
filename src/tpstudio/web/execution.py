@@ -13,6 +13,7 @@ from tpstudio.semantic_analysis import SemanticAnalysisProvider
 
 from .planning import build_dispatch_requests_from_web_selection
 from .model import WebCopyExportState, WebCopyOverride
+from .identity import build_canonical_copy_stem, extract_copy_identity_from_notebook
 from .presenters import active_analysis_for_source
 
 
@@ -65,11 +66,20 @@ def analyze_selected_copy(
     )
 
 
-def export_output_stem(analysis) -> str:
-    """Build a deterministic project-agnostic stem for one active copy."""
+def export_output_stem(analysis, identity=None) -> str:
+    """Build ``TP-students-Correction`` from the confirmed copy identity."""
+    if identity is None:
+        identity = extract_copy_identity_from_notebook(analysis.source.path)
+    canonical = build_canonical_copy_stem(
+        analysis.project.identity.title,
+        identity,
+    )
+    if canonical is not None:
+        return f"{canonical}-Correction"
     name = Path(analysis.source.display_name).stem
     safe = re.sub(r"[^A-Za-z0-9._-]+", "-", name).strip("-._") or "copy"
-    return f"{safe}-{analysis.source.source_id}"
+    safe = re.sub(r"(?i)-correction$", "", safe).rstrip("-._") or "copy"
+    return f"{safe}-Correction"
 
 
 def export_active_copies(
@@ -78,9 +88,15 @@ def export_active_copies(
     *,
     output_dir: Path,
     options: CopyExportOptions,
+    selected_copies=(),
 ) -> dict[str, WebCopyExportState]:
     """Export active analyses only; analysis and dispatch are never called here."""
     exported: dict[str, WebCopyExportState] = {}
+    identities = {
+        item.source_id: item.identity
+        for item in tuple(selected_copies)
+        if item.identity is not None
+    }
     for item in result.copies:
         analysis = active_analysis_for_source(result, overrides, item.source_id)
         if analysis is None:
@@ -93,7 +109,9 @@ def export_active_copies(
                     analysis,
                     output_dir,
                     options=options,
-                    output_stem=export_output_stem(analysis),
+                    output_stem=export_output_stem(
+                        analysis, identities.get(item.source_id)
+                    ),
                 ),
             )
         except Exception as exc:

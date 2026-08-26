@@ -20,6 +20,12 @@ from .first_order_transient import (
     LEAKAGE_PROTOCOL_SEMANTIC_CONTRACT,
     first_order_transient_teacher_project,
 )
+from .first_lab_measurements import (
+    CORRECTION_FILENAME as FIRST_LAB_MEASUREMENTS_CORRECTION_FILENAME,
+    SEMANTIC_RESPONSE_EXPECTATIONS as FIRST_LAB_MEASUREMENTS_SEMANTIC_EXPECTATIONS,
+    STATEMENT_FILENAME as FIRST_LAB_MEASUREMENTS_STATEMENT_FILENAME,
+    first_lab_measurements_teacher_project,
+)
 from .graph_model_inference import (
     ExpectedGraphModelProposal,
     ExpectedModelProposalConfidence,
@@ -52,6 +58,10 @@ __all__ = [
     "thin_lens_teacher_project",
     "torsion_pendulum_teacher_project",
     "first_order_transient_teacher_project",
+    "first_lab_measurements_teacher_project",
+    "FIRST_LAB_MEASUREMENTS_STATEMENT_FILENAME",
+    "FIRST_LAB_MEASUREMENTS_CORRECTION_FILENAME",
+    "FIRST_LAB_MEASUREMENTS_SEMANTIC_EXPECTATIONS",
     "CHARGE_OBJECTIVE_SEMANTIC_CONTRACT",
     "ENERGY_OBJECTIVE_SEMANTIC_CONTRACT",
     "LEAKAGE_PROTOCOL_SEMANTIC_CONTRACT",
