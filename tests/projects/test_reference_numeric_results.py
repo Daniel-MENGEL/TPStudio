@@ -1,3 +1,4 @@
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -25,7 +26,7 @@ REFERENCE_DIR = Path(__file__).parents[2] / "reference-notebooks"
         (
             thin_lens_teacher_project,
             "session-02/thin-lens/Correction-Formation-dune-image-par-une-lentille-mince.ipynb",
-            frozenset({"theoretical_slope"}),
+            frozenset(),
         ),
         (
             focometry_teacher_project,
@@ -80,3 +81,47 @@ def test_snells_reference_does_not_treat_raw_angles_as_reported_results() -> Non
         "direct_index",
     ):
         assert not evaluations.for_production(production_id)[0].diagnostics
+
+
+def test_thin_lens_reference_prefers_formatted_theoretical_focal_length() -> None:
+    path = (
+        REFERENCE_DIR
+        / "session-02/thin-lens"
+        / "Correction-Formation-dune-image-par-une-lentille-mince.ipynb"
+    )
+    dispatch = analyze_copy(
+        NotebookCopySource(path.name, path.name, path),
+        project=thin_lens_teacher_project(),
+    )
+
+    assert dispatch.analysis is not None
+    evaluation = dispatch.analysis.quantity_evaluations.for_production(
+        "theoretical_focal_length"
+    )[0]
+    observation = evaluation.assessment.selected_observation
+    assert observation is not None
+    assert observation.value == Decimal("30.3")
+    assert observation.uncertainty == Decimal("1.0")
+    assert observation.unit == "cm"
+    assert not evaluation.diagnostics
+
+
+def test_thin_lens_statement_supplies_theoretical_slope_without_feedback() -> None:
+    path = (
+        REFERENCE_DIR
+        / "session-02/thin-lens"
+        / "Correction-Formation-dune-image-par-une-lentille-mince.ipynb"
+    )
+    dispatch = analyze_copy(
+        NotebookCopySource(path.name, path.name, path),
+        project=thin_lens_teacher_project(),
+    )
+
+    assert dispatch.analysis is not None
+    evaluation = dispatch.analysis.quantity_evaluations.for_production(
+        "theoretical_slope"
+    )[0]
+    observation = evaluation.assessment.selected_observation
+    assert observation is not None
+    assert observation.value == Decimal("1")
+    assert not evaluation.diagnostics

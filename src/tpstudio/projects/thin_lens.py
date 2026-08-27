@@ -153,7 +153,7 @@ def _bindings(plan: ScientificProductionPlan) -> NotebookBindingPlan:
             marker("conjugation-graph-cell", "conjugation_graph", "plt.plot(invOA, invOAp"),
             marker("conjugation-slope-cell", "conjugation_slope", "a, b = np.polyfit(invOA, invOAp, 1)"),
             marker("focal-intercept-cell", "focal_intercept", "a, b = np.polyfit(invOA, invOAp, 1)"),
-            marker("theoretical-slope-cell", "theoretical_slope", "La pente attendue vaut 1"),
+            marker("theoretical-slope-cell", "theoretical_slope", "La pente attendue = 1"),
             marker("conjugation-comparison-response", "compare_conjugation", "conjugation-graph-analysis-response"),
             marker("graph-analysis-response", "graph_analysis", "conjugation-graph-analysis-response"),
             marker("multiple-focal-cell", "multiple_focal_length", "f2 = f_multiple.mean()"),
@@ -175,10 +175,14 @@ def _quantities(plan: ScientificProductionPlan) -> QuantityExpectationSet:
         plan,
         (
             ExpectedQuantity("single_focal_length", "f_1", ("f1", "f' par mesure unique"), "cm", (), required, required),
-            ExpectedQuantity("theoretical_focal_length", "f_th", ("Valeur attendue",), "cm", (), required, required),
+            # Prefer the formatted saved result over the intermediate Python
+            # expression ``f_th = 100 / 3.3``.  The latter would otherwise be
+            # parsed as the spurious bare value 100.
+            ExpectedQuantity("theoretical_focal_length", "Valeur attendue", (), "cm", (), required, required),
             ExpectedQuantity("conjugation_slope", "a", ("pente",), None, (), ignored, optional),
             ExpectedQuantity("focal_intercept", "b", ("Ordonnée à l'origine b", "ordonnée à l'origine", "ordonnee a l origine"), "cm^-1", (), optional, optional),
-            ExpectedQuantity("theoretical_slope", "a_th", ("pente théorique",), None, (), ignored, ignored),
+            # Reference supplied by the statement, not a student result.
+            ExpectedQuantity("theoretical_slope", "a_th", ("pente théorique", "pente attendue"), None, (), ignored, ignored),
             ExpectedQuantity("multiple_focal_length", "f_2", ("f2", "f' moyen"), "cm", (), required, required),
         ),
     )
