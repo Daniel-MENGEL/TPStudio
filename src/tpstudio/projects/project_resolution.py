@@ -15,6 +15,7 @@ from typing import Any, Callable
 from .model import TeacherProjectConfiguration
 from .snells_laws import snells_laws_teacher_project
 from .thin_lens import thin_lens_teacher_project
+from .focometry import focometry_teacher_project
 from .torsion_pendulum import torsion_pendulum_teacher_project
 from .first_order_transient import first_order_transient_teacher_project
 from .first_lab_measurements import first_lab_measurements_teacher_project
@@ -193,8 +194,24 @@ def _thin_lens_evidence(markdown: str, code: str, filename: str) -> tuple[Projec
     if re.search(r"distance\s+focale|oa['’]?|oa\b", markdown) and re.search(r"d0|d1|d2|invoa", markdown + code):
         evidence.append(_evidence("quantities", "OA/OA' et distances d0/d1/d2", ProjectEvidenceCategory.MEDIUM))
     if "lentille mince" in markdown or "distance focale" in markdown:
-        evidence.append(_evidence("vocabulary", "Vocabulaire de lentille", ProjectEvidenceCategory.MEDIUM))
+        evidence.append(_evidence("vocabulary", "Vocabulaire de lentille", ProjectEvidenceCategory.WEAK))
     if re.search(r"lentille|mince", filename):
+        evidence.append(_evidence("filename", filename, ProjectEvidenceCategory.WEAK))
+    return tuple(evidence)
+
+
+def _focometry_evidence(markdown: str, code: str, filename: str) -> tuple[ProjectResolutionEvidence, ...]:
+    evidence: list[ProjectResolutionEvidence] = []
+    text = f"{markdown}\n{code}".casefold()
+    if re.search(r"instruments?\s+d['’]optique\s+et\s+application\s+[àa]\s+la\s+focom[eé]trie", text):
+        evidence.append(_evidence("title", "Titre Instruments d'optique et focométrie", ProjectEvidenceCategory.STRONG))
+    if "autocollimation" in text and "méthode de bessel" in text and "collimateur" in text:
+        evidence.append(_evidence("methods", "Autocollimation, Bessel et collimateur", ProjectEvidenceCategory.STRONG))
+    if "f1_values" in code and "f3_bessel_values" in code and "f3_collimateur_values" in code:
+        evidence.append(_evidence("code", "Calculs des focales par trois méthodes", ProjectEvidenceCategory.MEDIUM))
+    if "focométrie" in text or "focometrie" in text:
+        evidence.append(_evidence("vocabulary", "Vocabulaire de focométrie", ProjectEvidenceCategory.MEDIUM))
+    if re.search(r"focom[eé]trie|focometry", filename):
         evidence.append(_evidence("filename", filename, ProjectEvidenceCategory.WEAK))
     return tuple(evidence)
 
@@ -239,6 +256,7 @@ def _first_lab_measurements_evidence(markdown: str, code: str, filename: str) ->
 PROJECT_DESCRIPTORS: tuple[ProjectDescriptor, ...] = (
     ProjectDescriptor("snells-laws-mvp", "Lois de Snell-Descartes", snells_laws_teacher_project, _snell_evidence),
     ProjectDescriptor("thin-lens-image", "Formation d'une image par une lentille mince", thin_lens_teacher_project, _thin_lens_evidence),
+    ProjectDescriptor("optical-instruments-focometry", "Instruments d'optique et application à la focométrie", focometry_teacher_project, _focometry_evidence),
     ProjectDescriptor("torsion-pendulum", "Pendule de torsion", torsion_pendulum_teacher_project, _torsion_pendulum_evidence),
     ProjectDescriptor("first-order-transient", "Système du premier ordre en régime transitoire", first_order_transient_teacher_project, _first_order_transient_evidence),
     ProjectDescriptor("first-lab-measurements", "Premières mesures au labo", first_lab_measurements_teacher_project, _first_lab_measurements_evidence),

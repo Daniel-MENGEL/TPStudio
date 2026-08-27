@@ -13,6 +13,12 @@ from .model import (
 )
 from .snells_laws import snells_laws_teacher_project
 from .thin_lens import thin_lens_teacher_project
+from .focometry import (
+    CORRECTION_FILENAME as FOCOMETRY_CORRECTION_FILENAME,
+    SEMANTIC_RESPONSE_EXPECTATIONS as FOCOMETRY_SEMANTIC_EXPECTATIONS,
+    STATEMENT_FILENAME as FOCOMETRY_STATEMENT_FILENAME,
+    focometry_teacher_project,
+)
 from .torsion_pendulum import torsion_pendulum_teacher_project
 from .first_order_transient import (
     CHARGE_OBJECTIVE_SEMANTIC_CONTRACT,
@@ -56,6 +62,10 @@ __all__ = [
     "TeacherProjectIdentity",
     "snells_laws_teacher_project",
     "thin_lens_teacher_project",
+    "focometry_teacher_project",
+    "FOCOMETRY_STATEMENT_FILENAME",
+    "FOCOMETRY_CORRECTION_FILENAME",
+    "FOCOMETRY_SEMANTIC_EXPECTATIONS",
     "torsion_pendulum_teacher_project",
     "first_order_transient_teacher_project",
     "first_lab_measurements_teacher_project",

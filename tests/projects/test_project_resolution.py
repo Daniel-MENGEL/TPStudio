@@ -19,6 +19,7 @@ def test_registry_contains_projects_in_stable_order() -> None:
     assert known_project_ids() == (
         "snells-laws-mvp",
         "thin-lens-image",
+        "optical-instruments-focometry",
         "torsion-pendulum",
         "first-order-transient",
         "first-lab-measurements",
@@ -43,6 +44,15 @@ def test_thin_lens_clear_resolves_high() -> None:
     ))
     assert result.selected_project_id == "thin-lens-image"
     assert result.candidates[0].confidence is ProjectResolutionConfidence.HIGH
+
+
+def test_focometry_clear_resolves_high() -> None:
+    result = resolve_project_for_copy(notebook(
+        "# Instruments d'optique et application à la focométrie",
+        "Méthodes d'autocollimation, de Bessel et utilisation d'un collimateur.",
+    ))
+    assert result.selected_project_id == "optical-instruments-focometry"
+    assert result.requires_teacher_choice is False
 
 
 def test_first_lab_measurements_clear_resolves_high() -> None:
