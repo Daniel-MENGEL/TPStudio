@@ -5,6 +5,7 @@ import pytest
 from tpstudio.orchestration import NotebookCopySource, analyze_copy
 from tpstudio.projects import (
     focometry_teacher_project,
+    prism_goniometer_teacher_project,
     snells_laws_teacher_project,
     thin_lens_teacher_project,
 )
@@ -29,6 +30,11 @@ REFERENCE_DIR = Path(__file__).parents[2] / "reference-notebooks"
         (
             focometry_teacher_project,
             "session-03/focometry/Correction-Instruments-doptique-et-application-a-la-focometrie.ipynb",
+            frozenset(),
+        ),
+        (
+            prism_goniometer_teacher_project,
+            "session-03/prism-goniometer/Correction-Mesure-dindice-au-goniometre-a-prisme.ipynb",
             frozenset(),
         ),
     ),

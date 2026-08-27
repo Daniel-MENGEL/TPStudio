@@ -20,6 +20,7 @@ def test_registry_contains_projects_in_stable_order() -> None:
         "snells-laws-mvp",
         "thin-lens-image",
         "optical-instruments-focometry",
+        "prism-goniometer-index",
         "torsion-pendulum",
         "first-order-transient",
         "first-lab-measurements",

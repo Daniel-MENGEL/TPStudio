@@ -19,6 +19,12 @@ from .focometry import (
     STATEMENT_FILENAME as FOCOMETRY_STATEMENT_FILENAME,
     focometry_teacher_project,
 )
+from .prism_goniometer import (
+    CORRECTION_FILENAME as PRISM_GONIOMETER_CORRECTION_FILENAME,
+    SEMANTIC_RESPONSE_EXPECTATIONS as PRISM_GONIOMETER_SEMANTIC_EXPECTATIONS,
+    STATEMENT_FILENAME as PRISM_GONIOMETER_STATEMENT_FILENAME,
+    prism_goniometer_teacher_project,
+)
 from .torsion_pendulum import torsion_pendulum_teacher_project
 from .first_order_transient import (
     CHARGE_OBJECTIVE_SEMANTIC_CONTRACT,
@@ -66,6 +72,10 @@ __all__ = [
     "FOCOMETRY_STATEMENT_FILENAME",
     "FOCOMETRY_CORRECTION_FILENAME",
     "FOCOMETRY_SEMANTIC_EXPECTATIONS",
+    "prism_goniometer_teacher_project",
+    "PRISM_GONIOMETER_STATEMENT_FILENAME",
+    "PRISM_GONIOMETER_CORRECTION_FILENAME",
+    "PRISM_GONIOMETER_SEMANTIC_EXPECTATIONS",
     "torsion_pendulum_teacher_project",
     "first_order_transient_teacher_project",
     "first_lab_measurements_teacher_project",

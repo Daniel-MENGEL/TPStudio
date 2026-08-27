@@ -16,6 +16,7 @@ from .model import TeacherProjectConfiguration
 from .snells_laws import snells_laws_teacher_project
 from .thin_lens import thin_lens_teacher_project
 from .focometry import focometry_teacher_project
+from .prism_goniometer import prism_goniometer_teacher_project
 from .torsion_pendulum import torsion_pendulum_teacher_project
 from .first_order_transient import first_order_transient_teacher_project
 from .first_lab_measurements import first_lab_measurements_teacher_project
@@ -216,6 +217,22 @@ def _focometry_evidence(markdown: str, code: str, filename: str) -> tuple[Projec
     return tuple(evidence)
 
 
+def _prism_goniometer_evidence(markdown: str, code: str, filename: str) -> tuple[ProjectResolutionEvidence, ...]:
+    evidence: list[ProjectResolutionEvidence] = []
+    text = f"{markdown}\n{code}".casefold()
+    if re.search(r"mesure\s+de\s+l['’]indice\s+d['’]?un\s+prisme\s+au\s+goniom[eè]tre", text):
+        evidence.append(_evidence("title", "Titre Mesure d'indice au goniomètre à prisme", ProjectEvidenceCategory.STRONG))
+    if "minimum de déviation" in text and "angle au sommet" in text and "goniomètre" in text:
+        evidence.append(_evidence("method", "Angle au sommet et minimum de déviation", ProjectEvidenceCategory.STRONG))
+    if "a_values" in code and "dm_values" in code and "n_values" in code:
+        evidence.append(_evidence("code", "Calculs de A, Dm et n", ProjectEvidenceCategory.MEDIUM))
+    if "goniometer-settings-response" in text and "minimum-deviation-protocol-response" in text:
+        evidence.append(_evidence("markers", "Marqueurs des réglages et du minimum", ProjectEvidenceCategory.MEDIUM))
+    if re.search(r"goniom[eè]tre|goniometre|prisme", filename):
+        evidence.append(_evidence("filename", filename, ProjectEvidenceCategory.WEAK))
+    return tuple(evidence)
+
+
 def _torsion_pendulum_evidence(markdown: str, code: str, filename: str) -> tuple[ProjectResolutionEvidence, ...]:
     evidence: list[ProjectResolutionEvidence] = []
     if re.search(r"pendule\s+de\s+torsion", markdown):
@@ -257,6 +274,7 @@ PROJECT_DESCRIPTORS: tuple[ProjectDescriptor, ...] = (
     ProjectDescriptor("snells-laws-mvp", "Lois de Snell-Descartes", snells_laws_teacher_project, _snell_evidence),
     ProjectDescriptor("thin-lens-image", "Formation d'une image par une lentille mince", thin_lens_teacher_project, _thin_lens_evidence),
     ProjectDescriptor("optical-instruments-focometry", "Instruments d'optique et application à la focométrie", focometry_teacher_project, _focometry_evidence),
+    ProjectDescriptor("prism-goniometer-index", "Mesure de l'indice au goniomètre à prisme", prism_goniometer_teacher_project, _prism_goniometer_evidence),
     ProjectDescriptor("torsion-pendulum", "Pendule de torsion", torsion_pendulum_teacher_project, _torsion_pendulum_evidence),
     ProjectDescriptor("first-order-transient", "Système du premier ordre en régime transitoire", first_order_transient_teacher_project, _first_order_transient_evidence),
     ProjectDescriptor("first-lab-measurements", "Premières mesures au labo", first_lab_measurements_teacher_project, _first_lab_measurements_evidence),
