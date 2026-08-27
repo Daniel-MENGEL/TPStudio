@@ -13,6 +13,7 @@ from tpstudio.reporting import (
 from tpstudio.semantic_analysis import (
     SemanticCriterionImportance,
     SemanticCriterionStatus,
+    SemanticRole,
 )
 
 from .model import (
@@ -210,6 +211,24 @@ def build_annotation_plan(
     summary_keys: set[tuple] = set()
     summarized_productions: set[str] = set()
 
+    # When an actual semantic result exists, it is the authoritative
+    # student-facing assessment of the corresponding free response.  Keep the
+    # legacy phrase-based evaluations in the analysis/report for auditability,
+    # but do not render a second, potentially contradictory comment beside the
+    # same answer.
+    semantic_cells: set[int] = set()
+    semantic_protocol_cells: set[int] = set()
+    for semantic_analysis in result.semantic_response_analyses:
+        semantic_result = semantic_analysis.result
+        resolution = semantic_analysis.resolution
+        if semantic_result is None or resolution is None or resolution.cell is None:
+            continue
+        if semantic_result.diagnostics and "EMPTY_RESPONSE" not in semantic_result.diagnostics:
+            continue
+        semantic_cells.add(resolution.cell.index)
+        if semantic_analysis.contract.semantic_role is SemanticRole.PROTOCOL:
+            semantic_protocol_cells.add(resolution.cell.index)
+
     for item in report.feedback:
         production_id, comparison_id = _semantic_ids(result, item.production_id, item.comparison_id)
         allowed = (
@@ -220,6 +239,51 @@ def build_annotation_plan(
         if not allowed:
             skipped.append(SkippedAnnotation(item.source_key, AnnotationKind.FEEDBACK, item.audience, SkippedAnnotationReason.AUDIENCE_EXCLUDED, production_id, comparison_id))
             continue
+
+        if item.audience is FeedbackAudience.STUDENT:
+            legacy_narrative = any(
+                name in item.source_key
+                for name in (
+                    "ComparisonInterpretationFeedbackItem",
+                    "ComparisonJustificationFeedbackItem",
+                )
+            )
+            if legacy_narrative:
+                semantic_target, semantic_target_reason = _target(
+                    result, production_id, comparison_id
+                )
+                if (
+                    semantic_target_reason is None
+                    and semantic_target is not None
+                    and semantic_target.cell is not None
+                    and semantic_target.cell.index in semantic_cells
+                ):
+                    skipped.append(SkippedAnnotation(
+                        item.source_key,
+                        AnnotationKind.FEEDBACK,
+                        item.audience,
+                        SkippedAnnotationReason.DUPLICATE,
+                        production_id,
+                        comparison_id,
+                    ))
+                    continue
+            if (
+                "ProtocolFeedbackItem" in item.source_key
+                and item.cell_index is not None
+                and any(
+                    abs(item.cell_index - cell_index) <= 1
+                    for cell_index in semantic_protocol_cells
+                )
+            ):
+                skipped.append(SkippedAnnotation(
+                    item.source_key,
+                    AnnotationKind.FEEDBACK,
+                    item.audience,
+                    SkippedAnnotationReason.DUPLICATE,
+                    production_id,
+                    comparison_id,
+                ))
+                continue
 
         if item.cell_index is not None and production_id is None and comparison_id is None:
             if item.cell_index < 0 or item.cell_index >= result.technical_inspection.cell_count:

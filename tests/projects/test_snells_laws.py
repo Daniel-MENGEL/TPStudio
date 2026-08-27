@@ -72,13 +72,23 @@ def test_quantities_declare_angles_and_dimensionless_results() -> None:
     quantities = snells_laws_teacher_project().quantity_expectation_set
     assert quantities.get("incidence_angle").canonical_unit == "°"
     assert quantities.get("refraction_angle").accepted_units == ("deg",)
+    assert quantities.get("critical_angle").unit_requirement is PresenceRequirement.IGNORE
+    assert quantities.get("critical_angle").uncertainty_requirement is PresenceRequirement.IGNORE
+    assert quantities.get("incidence_angle").unit_requirement is PresenceRequirement.IGNORE
+    assert quantities.get("incidence_angle").uncertainty_requirement is PresenceRequirement.IGNORE
+    assert quantities.get("refraction_angle").unit_requirement is PresenceRequirement.IGNORE
+    assert quantities.get("refraction_angle").uncertainty_requirement is PresenceRequirement.IGNORE
     assert quantities.get("direct_index").unit_requirement is PresenceRequirement.IGNORE
+    assert quantities.get("direct_index").uncertainty_requirement is PresenceRequirement.REQUIRED
     assert quantities.get("regression_slope").canonical_unit is None
     assert quantities.get("regression_index").uncertainty_requirement is PresenceRequirement.REQUIRED
 
 
 def test_uncertainty_policies_are_distinct_from_recognition_tolerance() -> None:
     project = snells_laws_teacher_project()
+    assert project.uncertainty_expectation_set.get("critical_angle") is None
+    assert project.uncertainty_expectation_set.get("incidence_angle") is None
+    assert project.uncertainty_expectation_set.get("refraction_angle") is None
     assert project.uncertainty_expectation_set.get("direct_index") is not None
     assert project.uncertainty_expectation_set.get("regression_slope") is None
     assert all(item.absolute_tolerance == Decimal("0.05") for item in project.student_normalized_error_expectation_set)

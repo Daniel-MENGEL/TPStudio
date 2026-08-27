@@ -25,6 +25,8 @@ from tpstudio.semantic_analysis import (
     SemanticCriterionStatus,
     SemanticRole,
 )
+from tpstudio.orchestration import NotebookCopySource, SnellsLawsCopyAnalyzer
+from tpstudio.projects import snells_laws_teacher_project
 
 
 def _module():
@@ -42,6 +44,57 @@ def test_default_plan_uses_only_existing_student_feedback(tmp_path) -> None:
     assert all(item.kind is AnnotationKind.FEEDBACK for item in plan.annotations)
     texts = {item.text for item in result.feedback if item.audience is FeedbackAudience.STUDENT}
     assert all(item.message in texts for item in plan.annotations)
+
+
+def test_semantic_results_supersede_overlapping_legacy_narrative_feedback() -> None:
+    module = _module()
+    path = (
+        Path(__file__).parents[2]
+        / "reference-notebooks/session-02/snells-descartes"
+        / "Correction-Lois-de-Snell-Descartes.ipynb"
+    )
+    result = SnellsLawsCopyAnalyzer().analyze(
+        NotebookCopySource("snell-reference", "Correction Snell", path),
+        project=snells_laws_teacher_project(),
+        semantic_provider=module._RecordingSemanticProvider(),
+    )
+
+    plan = build_annotation_plan(result)
+    source_ids = tuple(
+        source_id
+        for annotation in plan.annotations
+        for source_id in annotation.source_ids
+    )
+    assert not any("ComparisonJustificationFeedbackItem" in item for item in source_ids)
+    assert not any("ComparisonInterpretationFeedbackItem" in item for item in source_ids)
+    assert not any("ProtocolFeedbackItem" in item for item in source_ids)
+    assert any(item == "semantic:geometric_result_comment" for item in source_ids)
+    assert any(item == "semantic:compare_geometric_regression" for item in source_ids)
+    assert any(
+        item.reason is SkippedAnnotationReason.DUPLICATE
+        and "ComparisonJustificationFeedbackItem" in item.source_id
+        for item in plan.skipped
+    )
+
+
+def test_legacy_narrative_feedback_remains_without_semantic_provider() -> None:
+    path = (
+        Path(__file__).parents[2]
+        / "reference-notebooks/session-02/snells-descartes"
+        / "Correction-Lois-de-Snell-Descartes.ipynb"
+    )
+    result = SnellsLawsCopyAnalyzer().analyze(
+        NotebookCopySource("snell-reference", "Correction Snell", path),
+        project=snells_laws_teacher_project(),
+    )
+
+    source_ids = tuple(
+        source_id
+        for annotation in build_annotation_plan(result).annotations
+        for source_id in annotation.source_ids
+    )
+    assert any("ComparisonJustificationFeedbackItem" in item for item in source_ids)
+    assert any("ProtocolFeedbackItem" in item for item in source_ids)
 
 
 def test_low_priority_corrective_feedback_is_attention_not_positive_info() -> None:

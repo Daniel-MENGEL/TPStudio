@@ -210,9 +210,13 @@ def _quantities(plan: ScientificProductionPlan) -> QuantityExpectationSet:
     return QuantityExpectationSet(
         plan,
         (
-            ExpectedQuantity("critical_angle", "i_l", ("il", "il_deg"), "°", ("deg",), required, required),
-            ExpectedQuantity("incidence_angle", "i_1", ("i1", "i1_deg"), "°", ("deg",), required, required),
-            ExpectedQuantity("refraction_angle", "i_2", ("i2", "i2_deg"), "°", ("deg",), required, required),
+            # These are raw notebook inputs entered as paired variables
+            # (for example il_deg and uil_deg), not reported results.  Their
+            # presence is checked by execution; presentation requirements
+            # apply to the derived indices below.
+            ExpectedQuantity("critical_angle", "i_l", ("il", "il_deg"), "°", ("deg",), ignored, ignored),
+            ExpectedQuantity("incidence_angle", "i_1", ("i1", "i1_deg"), "°", ("deg",), ignored, ignored),
+            ExpectedQuantity("refraction_angle", "i_2", ("i2", "i2_deg"), "°", ("deg",), ignored, ignored),
             ExpectedQuantity("direct_index", "n_1", ("n", "n par angle limite"), None, (), ignored, required),
             ExpectedQuantity("geometric_index", "n_2", ("n", "n par un couple d'angles"), None, (), ignored, required),
             ExpectedQuantity("regression_slope", "a", ("pente",), None, (), ignored, ignored),
@@ -241,7 +245,6 @@ def _uncertainties(quantities: QuantityExpectationSet):
         tuple(
             UncertaintyQualitySpec(identifier)
             for identifier in (
-                "critical_angle", "incidence_angle", "refraction_angle",
                 "direct_index", "geometric_index", "regression_index",
             )
         ),

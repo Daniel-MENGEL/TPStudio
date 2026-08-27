@@ -59,3 +59,24 @@ def test_reference_correction_numeric_results_are_unambiguous(
         for item in detections
         if item.production.id not in intentionally_absent
     )
+
+
+def test_snells_reference_does_not_treat_raw_angles_as_reported_results() -> None:
+    path = (
+        REFERENCE_DIR
+        / "session-02/snells-descartes/Correction-Lois-de-Snell-Descartes.ipynb"
+    )
+    dispatch = analyze_copy(
+        NotebookCopySource(path.name, path.name, path),
+        project=snells_laws_teacher_project(),
+    )
+
+    assert dispatch.analysis is not None
+    evaluations = dispatch.analysis.quantity_evaluations
+    for production_id in (
+        "critical_angle",
+        "incidence_angle",
+        "refraction_angle",
+        "direct_index",
+    ):
+        assert not evaluations.for_production(production_id)[0].diagnostics

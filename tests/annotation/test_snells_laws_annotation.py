@@ -1,5 +1,6 @@
 from pathlib import Path
 import importlib.util
+from dataclasses import replace
 
 import nbformat
 
@@ -52,6 +53,11 @@ def test_real_comparison_feedbacks_keep_comparison_and_localize_to_distinct_text
     )
     second.source = "### Comparaison des résultats obtenus\nEn = 0,14"
     result = module._analyze(tmp_path, notebook)
+    # This test exercises legacy comparison localization in isolation.  The
+    # synthetic fixture has no actual ``### Réponse`` blocks, so its semantic
+    # contracts otherwise (correctly) supersede the legacy comments as empty
+    # responses.
+    result = replace(result, semantic_response_analyses=())
     plan = build_annotation_plan(result)
     comparison_annotations = tuple(
         item for item in plan.annotations if item.comparison_id is not None
