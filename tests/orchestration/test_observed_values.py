@@ -34,9 +34,22 @@ def test_safe_code_literals(source: str, expected: str) -> None:
     assert values[0].source is ObservedValueSource.CODE_LITERAL
 
 
-@pytest.mark.parametrize("source", ("a = b = 2", "n = a / b", "n = float(1.2)", "n = np.mean(x)"))
+@pytest.mark.parametrize("source", ("a = b = 2", "n = a / b", "n = float(1.2)", "n = np.mean(x)", "n = 1 / 0"))
 def test_unsafe_or_nonliteral_assignments_are_rejected(source: str) -> None:
     assert code_literal_values(source, "index", 0) == ()
+
+
+def test_safe_literal_arithmetic_is_read_inside_control_flow() -> None:
+    values = code_literal_values(
+        "if measured:\n    f_constructeur = 100 / (-6.6)",
+        "focal_length",
+        0,
+        ("f_constructeur",),
+        unit="cm",
+    )
+    assert len(values) == 1
+    assert values[0].value == Decimal("100") / Decimal("-6.6")
+    assert values[0].unit == "cm"
 
 
 def _case(cell):
@@ -96,6 +109,51 @@ def test_saved_outputs_can_be_explicitly_ignored() -> None:
         notebook, resolution, spec, inspect_saved_outputs=False
     )
     assert detection.absent
+
+
+def test_labelled_output_ignores_numbers_from_a_separate_figure_display() -> None:
+    project = snells_laws_teacher_project()
+    expectation = project.quantity_expectation_set.get("regression_slope")
+    production = project.scientific_production_plan.get("regression_slope")
+    cell = nbformat.v4.new_code_cell("print(a)", id="target", outputs=[
+        nbformat.v4.new_output(
+            "display_data", data={"text/plain": "<Figure size 700x450 with 1 Axes>"}
+        ),
+        nbformat.v4.new_output("stream", name="stdout", text="Pente a = 1.48\n"),
+    ])
+    notebook, resolution, _ = _case(cell)
+    detection = detect_observed_values(
+        notebook, resolution, production, expectation=expectation
+    )
+    assert detection.unique
+    assert detection.selected.value == Decimal("1.48")
+
+
+def test_descriptive_symbol_wins_over_repeated_single_letter_symbol() -> None:
+    project = snells_laws_teacher_project()
+    expectation = project.quantity_expectation_set.get("regression_slope")
+    production = project.scientific_production_plan.get("regression_slope")
+    expectation = type(expectation)(
+        expectation.production_id,
+        "a",
+        ("Pente a",),
+        None,
+        (),
+        expectation.unit_requirement,
+        expectation.uncertainty_requirement,
+        expectation.uncertainty_justification_requirement,
+    )
+    cell = nbformat.v4.new_code_cell("print(a)", id="target", outputs=[
+        nbformat.v4.new_output(
+            "stream", name="stdout", text="Pente a = 1.48\nValeur déduite de a = 9.9\n"
+        )
+    ])
+    notebook, resolution, _ = _case(cell)
+    detection = detect_observed_values(
+        notebook, resolution, production, expectation=expectation
+    )
+    assert detection.unique
+    assert detection.selected.value == Decimal("1.48")
 
 
 def _priority_detection(markdown: str, code: str, output: str = ""):

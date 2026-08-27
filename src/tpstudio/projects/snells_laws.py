@@ -210,13 +210,13 @@ def _quantities(plan: ScientificProductionPlan) -> QuantityExpectationSet:
     return QuantityExpectationSet(
         plan,
         (
-            ExpectedQuantity("critical_angle", "i_l", ("il",), "°", ("deg",), required, required),
-            ExpectedQuantity("incidence_angle", "i_1", ("i1",), "°", ("deg",), required, required),
-            ExpectedQuantity("refraction_angle", "i_2", ("i2",), "°", ("deg",), required, required),
-            ExpectedQuantity("direct_index", "n_1", ("n",), None, (), ignored, required),
-            ExpectedQuantity("geometric_index", "n_2", ("n",), None, (), ignored, required),
+            ExpectedQuantity("critical_angle", "i_l", ("il", "il_deg"), "°", ("deg",), required, required),
+            ExpectedQuantity("incidence_angle", "i_1", ("i1", "i1_deg"), "°", ("deg",), required, required),
+            ExpectedQuantity("refraction_angle", "i_2", ("i2", "i2_deg"), "°", ("deg",), required, required),
+            ExpectedQuantity("direct_index", "n_1", ("n", "n par angle limite"), None, (), ignored, required),
+            ExpectedQuantity("geometric_index", "n_2", ("n", "n par un couple d'angles"), None, (), ignored, required),
             ExpectedQuantity("regression_slope", "a", ("pente",), None, (), ignored, ignored),
-            ExpectedQuantity("regression_index", "n_3", ("n",), None, (), ignored, required),
+            ExpectedQuantity("regression_index", "n_3", ("n", "n moyen"), None, (), ignored, required),
         ),
     )
 

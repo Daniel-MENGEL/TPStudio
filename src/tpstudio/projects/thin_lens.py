@@ -174,12 +174,12 @@ def _quantities(plan: ScientificProductionPlan) -> QuantityExpectationSet:
     return QuantityExpectationSet(
         plan,
         (
-            ExpectedQuantity("single_focal_length", "f_1", ("f1",), "cm", (), required, required),
-            ExpectedQuantity("theoretical_focal_length", "f_th", (), "cm", (), required, required),
+            ExpectedQuantity("single_focal_length", "f_1", ("f1", "f' par mesure unique"), "cm", (), required, required),
+            ExpectedQuantity("theoretical_focal_length", "f_th", ("Valeur attendue",), "cm", (), required, required),
             ExpectedQuantity("conjugation_slope", "a", ("pente",), None, (), ignored, optional),
-            ExpectedQuantity("focal_intercept", "b", ("ordonnée à l'origine", "ordonnee a l origine"), "cm^-1", (), optional, optional),
+            ExpectedQuantity("focal_intercept", "b", ("Ordonnée à l'origine b", "ordonnée à l'origine", "ordonnee a l origine"), "cm^-1", (), optional, optional),
             ExpectedQuantity("theoretical_slope", "a_th", ("pente théorique",), None, (), ignored, ignored),
-            ExpectedQuantity("multiple_focal_length", "f_2", ("f2",), "cm", (), required, required),
+            ExpectedQuantity("multiple_focal_length", "f_2", ("f2", "f' moyen"), "cm", (), required, required),
         ),
     )
 

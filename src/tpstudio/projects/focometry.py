@@ -251,15 +251,15 @@ def focometry_teacher_project() -> TeacherProjectConfiguration:
     quantities = QuantityExpectationSet(
         plan,
         (
-            ExpectedQuantity("autocollimation_focal_length", "f'_1", ("f1",), "cm", (), required, required),
-            ExpectedQuantity("plus5_theoretical_focal_length", "f'_{+5}", ("f1_constructeur",), "cm", (), required, ignored),
-            ExpectedQuantity("diverging_box_focal_length", "f'_2", ("f2",), "cm", (), required, required),
-            ExpectedQuantity("minus2_theoretical_focal_length", "f'_{-2}", ("f2_constructeur",), "cm", (), required, ignored),
-            ExpectedQuantity("bessel_focal_length", "f'_{Bessel}", ("f3_bessel",), "cm", (), required, required),
-            ExpectedQuantity("plus33_theoretical_focal_length", "f'_{+3,3}", ("f3_constructeur",), "cm", (), required, ignored),
-            ExpectedQuantity("collimator_focal_length", "f'_{collimateur}", ("f3_collimateur",), "cm", (), required, required),
-            ExpectedQuantity("vff_focal_length", "f'_{VFF}", ("f4",), "cm", (), optional, optional),
-            ExpectedQuantity("minus66_theoretical_focal_length", "f'_{-6,6}", ("f4_constructeur",), "cm", (), optional, ignored),
+            ExpectedQuantity("autocollimation_focal_length", "f'_1", ("f1", "f'1"), "cm", (), required, required),
+            ExpectedQuantity("plus5_theoretical_focal_length", "f'_{+5}", ("f1_constructeur", "Valeur constructeur"), "cm", (), required, ignored),
+            ExpectedQuantity("diverging_box_focal_length", "f'_2", ("f2", "f'2"), "cm", (), required, required),
+            ExpectedQuantity("minus2_theoretical_focal_length", "f'_{-2}", ("f2_constructeur", "Valeur constructeur"), "cm", (), required, ignored),
+            ExpectedQuantity("bessel_focal_length", "f'_{Bessel}", ("f3_bessel", "f'3 par Bessel"), "cm", (), required, required),
+            ExpectedQuantity("plus33_theoretical_focal_length", "f'_{+3,3}", ("f3_constructeur", "Valeur constructeur"), "cm", (), required, ignored),
+            ExpectedQuantity("collimator_focal_length", "f'_{collimateur}", ("f3_collimateur", "f'3 au collimateur"), "cm", (), required, required),
+            ExpectedQuantity("vff_focal_length", "f'_{VFF}", ("f4", "f'4 au viseur"), "cm", (), optional, optional),
+            ExpectedQuantity("minus66_theoretical_focal_length", "f'_{-6,6}", ("f4_constructeur", "Valeur constructeur"), "cm", (), optional, ignored),
         ),
     )
     comparisons = QuantityComparisonExpectationSet(
