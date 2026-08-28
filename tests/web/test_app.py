@@ -6,6 +6,7 @@ from tpstudio.web.app import (
     _analysis_signature,
     _build_semantic_provider,
     _input_signature,
+    _open_local_html_artifact,
     _render_first_lab_grading,
     web_error_message,
 )
@@ -50,6 +51,18 @@ def test_analysis_signature_is_stable_and_option_model_specific():
     assert _analysis_signature(base, False, "gpt-5-mini") == _analysis_signature(base, False, "gpt-5-mini")
     assert _analysis_signature(base, False, "gpt-5-mini") != _analysis_signature(base, True, "gpt-5-mini")
     assert _analysis_signature(base, True, "gpt-5-mini") != _analysis_signature(base, True, "other-model")
+    assert _analysis_signature(base, True, "gpt-5-mini", False) != _analysis_signature(
+        base, True, "gpt-5-mini", True
+    )
+
+
+def test_open_local_html_artifact_delegates_to_operating_system(tmp_path):
+    html = tmp_path / "Copie corrigée.html"
+    html.write_text("<html></html>", encoding="utf-8")
+    opened = []
+    assert _open_local_html_artifact(html, opener=lambda uri: opened.append(uri) or True)
+    assert opened == [html.resolve().as_uri()]
+    assert not _open_local_html_artifact(tmp_path / "absent.html", opener=lambda uri: True)
 
 
 def test_first_lab_grading_panel_prefills_an_empty_copy_and_remains_teacher_only():

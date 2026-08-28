@@ -6,6 +6,7 @@ from pathlib import Path
 from dataclasses import replace
 from datetime import datetime, timezone
 import os
+import webbrowser
 
 from tpstudio.batch import BatchCopyStatus, render_batch_report_markdown
 from tpstudio.export import CopyExportOptions
@@ -14,7 +15,13 @@ from tpstudio.semantic_analysis import (
     DEFAULT_OPENAI_SEMANTIC_MODEL,
     OpenAISemanticAnalysisProvider,
 )
-from tpstudio.web.execution import analyze_selected_copy, can_run_batch, export_active_copies, run_selected_dispatch
+from tpstudio.web.execution import (
+    analyze_selected_copy,
+    can_run_batch,
+    export_active_copies,
+    run_selected_dispatch,
+    should_use_semantic_provider,
+)
 from tpstudio.web.model import WebBatchOptions
 from tpstudio.web.identity import (
     CopyIdentityStatus, StudentIdentity, confirm_copy_identity,
@@ -76,13 +83,33 @@ def _input_signature(copies, output_dir: Path, options: WebBatchOptions) -> tupl
                   tuple(getattr(getattr(item, "identity", None), "students", ()))) for item in copies), str(output_dir), options
 
 
-def _analysis_signature(input_signature: tuple, semantic_enabled: bool, model: str) -> tuple:
+def _analysis_signature(
+    input_signature: tuple,
+    semantic_enabled: bool,
+    model: str,
+    include_semantic_references: bool = False,
+) -> tuple:
     """Signature for analysis results; planning remains independent of AI."""
-    return input_signature, bool(semantic_enabled), model
+    return (
+        input_signature,
+        bool(semantic_enabled),
+        model,
+        bool(include_semantic_references),
+    )
 
 
 def _semantic_model() -> str:
     return os.getenv("TPSTUDIO_OPENAI_MODEL") or DEFAULT_OPENAI_SEMANTIC_MODEL
+
+
+def _open_local_html_artifact(path, *, opener=None) -> bool:
+    """Ask the local operating system to open one exported HTML artifact."""
+
+    artifact = Path(path).resolve()
+    if not artifact.is_file() or artifact.suffix.casefold() != ".html":
+        return False
+    open_in_browser = opener or webbrowser.open_new_tab
+    return bool(open_in_browser(artifact.as_uri()))
 
 
 _RUBRIC_LEVEL_LABELS = {
@@ -301,6 +328,15 @@ def main() -> None:
             key=SEMANTIC_ANALYSIS_ENABLED_KEY,
         )
         semantic_model = _semantic_model()
+        include_semantic_references = st.checkbox(
+            "Analyser aussi les corrigés et énoncés de référence",
+            value=False,
+            disabled=not semantic_enabled,
+            help=(
+                "Désactivé par défaut : les références restent analysées localement, "
+                "mais leurs réponses ne sont pas envoyées à OpenAI."
+            ),
+        )
         if semantic_enabled:
             st.caption(f"Modèle sémantique : {semantic_model}")
         try:
@@ -436,14 +472,39 @@ def main() -> None:
                     )
                 else:
                     with st.spinner("Analyse du lot en cours…"):
-                        if provider is None:
-                            result = run_selected_dispatch(copies)
-                        else:
-                            result = run_selected_dispatch(copies, semantic_provider=provider)
+                        progress = st.progress(0.0, text="Préparation de l’analyse…")
+
+                        def update_progress(completed, total, source_id):
+                            ratio = completed / total if total else 1.0
+                            progress.progress(
+                                ratio,
+                                text=f"Copie {completed} sur {total} analysée",
+                            )
+
+                        try:
+                            if provider is None:
+                                result = run_selected_dispatch(
+                                    copies,
+                                    progress_callback=update_progress,
+                                )
+                            else:
+                                result = run_selected_dispatch(
+                                    copies,
+                                    semantic_provider=provider,
+                                    include_semantic_references=include_semantic_references,
+                                    progress_callback=update_progress,
+                                )
+                        finally:
+                            progress.empty()
                     set_dispatch_result(
                         st.session_state,
                         result,
-                        _analysis_signature(signature, semantic_enabled, semantic_model),
+                        _analysis_signature(
+                            signature,
+                            semantic_enabled,
+                            semantic_model,
+                            include_semantic_references,
+                        ),
                     )
                 clear_run_result(st.session_state)
                 st.session_state[REVIEW_INDEX_KEY] = 0
@@ -452,7 +513,12 @@ def main() -> None:
                 st.error("Impossible d'analyser le lot.")
             finally:
                 st.session_state[RUN_IN_PROGRESS_KEY] = False
-        current_analysis_signature = _analysis_signature(signature, semantic_enabled, semantic_model)
+        current_analysis_signature = _analysis_signature(
+            signature,
+            semantic_enabled,
+            semantic_model,
+            include_semantic_references,
+        )
         invalidate_dispatch_if_signature_changed(st.session_state, current_analysis_signature)
         dispatch_result = get_current_dispatch_result(st.session_state, current_analysis_signature)
         if dispatch_result is not None:
@@ -567,6 +633,13 @@ def main() -> None:
                             st.markdown("**Artefacts**")
                             st.caption(f"Notebook corrigé : {export_state.result.notebook_artifact.path}")
                             st.caption(f"Version HTML : {export_state.result.html_artifact.path}")
+                            if st.button(
+                                "Ouvrir le HTML corrigé",
+                                key=f"open-html-{item.source_id}",
+                            ) and not _open_local_html_artifact(
+                                export_state.result.html_artifact.path
+                            ):
+                                st.warning("Le fichier HTML corrigé ne peut pas être ouvert.")
                         else:
                             st.error("❌ Erreur d'export")
                             st.caption(export_state.error_message)
@@ -595,8 +668,18 @@ def main() -> None:
                                         request.source for request in build_dispatch_requests_from_web_selection(tuple(copies))
                                         if request.source_id == item.source_id
                                     )
-                                    provider = _build_semantic_provider(semantic_enabled)
-                                    if semantic_enabled and provider is None:
+                                    configured_provider = _build_semantic_provider(semantic_enabled)
+                                    provider = configured_provider
+                                    selected_copy = next(
+                                        copy for copy in copies
+                                        if copy.source_id == item.source_id
+                                    )
+                                    if provider is not None and not should_use_semantic_provider(
+                                        selected_copy,
+                                        include_references=include_semantic_references,
+                                    ):
+                                        provider = None
+                                    if semantic_enabled and configured_provider is None:
                                         st.warning(
                                             "Analyse sémantique activée, mais OPENAI_API_KEY est absente."
                                         )

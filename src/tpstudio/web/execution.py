@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 import re
 
@@ -17,6 +18,18 @@ from .identity import build_canonical_copy_stem, extract_copy_identity_from_note
 from .presenters import active_analysis_for_source
 
 
+_SEMANTIC_REFERENCE_STATUSES = {"reference_correction", "empty_statement"}
+
+
+def should_use_semantic_provider(selected_copy, *, include_references: bool = False) -> bool:
+    """Return whether one selected copy may be sent to the semantic provider."""
+
+    if type(include_references) is not bool:
+        raise TypeError("include_references doit être booléen.")
+    status = getattr(getattr(selected_copy, "identity", None), "status", None)
+    return include_references or status is None or status.value not in _SEMANTIC_REFERENCE_STATUSES
+
+
 def run_prepared_batch(plan: BatchPlan) -> BatchRunResult:
     if type(plan) is not BatchPlan:
         raise TypeError("Le lancement web exige un BatchPlan.")
@@ -29,20 +42,39 @@ def run_selected_dispatch(
     options: CopyAnalysisOptions | None = None,
     continue_on_error: bool = True,
     semantic_provider: SemanticAnalysisProvider | None = None,
+    include_semantic_references: bool = False,
+    progress_callback: Callable[[int, int, str], None] | None = None,
 ) -> BatchDispatchResult:
     """Analyze selected copies generically, without export side effects."""
-    requests = build_dispatch_requests_from_web_selection(tuple(copies))
-    if semantic_provider is None:
+    selected_copies = tuple(copies)
+    requests = build_dispatch_requests_from_web_selection(selected_copies)
+    if type(include_semantic_references) is not bool:
+        raise TypeError("include_semantic_references doit être booléen.")
+    if semantic_provider is None and progress_callback is None:
         return run_batch(
             requests,
             options=options,
             continue_on_error=continue_on_error,
         )
+    semantic_source_ids = None
+    if semantic_provider is not None and not include_semantic_references:
+        allowed = frozenset(
+            item.source_id
+            for item in selected_copies
+            if should_use_semantic_provider(item)
+        )
+        if len(allowed) != len(selected_copies):
+            semantic_source_ids = allowed
+    extra = {"semantic_provider": semantic_provider}
+    if semantic_source_ids is not None:
+        extra["semantic_source_ids"] = semantic_source_ids
+    if progress_callback is not None:
+        extra["progress_callback"] = progress_callback
     return run_batch(
         requests,
         options=options,
         continue_on_error=continue_on_error,
-        semantic_provider=semantic_provider,
+        **extra,
     )
 
 

@@ -199,6 +199,46 @@ def test_semantic_provider_same_instance_is_forwarded_in_request_order(tmp_path:
     assert result.analyzed_count == 2
 
 
+def test_semantic_provider_is_limited_to_selected_source_ids(tmp_path: Path, monkeypatch) -> None:
+    first = _source(tmp_path, _snell_notebook(), "first.ipynb")
+    reference = _source(tmp_path, _snell_notebook(), "reference.ipynb")
+    base = analyze_copy(first, project=snells_laws_teacher_project())
+    provider = object()
+    calls = []
+
+    def fake_analyze(source, *, project=None, options=None, semantic_provider=None):
+        calls.append((source.path.stem, semantic_provider))
+        return base
+
+    monkeypatch.setattr(batch_dispatch, "analyze_copy", fake_analyze)
+    result = run_batch(
+        (
+            BatchCopyRequest("first", first),
+            BatchCopyRequest("reference", reference),
+        ),
+        semantic_provider=provider,
+        semantic_source_ids=frozenset({"first"}),
+    )
+    assert calls == [("first", provider), ("reference", None)]
+    assert result.analyzed_count == 2
+
+
+def test_progress_callback_reports_every_copy_in_order(tmp_path: Path, monkeypatch) -> None:
+    first = _source(tmp_path, _snell_notebook(), "first.ipynb")
+    second = _source(tmp_path, _snell_notebook(), "second.ipynb")
+    base = analyze_copy(first, project=snells_laws_teacher_project())
+    events = []
+
+    monkeypatch.setattr(batch_dispatch, "analyze_copy", lambda *args, **kwargs: base)
+    run_batch(
+        (BatchCopyRequest("first", first), BatchCopyRequest("second", second)),
+        progress_callback=lambda completed, total, source_id: events.append(
+            (completed, total, source_id)
+        ),
+    )
+    assert events == [(1, 2, "first"), (2, 2, "second")]
+
+
 def test_semantic_provider_is_not_forwarded_to_skipped_requests(tmp_path: Path, monkeypatch) -> None:
     provider = object()
     calls = []

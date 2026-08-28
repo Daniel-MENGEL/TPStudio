@@ -10,9 +10,15 @@ from tpstudio.orchestration import (
 from tpstudio.export import CopyExportOptions, export_analyzed_copy as real_export_analyzed_copy
 from tpstudio.projects import known_project_ids
 from tpstudio.projects import first_order_transient_teacher_project
-from tpstudio.web.execution import analyze_selected_copy, export_active_copies, run_selected_dispatch
+from tpstudio.web.execution import (
+    analyze_selected_copy,
+    export_active_copies,
+    run_selected_dispatch,
+    should_use_semantic_provider,
+)
 import tpstudio.web.execution as execution
 from tpstudio.web.model import SelectedCopy, WebCopyExportState, WebCopyOverride
+from tpstudio.web.identity import CopyIdentity, CopyIdentitySource, CopyIdentityStatus
 from tpstudio.web.planning import build_dispatch_requests_from_web_selection
 from tpstudio.web.presenters import active_analysis_for_source, batch_dispatch_rows, project_choices_for_source, semantic_response_rows
 from tpstudio.projects import torsion_pendulum_teacher_project
@@ -85,6 +91,40 @@ def test_run_selected_dispatch_forwards_semantic_provider_exactly(tmp_path, monk
     monkeypatch.setattr(execution, "run_batch", fake_run_batch)
     assert run_selected_dispatch(copies, semantic_provider=provider) is expected
     assert observed["provider"] is provider
+
+
+def test_run_selected_dispatch_excludes_reference_from_semantic_provider(tmp_path, monkeypatch):
+    ordinary, reference = _copies(tmp_path)
+    reference = SelectedCopy(
+        reference.source_id,
+        reference.original_filename,
+        reference.workspace_path,
+        reference.content_sha256,
+        CopyIdentity(
+            (), CopyIdentitySource.NOTEBOOK,
+            CopyIdentityStatus.REFERENCE_CORRECTION, "Corrigé",
+        ),
+    )
+    provider = object()
+    observed = {}
+    expected = BatchDispatchResult(())
+
+    def fake_run_batch(
+        requests, *, options=None, continue_on_error=True,
+        semantic_provider=None, semantic_source_ids=None,
+    ):
+        observed["semantic_source_ids"] = semantic_source_ids
+        observed["provider"] = semantic_provider
+        return expected
+
+    monkeypatch.setattr(execution, "run_batch", fake_run_batch)
+    assert run_selected_dispatch(
+        (ordinary, reference), semantic_provider=provider
+    ) is expected
+    assert observed["provider"] is provider
+    assert observed["semantic_source_ids"] == frozenset({ordinary.source_id})
+    assert not should_use_semantic_provider(reference)
+    assert should_use_semantic_provider(reference, include_references=True)
 
 
 def test_analyze_selected_copy_forwards_semantic_provider_exactly(tmp_path, monkeypatch):

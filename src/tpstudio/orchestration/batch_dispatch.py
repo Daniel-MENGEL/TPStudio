@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from enum import Enum
 
@@ -154,6 +154,8 @@ def run_batch(
     options: CopyAnalysisOptions | None = None,
     continue_on_error: bool = True,
     semantic_provider: SemanticAnalysisProvider | None = None,
+    semantic_source_ids: frozenset[str] | None = None,
+    progress_callback: Callable[[int, int, str], None] | None = None,
 ) -> BatchDispatchResult:
     """Analyze requests sequentially, without exporting or selecting a global project."""
     requests = tuple(requests)
@@ -166,19 +168,33 @@ def run_batch(
         raise TypeError("continue_on_error doit être un booléen exact.")
     if options is not None and type(options) is not CopyAnalysisOptions:
         raise TypeError("options doit être un CopyAnalysisOptions ou None.")
+    if semantic_source_ids is not None and type(semantic_source_ids) is not frozenset:
+        raise TypeError("semantic_source_ids doit être un frozenset ou None.")
+    if progress_callback is not None and not callable(progress_callback):
+        raise TypeError("progress_callback doit être appelable ou None.")
 
     results: list[BatchCopyDispatchResult] = []
     stopped = False
-    for request in requests:
+    total = len(requests)
+    for position, request in enumerate(requests, 1):
         if stopped:
             results.append(BatchCopyDispatchResult(
                 request.source_id,
                 BatchCopyDispatchStatus.SKIPPED,
                 error_message="Copie non traitée après une erreur technique.",
             ))
+            if progress_callback is not None:
+                progress_callback(position, total, request.source_id)
             continue
         try:
-            if semantic_provider is None:
+            use_semantic_provider = (
+                semantic_provider is not None
+                and (
+                    semantic_source_ids is None
+                    or request.source_id in semantic_source_ids
+                )
+            )
+            if not use_semantic_provider:
                 dispatch = analyze_copy(
                     request.source, project=request.project, options=options
                 )
@@ -196,6 +212,8 @@ def run_batch(
             ))
             if not continue_on_error:
                 stopped = True
+            if progress_callback is not None:
+                progress_callback(position, total, request.source_id)
             continue
         if dispatch.analysis is not None:
             status = BatchCopyDispatchStatus.ANALYZED
@@ -204,4 +222,6 @@ def run_batch(
         else:
             status = BatchCopyDispatchStatus.RESOLVED_NOT_READY
         results.append(BatchCopyDispatchResult(request.source_id, status, dispatch=dispatch))
+        if progress_callback is not None:
+            progress_callback(position, total, request.source_id)
     return BatchDispatchResult(tuple(results))
