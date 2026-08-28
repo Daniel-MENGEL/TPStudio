@@ -26,6 +26,14 @@ class _SafeInteger(float):
     """Integer literal/binding marker retained for strict linspace counts."""
 
 
+@dataclass(frozen=True, slots=True)
+class _SafeUserFunction:
+    """Single-expression local helper interpreted by the safe evaluator."""
+
+    parameter: str
+    expression: ast.AST
+
+
 _SHADOWED_BUILTIN = object()
 
 
@@ -198,6 +206,25 @@ def _apply_binary(left: object, right: object, operator: ast.operator) -> object
     return None
 
 
+def _safe_user_function(statement: ast.FunctionDef) -> _SafeUserFunction | None:
+    arguments = statement.args
+    if (
+        statement.decorator_list
+        or arguments.posonlyargs
+        or len(arguments.args) != 1
+        or arguments.vararg is not None
+        or arguments.kwonlyargs
+        or arguments.kwarg is not None
+        or arguments.defaults
+        or arguments.kw_defaults
+        or len(statement.body) != 1
+        or not isinstance(statement.body[0], ast.Return)
+        or statement.body[0].value is None
+    ):
+        return None
+    return _SafeUserFunction(arguments.args[0].arg, statement.body[0].value)
+
+
 def _safe_value(node: ast.AST, bindings: dict[str, object]) -> object | None:
     if isinstance(node, ast.Constant):
         if type(node.value) is int:
@@ -205,6 +232,20 @@ def _safe_value(node: ast.AST, bindings: dict[str, object]) -> object | None:
         return _number(node.value)
     if isinstance(node, ast.Name):
         return bindings.get(node.id)
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+        function = bindings.get(node.func.id)
+        if isinstance(function, _SafeUserFunction):
+            if len(node.args) != 1 or node.keywords:
+                return None
+            argument = _safe_value(node.args[0], bindings)
+            if argument is None:
+                return None
+            local_bindings = dict(bindings)
+            # A helper cannot recursively invoke itself in the bounded static
+            # evaluator.  Its body still only has access to already-safe data.
+            local_bindings.pop(node.func.id, None)
+            local_bindings[function.parameter] = argument
+            return _safe_value(function.expression, local_bindings)
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in ("min", "max"):
         if node.func.id in bindings:
             return None
@@ -235,6 +276,11 @@ def _safe_value(node: ast.AST, bindings: dict[str, object]) -> object | None:
     if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id == "np":
         return math.pi if node.attr == "pi" else None
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+        if node.func.attr in ("min", "max") and not node.args and not node.keywords:
+            values = _as_array(_safe_value(node.func.value, bindings))
+            if values is None:
+                return None
+            return min(values) if node.func.attr == "min" else max(values)
         if not isinstance(node.func.value, ast.Name) or node.func.value.id != "np":
             return None
         name = node.func.attr
@@ -266,6 +312,17 @@ def _safe_value(node: ast.AST, bindings: dict[str, object]) -> object | None:
                     return None
             value = _safe_value(node.args[0], bindings)
             return value if _as_array(value) is not None else None
+        if name == "asarray":
+            if len(node.args) != 1:
+                return None
+            if node.keywords:
+                if len(node.keywords) != 1 or node.keywords[0].arg != "dtype":
+                    return None
+                dtype = node.keywords[0].value
+                if not isinstance(dtype, ast.Name) or dtype.id != "float" or "float" in bindings:
+                    return None
+            value = _safe_value(node.args[0], bindings)
+            return value if _as_array(value) is not None or _number(value) is not None else None
         function = _SAFE_FUNCTIONS.get(name)
         if function is None or len(node.args) != 1 or node.keywords:
             return None
@@ -311,6 +368,13 @@ def _extract_series(
     for statement in tree.body:
         call = statement.value if isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call) else None
         if call is None or not _plot_call_name(call) or len(call.args) < 2:
+            if isinstance(statement, ast.FunctionDef):
+                function = _safe_user_function(statement)
+                if function is None:
+                    bindings.pop(statement.name, None)
+                else:
+                    bindings[statement.name] = function
+                continue
             if isinstance(statement, ast.Assign) and len(statement.targets) == 1 and isinstance(statement.targets[0], ast.Name):
                 value = _safe_value(statement.value, bindings)
                 if value is None:
@@ -419,6 +483,13 @@ def _bindings_before_cell(notebook: NotebookNode, cell_index: int) -> dict[str, 
         except SyntaxError:
             continue
         for statement in previous_tree.body:
+            if isinstance(statement, ast.FunctionDef):
+                function = _safe_user_function(statement)
+                if function is None:
+                    bindings.pop(statement.name, None)
+                else:
+                    bindings[statement.name] = function
+                continue
             if isinstance(statement, ast.AugAssign):
                 for name in _target_names(statement.target):
                     if name in ("min", "max", "float"):
@@ -460,6 +531,13 @@ def _bindings_at_position(
     for statement in tree.body:
         if not _statement_before(position, statement):
             break
+        if isinstance(statement, ast.FunctionDef):
+            function = _safe_user_function(statement)
+            if function is None:
+                bindings.pop(statement.name, None)
+            else:
+                bindings[statement.name] = function
+            continue
         if isinstance(statement, ast.AugAssign):
             for name in _target_names(statement.target):
                 if name in ("min", "max", "float"):
@@ -537,6 +615,15 @@ def _state_before_cell(
 def _apply_taint_statement(
     statement: ast.stmt, bindings: dict[str, object], tainted: set[str]
 ) -> None:
+    if isinstance(statement, ast.FunctionDef):
+        function = _safe_user_function(statement)
+        if function is None:
+            bindings.pop(statement.name, None)
+            tainted.add(statement.name)
+        else:
+            bindings[statement.name] = function
+            tainted.discard(statement.name)
+        return
     targets: tuple[ast.AST, ...] = ()
     value: ast.AST | None = None
     if isinstance(statement, ast.Assign):

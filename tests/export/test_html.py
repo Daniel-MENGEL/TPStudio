@@ -32,7 +32,7 @@ def test_html_can_hide_code_and_outputs():
 
 def test_html_contains_annotation_palette_css():
     notebook = nbformat.v4.new_notebook(cells=[nbformat.v4.new_markdown_cell(
-        '<div class="tpstudio-annotation tpstudio-severity-info"></div>\n\n> **Retour TPStudio — Très bien**'
+        '<div class="tpstudio-annotation tpstudio-severity-info"></div>\n\n> **Très bien**'
     )])
     html = render_annotated_notebook_html(notebook, options=CopyExportOptions())
     assert "tpstudio-severity-info" in html
@@ -41,8 +41,8 @@ def test_html_contains_annotation_palette_css():
 
 def test_html_multiple_annotations_use_one_global_palette_and_escape_message():
     cells = [
-        nbformat.v4.new_markdown_cell('<blockquote class="tpstudio-annotation tpstudio-severity-info" style="background:#edf7ee"><strong>Retour TPStudio — Très bien</strong><br>Premier</blockquote>'),
-        nbformat.v4.new_markdown_cell('<blockquote class="tpstudio-annotation tpstudio-severity-blocking" style="background:#fceeee"><strong>Retour TPStudio — Problème</strong><br>&lt;tag&gt; &amp; **gras**</blockquote>'),
+        nbformat.v4.new_markdown_cell('<blockquote class="tpstudio-annotation tpstudio-severity-info" style="background:#edf7ee"><strong>Très bien</strong><br>Premier</blockquote>'),
+        nbformat.v4.new_markdown_cell('<blockquote class="tpstudio-annotation tpstudio-severity-blocking" style="background:#fceeee"><strong>Problème</strong><br>&lt;tag&gt; &amp; **gras**</blockquote>'),
     ]
     html = render_annotated_notebook_html(nbformat.v4.new_notebook(cells=cells), options=CopyExportOptions())
     assert html.count(".tpstudio-annotation { margin") == 1

@@ -64,7 +64,8 @@ def test_create_feedback_notebook_inserts_feedback_cell(tmp_path: Path) -> None:
     first_source = "".join(first_cell["source"])
 
     assert first_cell["cell_type"] == "markdown"
-    assert "Retour TPStudio" in first_source
+    assert "## Retour automatique" in first_source
+    assert "Retour TPStudio" not in first_source
     assert "Priorités avant nouveau rendu" in first_source
     assert "complétez cette cellule puis exécutez-la" in first_source
     assert "Tracé expérimental" in first_source
@@ -246,7 +247,8 @@ def test_local_feedback_comments_are_inserted_after_target_cells(tmp_path: Path)
     data = _read_notebook(created)
     cells = data["cells"]
 
-    assert "Retour TPStudio" in "".join(cells[0]["source"])
+    assert "## Retour automatique" in "".join(cells[0]["source"])
+    assert "Retour TPStudio" not in "".join(cells[0]["source"])
 
     local_feedback_cells = [
         cell for cell in cells
@@ -479,4 +481,3 @@ def test_feedback_copy_colors_response_cells_by_diagnosis(tmp_path: Path) -> Non
     assert colored_response_cells[1]["metadata"]["tpstudio"]["response_level"] == "fragile"
 
     assert data["metadata"]["tpstudio"]["response_cells_colored"] is True
-

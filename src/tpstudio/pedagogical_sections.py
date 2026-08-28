@@ -473,7 +473,7 @@ def _format_local_feedback(
     return f"""
 <div style="background:{background}; border-left:5px solid {border}; padding:12px 14px; border-radius:6px;">
 
-### Retour TPStudio — {finding.section_title}
+### {finding.section_title}
 
 **{label}** — {reasons}.
 

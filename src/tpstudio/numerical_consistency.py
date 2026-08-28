@@ -685,7 +685,7 @@ def _format_local_feedback(
     return f"""
 <div style="background:#ffebee; border-left:5px solid #c62828; padding:12px 14px; border-radius:6px;">
 
-### Retour TPStudio — cohérence numérique{context}
+### Cohérence numérique{context}
 
 **Écart important entre le calcul et le résultat attendu.**
 

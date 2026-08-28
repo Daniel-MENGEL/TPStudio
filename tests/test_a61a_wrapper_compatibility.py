@@ -37,7 +37,8 @@ def test_a61a_keeps_automatic_feedback_notebook_output(tmp_path: Path) -> None:
     notebook = nbformat.read(created, as_version=4)
     text = "\n".join(str(cell.source) for cell in notebook.cells)
 
-    assert "Retour TPStudio — Protocole" in text
+    assert "### Protocole" in text
+    assert "Retour TPStudio — Protocole" not in text
 
 
 def test_a61a_keeps_automatic_feedback_report_output(tmp_path: Path) -> None:

@@ -50,7 +50,7 @@ def render_notebook_annotation(annotation: NotebookAnnotation) -> str:
     content = (
         f'<blockquote class="tpstudio-annotation tpstudio-severity-{style}" role="note" '
         f'style="{_INLINE_STYLES[style]}">\n'
-        f"<strong>Retour TPStudio — {label}</strong>\n\n"
+        f"<strong>{label}</strong>\n\n"
         f"{safe_message}\n"
         "</blockquote>"
     )

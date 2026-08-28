@@ -87,7 +87,8 @@ def test_feedback_pipeline_reports_numerical_inconsistency(
         encoding="utf-8",
     )
 
-    assert "Retour TPStudio — cohérence numérique" in corrected_text
+    assert "### Cohérence numérique" in corrected_text
+    assert "### Retour TPStudio — cohérence numérique" not in corrected_text
     assert "Cohérence des résultats numériques" in report_text
     assert "Résultats numériques incompatibles : **1**" in report_text
     assert "2.99" in report_text

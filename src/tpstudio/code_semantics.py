@@ -914,7 +914,7 @@ def _format_local_feedback(
     return f"""
 <div style="background:#fff0e0; border-left:5px solid #ef6c00; padding:12px 14px; border-radius:6px;">
 
-### Retour TPStudio — code à vérifier{context}
+### Code à vérifier{context}
 
 **Variable concernée :** `{finding.target}`
 

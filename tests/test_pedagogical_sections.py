@@ -81,7 +81,8 @@ def test_local_feedback_is_inserted_after_fragile_protocol(
     output = nbformat.read(corrected, as_version=4)
 
     assert len(output.cells) == 2
-    assert "Retour TPStudio — Protocole" in output.cells[1].source
+    assert "### Protocole" in output.cells[1].source
+    assert "Retour TPStudio — Protocole" not in output.cells[1].source
     assert "À revoir" in output.cells[1].source
 
 

@@ -214,6 +214,39 @@ def match_regression_to_series(
         best = [item for item in matches if item[3] == best_rank]
         unique_interpretations = {(item[0].series_id, item[1], item[2]) for item in best}
         if len(unique_interpretations) != 1:
+            # The same measured variables may legitimately be plotted again
+            # later for another pedagogical purpose.  Prefer a uniquely nearest
+            # cell, but preserve ambiguity for duplicate plots at equal
+            # distance or for direct/reversed alternatives within one series.
+            distances = {
+                item[0].series_id: abs(
+                    item[0].cell_index_snapshot - regression.cell_index_snapshot
+                )
+                for item in best
+            }
+            nearest_distance = min(distances.values())
+            nearest_ids = {
+                series_id
+                for series_id, distance in distances.items()
+                if distance == nearest_distance
+            }
+            nearest = [item for item in best if item[0].series_id in nearest_ids]
+            nearest_interpretations = {
+                (item[0].series_id, item[2]) for item in nearest
+            }
+            if len(nearest_ids) == 1 and len(nearest_interpretations) == 1:
+                best = nearest
+                unique_interpretations = {
+                    (item[0].series_id, item[1], item[2]) for item in best
+                }
+            else:
+                return RegressionSeriesMatch(
+                    regression.regression_id, None, RegressionSeriesMatchStatus.AMBIGUOUS,
+                    "plusieurs_interpretations_directes_ou_inversees",
+                    tuple(sorted({item[0].series_id for item in best})),
+                    ("plusieurs_interpretations_possibles",), True,
+                )
+        if len(unique_interpretations) != 1:
             return RegressionSeriesMatch(
                 regression.regression_id, None, RegressionSeriesMatchStatus.AMBIGUOUS,
                 "plusieurs_interpretations_directes_ou_inversees",

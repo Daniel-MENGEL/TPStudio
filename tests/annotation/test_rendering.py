@@ -35,7 +35,8 @@ def test_severity_maps_to_explicit_accessible_presentation() -> None:
         assert annotation_presentation(item) == (style, label)
         rendered = render_notebook_annotation(item)
         assert f"tpstudio-severity-{style}" in rendered
-        assert f"Retour TPStudio — {label}" in rendered
+        assert f"<strong>{label}</strong>" in rendered
+        assert "Retour TPStudio" not in rendered
         assert "Message inchangé" in rendered
 
 

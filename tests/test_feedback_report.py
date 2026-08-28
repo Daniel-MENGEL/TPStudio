@@ -52,7 +52,8 @@ def test_format_feedback_report_markdown_contains_feedback_sections(tmp_path: Pa
     assert markdown.startswith("# Rapport TPStudio")
     assert "Modèle : `modele.ipynb`" in markdown
     assert "Copie : `copie.ipynb`" in markdown
-    assert "## Retour TPStudio" in markdown
+    assert "## Retour automatique" in markdown
+    assert "## Retour TPStudio" not in markdown
     assert "### Synthèse rapide" in markdown
     assert "### Diagnostic des réponses" in markdown
     assert "Corrigeabilité globale" in markdown

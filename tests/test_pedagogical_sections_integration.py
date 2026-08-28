@@ -51,7 +51,8 @@ def test_feedback_pipeline_covers_fragile_protocol_without_response_marker(
     )
     report_text = report.read_text(encoding="utf-8")
 
-    assert "Retour TPStudio — Protocole" in corrected_text
+    assert "### Protocole" in corrected_text
+    assert "Retour TPStudio — Protocole" not in corrected_text
     assert "Diagnostic des sections pédagogiques" in report_text
     assert "Protocole" in report_text
     assert "fragile" in report_text

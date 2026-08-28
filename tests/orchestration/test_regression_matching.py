@@ -82,6 +82,44 @@ def test_identical_measured_series_are_ambiguous():
     assert result.matched_series_id is None
 
 
+def test_unique_nearest_repeated_series_is_selected() -> None:
+    notebook = _notebook(
+        "x = [0., 1., 2.]\ny = [1., 3., 5.]\np = np.polyfit(x, y, 1)",
+        "plt.plot(x, y, 'o', label='Mesures')",
+        "unrelated = 1",
+        "plt.plot(x, y, 'o', label='Mesures')",
+    )
+    result = match_regression_to_series(
+        notebook,
+        _observation(notebook.cells[0].source),
+        (
+            _series(1, 1, "x", "y"),
+            _series(3, 1, "x", "y"),
+        ),
+    )
+    assert result.status is RegressionSeriesMatchStatus.EXACT
+    assert result.matched_series_id == "cell-1-series-1"
+    assert not result.requires_human_review
+
+
+def test_equally_near_repeated_series_remain_ambiguous() -> None:
+    notebook = _notebook(
+        "x = [0., 1., 2.]\ny = [1., 3., 5.]\nplt.plot(x, y, 'o', label='Mesures')",
+        "p = np.polyfit(x, y, 1)",
+        "plt.plot(x, y, 'o', label='Mesures')",
+    )
+    result = match_regression_to_series(
+        notebook,
+        _observation(notebook.cells[1].source, 1),
+        (
+            _series(0, 1, "x", "y"),
+            _series(2, 1, "x", "y"),
+        ),
+    )
+    assert result.status is RegressionSeriesMatchStatus.AMBIGUOUS
+    assert result.matched_series_id is None
+
+
 def test_reassignment_between_regression_and_plot_is_not_exact():
     notebook = _notebook(
         "x = [0., 1., 2.]\ny = [1., 3., 5.]\np = np.polyfit(x, y, 1)",

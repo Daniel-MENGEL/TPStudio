@@ -235,7 +235,7 @@ def structured_feedback_markdown(comparison: CopyComparison) -> str:
     )
 
     sections = [
-        "## Retour TPStudio",
+        "## Retour automatique",
         "",
         "Ce retour automatique signale les points techniques, rédactionnels et graphiques à vérifier avant une correction détaillée.",
         "",
@@ -836,7 +836,7 @@ def _advice_items(
     global_readiness = _global_readiness_level(comparison, response_diagnostics, graph_comparisons)
 
     if urgent_items:
-        items.append("Après correction, relisez les priorités du bloc `Retour TPStudio`.")
+        items.append("Après correction, relisez les priorités du bloc `Retour automatique`.")
     elif global_readiness == "à vérifier":
         items.append("Le notebook est techniquement exploitable, mais il doit être vérifié avant correction détaillée.")
     elif check_items or weak_responses or graph_issues:
@@ -922,4 +922,3 @@ def create_feedback_notebook(
         corrected_path,
     )
     return result
-

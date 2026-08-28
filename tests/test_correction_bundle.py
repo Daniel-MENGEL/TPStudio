@@ -63,7 +63,8 @@ def test_correct_copy_creates_notebook_and_markdown_report(tmp_path: Path) -> No
     assert copy.read_text(encoding="utf-8") == original
 
     corrected = json.loads(paths.notebook.read_text(encoding="utf-8"))
-    assert "Retour TPStudio" in "".join(corrected["cells"][0]["source"])
+    assert "## Retour automatique" in "".join(corrected["cells"][0]["source"])
+    assert "Retour TPStudio" not in "".join(corrected["cells"][0]["source"])
 
     report = paths.markdown_report.read_text(encoding="utf-8")
     assert "# Rapport TPStudio" in report

@@ -60,4 +60,5 @@ def test_feedback_copy_command_creates_feedback_notebook(tmp_path: Path, capsys)
     assert output.exists()
 
     data = json.loads(output.read_text(encoding="utf-8"))
-    assert "Retour TPStudio" in "".join(data["cells"][0]["source"])
+    assert "## Retour automatique" in "".join(data["cells"][0]["source"])
+    assert "Retour TPStudio" not in "".join(data["cells"][0]["source"])

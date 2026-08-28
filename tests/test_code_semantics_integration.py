@@ -81,7 +81,7 @@ def test_feedback_pipeline_reports_semantic_code_differences(
     )
 
     assert corrected_text.count(
-        "Retour TPStudio — code à vérifier"
+        "### Code à vérifier"
     ) == 2
 
     assert (

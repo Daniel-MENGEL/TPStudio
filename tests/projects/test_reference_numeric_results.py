@@ -83,6 +83,33 @@ def test_snells_reference_does_not_treat_raw_angles_as_reported_results() -> Non
         assert not evaluations.for_production(production_id)[0].diagnostics
 
 
+def test_snells_reference_regression_and_plotted_fit_are_evaluable() -> None:
+    path = (
+        REFERENCE_DIR
+        / "session-02/snells-descartes/Correction-Lois-de-Snell-Descartes.ipynb"
+    )
+    dispatch = analyze_copy(
+        NotebookCopySource(path.name, path.name, path),
+        project=snells_laws_teacher_project(),
+    )
+
+    assert dispatch.analysis is not None
+    analysis = dispatch.analysis
+    measured = next(
+        item for item in analysis.all_graph_analyses if item.n_points == 15
+    )
+    assert measured.technical_status.value == "evaluable"
+    match = analysis.regression_series_matches[0]
+    assert match.status.value == "exact"
+    assert match.matched_series_id == measured.series_id
+    model = analysis.regression_model_analyses[0]
+    assert model.technical_status.value == "evaluable"
+    assert model.coefficients == pytest.approx((1.4797237075, 0.0049401314))
+    consistency = analysis.regression_plot_consistency_analyses[0]
+    assert consistency.technical_status.value == "evaluable"
+    assert consistency.consistency_status.value == "consistent"
+
+
 def test_thin_lens_reference_prefers_formatted_theoretical_focal_length() -> None:
     path = (
         REFERENCE_DIR

@@ -31,7 +31,9 @@ def test_pipeline_creates_two_derived_artifacts_and_preserves_source(tmp_path):
     assert result.success and result.source_preserved and source.read_bytes() == before
     assert result.notebook_artifact.path.exists() and result.html_artifact.path.exists()
     exported = nbformat.read(result.notebook_artifact.path, as_version=nbformat.NO_CONVERT)
-    assert "Retour TPStudio" in "\n".join(cell.source for cell in exported.cells if cell.cell_type == "markdown")
+    feedback = "\n".join(cell.source for cell in exported.cells if cell.cell_type == "markdown")
+    assert "<strong>" in feedback
+    assert "Retour TPStudio" not in feedback
 
 
 def test_pipeline_exports_student_summary_to_notebook_and_html(tmp_path, monkeypatch):
