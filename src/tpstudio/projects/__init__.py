@@ -38,6 +38,10 @@ from .first_lab_measurements import (
     STATEMENT_FILENAME as FIRST_LAB_MEASUREMENTS_STATEMENT_FILENAME,
     first_lab_measurements_teacher_project,
 )
+from .first_lab_grading import (
+    FIRST_LAB_FORMATIVE_GRADING_PROFILE,
+    suggest_first_lab_rubric,
+)
 from .graph_model_inference import (
     ExpectedGraphModelProposal,
     ExpectedModelProposalConfidence,
@@ -82,6 +86,8 @@ __all__ = [
     "FIRST_LAB_MEASUREMENTS_STATEMENT_FILENAME",
     "FIRST_LAB_MEASUREMENTS_CORRECTION_FILENAME",
     "FIRST_LAB_MEASUREMENTS_SEMANTIC_EXPECTATIONS",
+    "FIRST_LAB_FORMATIVE_GRADING_PROFILE",
+    "suggest_first_lab_rubric",
     "CHARGE_OBJECTIVE_SEMANTIC_CONTRACT",
     "ENERGY_OBJECTIVE_SEMANTIC_CONTRACT",
     "LEAKAGE_PROTOCOL_SEMANTIC_CONTRACT",

@@ -1,7 +1,14 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import tpstudio.web.app as app
-from tpstudio.web.app import _analysis_signature, _build_semantic_provider, _input_signature, web_error_message
+from tpstudio.web.app import (
+    _analysis_signature,
+    _build_semantic_provider,
+    _input_signature,
+    _render_first_lab_grading,
+    web_error_message,
+)
 from tpstudio.web.model import SelectedCopy, WebBatchOptions
 
 
@@ -43,3 +50,51 @@ def test_analysis_signature_is_stable_and_option_model_specific():
     assert _analysis_signature(base, False, "gpt-5-mini") == _analysis_signature(base, False, "gpt-5-mini")
     assert _analysis_signature(base, False, "gpt-5-mini") != _analysis_signature(base, True, "gpt-5-mini")
     assert _analysis_signature(base, True, "gpt-5-mini") != _analysis_signature(base, True, "other-model")
+
+
+def test_first_lab_grading_panel_prefills_an_empty_copy_and_remains_teacher_only():
+    class FakeStreamlit:
+        def __init__(self):
+            self.metrics = []
+            self.keys = []
+
+        def markdown(self, value):
+            assert "Proposition de note formative" in value
+
+        def caption(self, value):
+            pass
+
+        def selectbox(self, label, *, options, index, format_func, help, key):
+            self.keys.append(key)
+            assert format_func(options[index]) == "Absent"
+            return options[index]
+
+        def metric(self, label, value):
+            self.metrics.append((label, value))
+
+    fake = FakeStreamlit()
+    _render_first_lab_grading(
+        fake,
+        SimpleNamespace(
+            project_id="first-lab-measurements",
+            semantic_response_analyses=(),
+            quantity_evaluations=(),
+            graph_evaluations=(),
+            has_placeholders=True,
+            has_unexecuted_code=True,
+        ),
+        "copy-001",
+    )
+    assert fake.metrics == [("Note proposée", "8.0/20")]
+    assert len(fake.keys) == 5
+    assert all(key.startswith("grading-first-lab-formative-v1-copy-001-") for key in fake.keys)
+
+
+def test_first_lab_grading_panel_is_hidden_for_other_projects():
+    class FailOnUse:
+        def __getattr__(self, name):
+            raise AssertionError(name)
+
+    _render_first_lab_grading(
+        FailOnUse(), SimpleNamespace(project_id="snells-laws-mvp"), "copy-001"
+    )

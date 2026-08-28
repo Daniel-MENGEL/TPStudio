@@ -40,11 +40,24 @@ class BatchPlanRow:
 
 def batch_plan_rows(plan: BatchPlan, identities: Mapping[str, object] | None = None) -> tuple[BatchPlanRow, ...]:
     identities = identities or {}
-    labels = {"confirmed": "Confirmée", "to_review": "À vérifier", "missing": "Non renseignée"}
+    labels = {
+        "confirmed": "Confirmée",
+        "to_review": "À vérifier",
+        "missing": "Non renseignée",
+        "reference_correction": "Référence",
+        "empty_statement": "Référence",
+    }
+    special_displays = {
+        "reference_correction": "Corrigé",
+        "empty_statement": "Énoncé vide",
+    }
     return tuple(
         BatchPlanRow(
             f"Copie {index}", source.source_id, source.display_name or source.path.name,
-            " · ".join(student.display_name for student in getattr(identities.get(source.source_id), "students", ())) or "—",
+            special_displays.get(
+                getattr(getattr(identities.get(source.source_id), "status", None), "value", ""),
+                " · ".join(student.display_name for student in getattr(identities.get(source.source_id), "students", ())) or "—",
+            ),
             labels.get(getattr(getattr(identities.get(source.source_id), "status", None), "value", ""), "Non renseignée"),
             {"notebook": "Notebook", "filename": "Nom du fichier"}.get(getattr(getattr(identities.get(source.source_id), "source", None), "value", ""), "—"),
             output.notebook_path.name, output.html_path.name,

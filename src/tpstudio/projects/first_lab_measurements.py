@@ -51,7 +51,7 @@ from .model import (
 
 
 STATEMENT_FILENAME = "Premieres-mesures-au-labo.ipynb"
-CORRECTION_FILENAME = "Premieres-mesures-au-labo-Correction.ipynb"
+CORRECTION_FILENAME = "Premieres-mesures-au-labo-Corrige.ipynb"
 
 
 def _criterion(

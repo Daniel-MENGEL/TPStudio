@@ -72,13 +72,13 @@ def test_generic_export_name_uses_project_and_confirmed_students(tmp_path):
 
 
 def test_generic_export_name_fallback_does_not_duplicate_correction(tmp_path):
-    source = tmp_path / "Premieres-mesures-au-labo-Correction.ipynb"
+    source = tmp_path / "Premieres-mesures-au-labo-Corrige.ipynb"
     source.write_text("{}", encoding="utf-8")
     analysis = SimpleNamespace(
         project=SimpleNamespace(identity=SimpleNamespace(title="Premières mesures au labo")),
         source=SimpleNamespace(path=source, display_name=source.name),
     )
-    assert export_output_stem(analysis) == "Premieres-mesures-au-labo-Correction"
+    assert export_output_stem(analysis) == "Premieres-mesures-au-labo-Corrige"
 
 
 def test_real_partial_filename_keeps_confirmed_identity_and_canonical_stem(tmp_path):

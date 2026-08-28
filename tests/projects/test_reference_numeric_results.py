@@ -20,22 +20,22 @@ REFERENCE_DIR = Path(__file__).parents[2] / "reference-notebooks"
     (
         (
             snells_laws_teacher_project,
-            "session-02/snells-descartes/Correction-Lois-de-Snell-Descartes.ipynb",
+            "session-02/snells-descartes/Lois-de-Snell-Descartes-Corrige.ipynb",
             frozenset(),
         ),
         (
             thin_lens_teacher_project,
-            "session-02/thin-lens/Correction-Formation-dune-image-par-une-lentille-mince.ipynb",
+            "session-02/thin-lens/Formation-dune-image-par-une-lentille-mince-Corrige.ipynb",
             frozenset(),
         ),
         (
             focometry_teacher_project,
-            "session-03/focometry/Correction-Instruments-doptique-et-application-a-la-focometrie.ipynb",
+            "session-03/focometry/Instruments-doptique-et-application-a-la-focometrie-Corrige.ipynb",
             frozenset(),
         ),
         (
             prism_goniometer_teacher_project,
-            "session-03/prism-goniometer/Correction-Mesure-dindice-au-goniometre-a-prisme.ipynb",
+            "session-03/prism-goniometer/Mesure-dindice-au-goniometre-a-prisme-Corrige.ipynb",
             frozenset(),
         ),
     ),
@@ -65,7 +65,7 @@ def test_reference_correction_numeric_results_are_unambiguous(
 def test_snells_reference_does_not_treat_raw_angles_as_reported_results() -> None:
     path = (
         REFERENCE_DIR
-        / "session-02/snells-descartes/Correction-Lois-de-Snell-Descartes.ipynb"
+        / "session-02/snells-descartes/Lois-de-Snell-Descartes-Corrige.ipynb"
     )
     dispatch = analyze_copy(
         NotebookCopySource(path.name, path.name, path),
@@ -86,7 +86,7 @@ def test_snells_reference_does_not_treat_raw_angles_as_reported_results() -> Non
 def test_snells_reference_regression_and_plotted_fit_are_evaluable() -> None:
     path = (
         REFERENCE_DIR
-        / "session-02/snells-descartes/Correction-Lois-de-Snell-Descartes.ipynb"
+        / "session-02/snells-descartes/Lois-de-Snell-Descartes-Corrige.ipynb"
     )
     dispatch = analyze_copy(
         NotebookCopySource(path.name, path.name, path),
@@ -114,7 +114,7 @@ def test_thin_lens_reference_prefers_formatted_theoretical_focal_length() -> Non
     path = (
         REFERENCE_DIR
         / "session-02/thin-lens"
-        / "Correction-Formation-dune-image-par-une-lentille-mince.ipynb"
+        / "Formation-dune-image-par-une-lentille-mince-Corrige.ipynb"
     )
     dispatch = analyze_copy(
         NotebookCopySource(path.name, path.name, path),
@@ -137,7 +137,7 @@ def test_thin_lens_statement_supplies_theoretical_slope_without_feedback() -> No
     path = (
         REFERENCE_DIR
         / "session-02/thin-lens"
-        / "Correction-Formation-dune-image-par-une-lentille-mince.ipynb"
+        / "Formation-dune-image-par-une-lentille-mince-Corrige.ipynb"
     )
     dispatch = analyze_copy(
         NotebookCopySource(path.name, path.name, path),
@@ -152,3 +152,28 @@ def test_thin_lens_statement_supplies_theoretical_slope_without_feedback() -> No
     assert observation is not None
     assert observation.value == Decimal("1")
     assert not evaluation.diagnostics
+
+
+def test_focometry_reference_recognizes_units_in_saved_text_outputs() -> None:
+    path = (
+        REFERENCE_DIR
+        / "session-03/focometry"
+        / "Instruments-doptique-et-application-a-la-focometrie-Corrige.ipynb"
+    )
+    dispatch = analyze_copy(
+        NotebookCopySource(path.name, path.name, path),
+        project=focometry_teacher_project(),
+    )
+
+    assert dispatch.analysis is not None
+    for production_id in (
+        "diverging_box_focal_length",
+        "bessel_focal_length",
+    ):
+        evaluation = dispatch.analysis.quantity_evaluations.for_production(
+            production_id
+        )[0]
+        observation = evaluation.assessment.selected_observation
+        assert observation is not None
+        assert observation.unit == "cm"
+        assert not evaluation.diagnostics

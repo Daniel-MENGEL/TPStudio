@@ -13,7 +13,7 @@ def test_project_identity_references_and_readiness():
     assert project.identity.version == "A79d2"
     assert project.statement_reference.expected_filename == "Premieres-mesures-au-labo.ipynb"
     assert project.correction_reference is not None
-    assert project.correction_reference.expected_filename == "Premieres-mesures-au-labo-Correction.ipynb"
+    assert project.correction_reference.expected_filename == "Premieres-mesures-au-labo-Corrige.ipynb"
     assert assess_analysis_readiness(project) is AnalysisReadiness.READY
 
 

@@ -9,6 +9,7 @@ import unicodedata
 from pathlib import Path
 
 import nbformat
+from tpstudio.semantic_analysis import extract_student_response
 
 from .model import SelectedCopy
 
@@ -39,6 +40,8 @@ class CopyIdentityStatus(str, Enum):
     CONFIRMED = "confirmed"
     TO_REVIEW = "to_review"
     MISSING = "missing"
+    REFERENCE_CORRECTION = "reference_correction"
+    EMPTY_STATEMENT = "empty_statement"
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,11 +55,19 @@ class CopyIdentity:
     def __post_init__(self) -> None:
         object.__setattr__(self, "students", tuple(self.students))
         object.__setattr__(self, "warnings", tuple(self.warnings))
-        if self.status is CopyIdentityStatus.MISSING and self.students:
-            raise ValueError("Une identité manquante ne peut pas porter d'étudiants.")
+        if self.status in (
+            CopyIdentityStatus.MISSING,
+            CopyIdentityStatus.REFERENCE_CORRECTION,
+            CopyIdentityStatus.EMPTY_STATEMENT,
+        ) and self.students:
+            raise ValueError("Cette classification ne peut pas porter d'étudiants.")
 
 
-_LABEL = re.compile(r"(?im)^\s*[#*_]*\s*(?:nom\(s\)|noms?|étudiants?|etudiants?|binôme|binome)\s*:?[#*_]*\s*(.+?)\s*$")
+_LABEL = re.compile(
+    r"(?im)^[ \t]*[#*_]*[ \t]*(?:nom\(s\)|noms?|étudiants?|etudiants?|binôme|binome)"
+    r"[ \t]*:?[#*_]*[ \t]*(.*?)[ \t]*$"
+)
+_RESPONSE_MARKER = re.compile(r"(?i)r[ée]ponse\s*(?:\*\*)?\s*:")
 _PLACEHOLDERS = {"", "nom", "prénom", "prenom", "nom prénom", "nom prenom", "à compléter", "a compléter", "a completer", "votre nom", "vos noms", "xxx", "???"}
 
 
@@ -82,6 +93,25 @@ def extract_copy_identity_from_notebook(notebook_path: Path) -> CopyIdentity:
         notebook = nbformat.read(notebook_path, as_version=4)
     except Exception:
         return CopyIdentity((), None, CopyIdentityStatus.MISSING, warnings=("Notebook invalide.",))
+    leading_markdown = tuple(
+        str(cell.source)
+        for cell in tuple(notebook.cells)[:15]
+        if cell.cell_type == "markdown"
+    )
+    normalized_stem = _normalise(notebook_path.stem)
+    correction_signal = (
+        "corrige" in normalized_stem
+        or any(
+            "correction de reference" in _normalise(text)
+            for text in leading_markdown
+        )
+    )
+    if correction_signal:
+        return CopyIdentity(
+            (), CopyIdentitySource.NOTEBOOK,
+            CopyIdentityStatus.REFERENCE_CORRECTION,
+            "Corrigé",
+        )
     for cell in tuple(notebook.cells)[:15]:
         if cell.cell_type != "markdown":
             continue
@@ -91,7 +121,26 @@ def extract_copy_identity_from_notebook(notebook_path: Path) -> CopyIdentity:
             students = _students_from_value(raw)
             if students:
                 return CopyIdentity(students, CopyIdentitySource.NOTEBOOK, CopyIdentityStatus.CONFIRMED, raw)
-            return CopyIdentity((), None, CopyIdentityStatus.MISSING, raw)
+            break
+    response_cells = tuple(
+        str(cell.source)
+        for cell in notebook.cells
+        if cell.cell_type == "markdown" and _RESPONSE_MARKER.search(str(cell.source))
+    )
+    extracted_responses = tuple(
+        re.sub(r"^[*_\s]+", "", extract_student_response(text)).strip()
+        for text in response_cells
+    )
+    if response_cells and all(
+        not response
+        or response.casefold().startswith(("à compléter", "a compléter", "a completer"))
+        for response in extracted_responses
+    ):
+        return CopyIdentity(
+            (), CopyIdentitySource.NOTEBOOK,
+            CopyIdentityStatus.EMPTY_STATEMENT,
+            "Énoncé vide",
+        )
     return CopyIdentity((), None, CopyIdentityStatus.MISSING)
 
 
@@ -112,6 +161,11 @@ def _identity_tokens(value: str) -> set[str]:
 
 
 def resolve_copy_identity(notebook_identity: CopyIdentity, *, filename_hint: tuple[str, ...] = ()) -> CopyIdentity:
+    if notebook_identity.status in (
+        CopyIdentityStatus.REFERENCE_CORRECTION,
+        CopyIdentityStatus.EMPTY_STATEMENT,
+    ):
+        return notebook_identity
     if notebook_identity.status is CopyIdentityStatus.MISSING:
         if filename_hint:
             return CopyIdentity((), CopyIdentitySource.FILENAME, CopyIdentityStatus.TO_REVIEW, warnings=("Identité absente du notebook ; indice filename à vérifier.",))

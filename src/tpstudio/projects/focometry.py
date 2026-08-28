@@ -48,7 +48,7 @@ from .model import (
 
 
 STATEMENT_FILENAME = "Instruments-doptique-et-application-a-la-focometrie.ipynb"
-CORRECTION_FILENAME = "Correction-Instruments-doptique-et-application-a-la-focometrie.ipynb"
+CORRECTION_FILENAME = "Instruments-doptique-et-application-a-la-focometrie-Corrige.ipynb"
 
 
 def _criterion(

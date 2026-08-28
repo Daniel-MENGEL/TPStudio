@@ -368,7 +368,7 @@ def thin_lens_teacher_project() -> TeacherProjectConfiguration:
         ),
         (
             NotebookReference("statement", NotebookReferenceRole.STATEMENT, "Formation-dune-image-par-une-lentille-mince.ipynb"),
-            NotebookReference("correction", NotebookReferenceRole.CORRECTION, "Correction-Formation-dune-image-par-une-lentille-mince.ipynb"),
+            NotebookReference("correction", NotebookReferenceRole.CORRECTION, "Formation-dune-image-par-une-lentille-mince-Corrige.ipynb"),
             NotebookReference("control-copy", NotebookReferenceRole.CONTROL_COPY, "TP_physique_2_Galaad-Louis_Louis[]Galaad.ipynb"),
         ),
         plan,

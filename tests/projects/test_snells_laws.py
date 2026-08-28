@@ -29,7 +29,7 @@ def test_project_identity_and_notebook_references_are_public_safe() -> None:
     assert project.identity.version == "A79e1"
     assert [item.expected_filename for item in project.notebook_references] == [
         "Lois-de-Snell-Descartes.ipynb",
-        "Correction-Lois-de-Snell-Descartes.ipynb",
+        "Lois-de-Snell-Descartes-Corrige.ipynb",
         "Fausse-copie-etudiant-Lois-de-Snell-Descartes-ameliore.ipynb",
     ]
     assert all(item.content_fingerprint is None for item in project.notebook_references)

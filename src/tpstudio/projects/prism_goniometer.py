@@ -48,7 +48,7 @@ from .model import (
 
 
 STATEMENT_FILENAME = "Mesure-dindice-au-goniometre-a-prisme.ipynb"
-CORRECTION_FILENAME = "Correction-Mesure-dindice-au-goniometre-a-prisme.ipynb"
+CORRECTION_FILENAME = "Mesure-dindice-au-goniometre-a-prisme-Corrige.ipynb"
 
 
 def _criterion(

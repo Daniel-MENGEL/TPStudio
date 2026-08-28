@@ -78,6 +78,8 @@ def export_output_stem(analysis, identity=None) -> str:
         return f"{canonical}-Correction"
     name = Path(analysis.source.display_name).stem
     safe = re.sub(r"[^A-Za-z0-9._-]+", "-", name).strip("-._") or "copy"
+    if re.search(r"(?i)-corrige$", safe):
+        return safe
     safe = re.sub(r"(?i)-correction$", "", safe).rstrip("-._") or "copy"
     return f"{safe}-Correction"
 

@@ -485,7 +485,7 @@ def snells_laws_teacher_project() -> TeacherProjectConfiguration:
         ),
         (
             NotebookReference("statement", NotebookReferenceRole.STATEMENT, "Lois-de-Snell-Descartes.ipynb"),
-            NotebookReference("correction", NotebookReferenceRole.CORRECTION, "Correction-Lois-de-Snell-Descartes.ipynb"),
+            NotebookReference("correction", NotebookReferenceRole.CORRECTION, "Lois-de-Snell-Descartes-Corrige.ipynb"),
             NotebookReference("control-copy", NotebookReferenceRole.CONTROL_COPY, "Fausse-copie-etudiant-Lois-de-Snell-Descartes-ameliore.ipynb"),
         ),
         plan,

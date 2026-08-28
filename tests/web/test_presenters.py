@@ -7,6 +7,7 @@ from tpstudio.batch import BatchCopyResult, BatchCopySource, BatchCopyStatus, Ba
 from tpstudio.web.presenters import artifact_download_info, batch_plan_rows, batch_run_rows, has_output_name_collision
 from tpstudio.reporting import TeacherGraphHeadlineStatus, build_teacher_copy_report
 from tpstudio.web.presenters import graph_summary_rows
+from tpstudio.web.identity import CopyIdentity, CopyIdentitySource, CopyIdentityStatus
 
 
 def test_presenters_use_planned_basenames_only(tmp_path):
@@ -19,6 +20,34 @@ def test_presenters_use_planned_basenames_only(tmp_path):
     assert has_output_name_collision(plan)
     rows = batch_plan_rows(plan)
     assert rows[0].copy_label == "Copie 1"
+
+
+def test_batch_plan_rows_label_reference_notebooks_instead_of_students(tmp_path):
+    first = tmp_path / "correction.ipynb"
+    second = tmp_path / "statement.ipynb"
+    first.write_bytes(b"x")
+    second.write_bytes(b"y")
+    plan = build_batch_plan(
+        (
+            BatchCopySource("copy-001", first, first.name),
+            BatchCopySource("copy-002", second, second.name),
+        ),
+        tmp_path / "out",
+        BatchOptions(),
+    )
+    identities = {
+        "copy-001": CopyIdentity(
+            (), CopyIdentitySource.NOTEBOOK,
+            CopyIdentityStatus.REFERENCE_CORRECTION, "Corrigé",
+        ),
+        "copy-002": CopyIdentity(
+            (), CopyIdentitySource.NOTEBOOK,
+            CopyIdentityStatus.EMPTY_STATEMENT, "Énoncé vide",
+        ),
+    }
+    rows = batch_plan_rows(plan, identities)
+    assert [row.students_display for row in rows] == ["Corrigé", "Énoncé vide"]
+    assert [row.identity_status for row in rows] == ["Référence", "Référence"]
 
 
 def test_batch_run_rows_and_download_info_are_safe(tmp_path):

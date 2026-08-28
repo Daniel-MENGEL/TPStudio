@@ -34,6 +34,64 @@ def test_markdown_context_and_placeholders(tmp_path):
     assert identity.status is CopyIdentityStatus.MISSING and not identity.students
 
 
+def test_empty_identity_line_does_not_capture_following_date(tmp_path):
+    path = tmp_path / "copy.ipynb"
+    nbformat.write(_notebook("**Noms :**\nDate : —"), path)
+    identity = extract_copy_identity_from_notebook(path)
+    assert identity.status is CopyIdentityStatus.MISSING
+    assert not identity.students
+
+
+def test_reference_correction_and_empty_statement_are_classified(tmp_path):
+    correction = tmp_path / "Premieres-mesures-au-labo-Corrige.ipynb"
+    nbformat.write(
+        _notebook("**Noms :** Exemple de correction\n\nCorrection de référence"),
+        correction,
+    )
+    corrected = extract_copy_identity_from_notebook(correction)
+    assert corrected.status is CopyIdentityStatus.REFERENCE_CORRECTION
+    assert corrected.raw_value == "Corrigé"
+    assert not corrected.students
+
+    statement = tmp_path / "Premieres-mesures-au-labo.ipynb"
+    nbformat.write(
+        _notebook("**Noms :**\nDate : —\n\n**Réponse :**\n\nÀ compléter."),
+        statement,
+    )
+    empty = extract_copy_identity_from_notebook(statement)
+    assert empty.status is CopyIdentityStatus.EMPTY_STATEMENT
+    assert empty.raw_value == "Énoncé vide"
+    assert not empty.students
+
+
+def test_exported_student_correction_is_not_a_reference(tmp_path):
+    correction = tmp_path / "Premieres-mesures-au-labo-Alice-Martin-Correction.ipynb"
+    nbformat.write(_notebook("**Noms :** Alice Martin"), correction)
+    identity = extract_copy_identity_from_notebook(correction)
+    assert identity.status is CopyIdentityStatus.CONFIRMED
+    assert [student.display_name for student in identity.students] == ["Alice Martin"]
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "expected_status"),
+    [
+        ("session-02/snells-descartes/Lois-de-Snell-Descartes-Corrige.ipynb", CopyIdentityStatus.REFERENCE_CORRECTION),
+        ("session-02/snells-descartes/Lois-de-Snell-Descartes.ipynb", CopyIdentityStatus.EMPTY_STATEMENT),
+        ("session-02/thin-lens/Formation-dune-image-par-une-lentille-mince-Corrige.ipynb", CopyIdentityStatus.REFERENCE_CORRECTION),
+        ("session-02/thin-lens/Formation-dune-image-par-une-lentille-mince.ipynb", CopyIdentityStatus.EMPTY_STATEMENT),
+        ("session-03/focometry/Instruments-doptique-et-application-a-la-focometrie-Corrige.ipynb", CopyIdentityStatus.REFERENCE_CORRECTION),
+        ("session-03/focometry/Instruments-doptique-et-application-a-la-focometrie.ipynb", CopyIdentityStatus.EMPTY_STATEMENT),
+        ("session-03/prism-goniometer/Mesure-dindice-au-goniometre-a-prisme-Corrige.ipynb", CopyIdentityStatus.REFERENCE_CORRECTION),
+        ("session-03/prism-goniometer/Mesure-dindice-au-goniometre-a-prisme.ipynb", CopyIdentityStatus.EMPTY_STATEMENT),
+    ],
+)
+def test_integrated_reference_notebooks_have_expected_special_identity(relative_path, expected_status):
+    reference_root = Path(__file__).parents[2] / "reference-notebooks"
+    identity = extract_copy_identity_from_notebook(reference_root / relative_path)
+    assert identity.status is expected_status
+    assert not identity.students
+
+
 def test_filename_is_only_a_review_hint():
     assert extract_identity_hint_from_filename("Untitled.ipynb") == ()
     hint = extract_identity_hint_from_filename("TP-Snell-Jules-Bernard-Daniel-Mengel.ipynb")

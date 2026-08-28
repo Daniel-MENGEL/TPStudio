@@ -51,7 +51,7 @@ def test_semantic_results_supersede_overlapping_legacy_narrative_feedback() -> N
     path = (
         Path(__file__).parents[2]
         / "reference-notebooks/session-02/snells-descartes"
-        / "Correction-Lois-de-Snell-Descartes.ipynb"
+        / "Lois-de-Snell-Descartes-Corrige.ipynb"
     )
     result = SnellsLawsCopyAnalyzer().analyze(
         NotebookCopySource("snell-reference", "Correction Snell", path),
@@ -81,7 +81,7 @@ def test_legacy_narrative_feedback_remains_without_semantic_provider() -> None:
     path = (
         Path(__file__).parents[2]
         / "reference-notebooks/session-02/snells-descartes"
-        / "Correction-Lois-de-Snell-Descartes.ipynb"
+        / "Lois-de-Snell-Descartes-Corrige.ipynb"
     )
     result = SnellsLawsCopyAnalyzer().analyze(
         NotebookCopySource("snell-reference", "Correction Snell", path),

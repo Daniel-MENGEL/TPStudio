@@ -23,6 +23,15 @@ from tpstudio.web.identity import (
 from tpstudio.web.model import WebCopyOverride
 from tpstudio.web.planning import WebInputError, build_batch_plan_from_web_selection, build_dispatch_requests_from_web_selection, resolve_output_dir
 from tpstudio.projects import project_descriptor
+from tpstudio.projects import (
+    FIRST_LAB_FORMATIVE_GRADING_PROFILE,
+    suggest_first_lab_rubric,
+)
+from tpstudio.grading import (
+    RubricDecision,
+    RubricLevel,
+    build_formative_grade_proposal,
+)
 from tpstudio.web.presenters import (
     batch_plan_rows, graph_summary_rows,
     identity_resolution_candidates, active_analysis_for_source, batch_dispatch_rows,
@@ -74,6 +83,51 @@ def _analysis_signature(input_signature: tuple, semantic_enabled: bool, model: s
 
 def _semantic_model() -> str:
     return os.getenv("TPSTUDIO_OPENAI_MODEL") or DEFAULT_OPENAI_SEMANTIC_MODEL
+
+
+_RUBRIC_LEVEL_LABELS = {
+    RubricLevel.ABSENT: "Absent",
+    RubricLevel.PARTIAL: "Partiel",
+    RubricLevel.SATISFACTORY: "Satisfaisant",
+    RubricLevel.VERY_GOOD: "Très bien",
+}
+
+
+def _render_first_lab_grading(st, analysis, source_id: str) -> None:
+    """Render a teacher-only, non-exported formative grading experiment."""
+
+    profile = FIRST_LAB_FORMATIVE_GRADING_PROFILE
+    if analysis.project_id != profile.project_id:
+        return
+    st.markdown("### Proposition de note formative")
+    st.caption(
+        "Première séance : base 15/20. Cette proposition dépend uniquement des "
+        "niveaux choisis par l’enseignant et n’est pas ajoutée au corrigé étudiant."
+    )
+    suggestions = suggest_first_lab_rubric(analysis)
+    by_criterion = {
+        item.decision.criterion_id: item for item in suggestions
+    }
+    decisions = []
+    for criterion in profile.criteria:
+        suggestion = by_criterion[criterion.criterion_id]
+        levels = tuple(RubricLevel)
+        level = st.selectbox(
+            criterion.label,
+            options=levels,
+            index=levels.index(suggestion.decision.level),
+            format_func=lambda value: _RUBRIC_LEVEL_LABELS[value],
+            help=criterion.description,
+            key=f"grading-{profile.profile_id}-{source_id}-{criterion.criterion_id}",
+        )
+        decisions.append(RubricDecision(criterion.criterion_id, level))
+        st.caption(f"Suggestion TPStudio : {suggestion.rationale}")
+    proposal = build_formative_grade_proposal(profile, tuple(decisions))
+    st.metric("Note proposée", f"{proposal.proposed_score}/20")
+    st.caption(
+        f"Base : {proposal.base_score}/20 · Bonus : +{proposal.bonus} · "
+        f"Retraits : −{proposal.deduction}"
+    )
 
 
 def _build_semantic_provider(enabled: bool, *, environ=None):
@@ -505,6 +559,7 @@ def main() -> None:
                             st.markdown(f"{graph_row.icon} **{graph_row.headline}**")
                             for line in graph_row.summary_lines:
                                 st.caption(line)
+                        _render_first_lab_grading(st, active_analysis, item.source_id)
                     export_state = export_results.get(item.source_id)
                     if export_state is not None:
                         if export_state.result is not None:

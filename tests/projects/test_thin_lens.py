@@ -64,7 +64,7 @@ def test_thin_lens_semantic_contracts_follow_notebook_order() -> None:
 def test_thin_lens_references_are_real_resource_names() -> None:
     project = thin_lens_teacher_project()
     assert project.statement_reference.expected_filename == "Formation-dune-image-par-une-lentille-mince.ipynb"
-    assert project.correction_reference.expected_filename == "Correction-Formation-dune-image-par-une-lentille-mince.ipynb"
+    assert project.correction_reference.expected_filename == "Formation-dune-image-par-une-lentille-mince-Corrige.ipynb"
     assert project.control_copy_reference.expected_filename == "TP_physique_2_Galaad-Louis_Louis[]Galaad.ipynb"
 
 
