@@ -5,9 +5,11 @@ import tpstudio.web.app as app
 from tpstudio.web.app import (
     _analysis_signature,
     _build_semantic_provider,
+    _copy_issue_count,
     _input_signature,
     _open_local_html_artifact,
     _render_first_lab_grading,
+    _suggested_grade_label,
     web_error_message,
 )
 from tpstudio.web.model import SelectedCopy, WebBatchOptions
@@ -63,6 +65,27 @@ def test_open_local_html_artifact_delegates_to_operating_system(tmp_path):
     assert _open_local_html_artifact(html, opener=lambda uri: opened.append(uri) or True)
     assert opened == [html.resolve().as_uri()]
     assert not _open_local_html_artifact(tmp_path / "absent.html", opener=lambda uri: True)
+
+
+def test_compact_copy_issue_count_ignores_information_and_counts_reviews():
+    row = SimpleNamespace(status="Analysée", error_message=None)
+    overview = (
+        SimpleNamespace(severity=SimpleNamespace(value="ok")),
+        SimpleNamespace(severity=SimpleNamespace(value="review")),
+    )
+    graphs = (SimpleNamespace(requires_human_review=True),)
+    semantics = (
+        SimpleNamespace(
+            contradictions=(),
+            criteria=(SimpleNamespace(status="partial"),),
+        ),
+    )
+    assert _copy_issue_count(row, overview, graphs, semantics) == 3
+
+
+def test_compact_grade_label_is_hidden_without_first_lab_analysis():
+    assert _suggested_grade_label(None) == "—"
+    assert _suggested_grade_label(SimpleNamespace(project_id="snells-laws-mvp")) == "—"
 
 
 def test_first_lab_grading_panel_prefills_an_empty_copy_and_remains_teacher_only():

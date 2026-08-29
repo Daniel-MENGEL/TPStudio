@@ -157,6 +157,33 @@ def _render_first_lab_grading(st, analysis, source_id: str) -> None:
     )
 
 
+def _copy_issue_count(row, overview_rows=(), graph_rows=(), semantic_rows=()) -> int:
+    """Count teacher-facing review signals for one compact copy row."""
+
+    count = int(row.status != "Analysée" or bool(row.error_message))
+    count += sum(item.severity.value in {"review", "error"} for item in overview_rows)
+    count += sum(item.requires_human_review for item in graph_rows)
+    count += sum(
+        bool(item.contradictions)
+        or any(criterion.status in {"partial", "not_found", "uncertain"} for criterion in item.criteria)
+        for item in semantic_rows
+    )
+    return count
+
+
+def _suggested_grade_label(analysis) -> str:
+    """Return the automatic first-session proposal for the compact table."""
+
+    if analysis is None or analysis.project_id != FIRST_LAB_FORMATIVE_GRADING_PROFILE.project_id:
+        return "—"
+    suggestions = suggest_first_lab_rubric(analysis)
+    proposal = build_formative_grade_proposal(
+        FIRST_LAB_FORMATIVE_GRADING_PROFILE,
+        tuple(item.decision for item in suggestions),
+    )
+    return f"{proposal.proposed_score}/20"
+
+
 def _build_semantic_provider(enabled: bool, *, environ=None):
     """Build a provider only from an explicit Analyze action."""
     if not enabled:
@@ -523,232 +550,318 @@ def main() -> None:
         dispatch_result = get_current_dispatch_result(st.session_state, current_analysis_signature)
         if dispatch_result is not None:
             st.subheader("Résultat de l'analyse")
-            st.write(
-                f"Copies : {len(dispatch_result.copies)} · "
-                f"Analysées : {dispatch_result.analyzed_count} · "
-                f"Reconnues — correction indisponible : {dispatch_result.resolved_not_ready_count} · "
-                f"À confirmer : {dispatch_result.unresolved_count} · "
-                f"Erreurs : {dispatch_result.error_count} · "
-                f"Non traitées : {dispatch_result.skipped_count}"
-            )
             overrides = get_project_overrides(st.session_state)
             rows = batch_dispatch_rows(dispatch_result, copies, overrides)
             export_results = get_export_results(st.session_state)
+            from tpstudio.reporting import build_teacher_copy_report
+            copy_views = []
+            selected_by_id = {copy.source_id: copy for copy in copies}
             for row, item in zip(rows, dispatch_result.copies):
-                icon = {
-                    "Analysée": "✅", "TP à confirmer": "⚠️", "Aucun TP reconnu": "⚠️",
-                    "Erreur technique": "❌", "Non traitée": "⏭️",
-                    "Non analysée à cause d'une erreur précédente": "⏭️",
-                }.get(row.status, "ℹ️")
-                with st.expander(f"{icon} {row.display_name} — {row.status}", expanded=True):
-                    if row.project_title:
-                        st.write(f"TP : {row.project_title}")
+                active_analysis = active_analysis_for_source(
+                    dispatch_result, overrides, item.source_id
+                )
+                report = (
+                    build_teacher_copy_report(active_analysis)
+                    if active_analysis is not None else None
+                )
+                overview_rows = (
+                    build_teacher_scientific_overview(report).rows if report else ()
+                )
+                graphs = graph_summary_rows(report, key_prefix=item.source_id)
+                semantics = semantic_response_rows(
+                    item.dispatch.semantic_response_analyses if item.dispatch else (),
+                    source_id=item.source_id,
+                )
+                selected_copy = selected_by_id.get(item.source_id)
+                identity_status = getattr(
+                    getattr(selected_copy, "identity", None), "status", None
+                )
+                is_reference = getattr(identity_status, "value", "") in {
+                    "reference_correction", "empty_statement"
+                }
+                copy_views.append({
+                    "row": row,
+                    "item": item,
+                    "analysis": active_analysis,
+                    "overview": overview_rows,
+                    "graphs": graphs,
+                    "semantics": semantics,
+                    "issues": _copy_issue_count(row, overview_rows, graphs, semantics),
+                    "reference": is_reference,
+                })
+
+            attention_count = sum(
+                view["issues"] > 0 and not view["reference"] for view in copy_views
+            )
+            ready_count = exportable_count(dispatch_result, overrides)
+            metric_columns = st.columns(3)
+            metric_columns[0].metric("Copies", len(copy_views))
+            metric_columns[1].metric("À examiner", attention_count)
+            metric_columns[2].metric("Prêtes à exporter", ready_count)
+
+            show_all_copies = st.checkbox(
+                "Afficher toutes les copies",
+                value=False,
+                key="show-all-analysis-copies",
+                help="Inclut les copies sans alerte ainsi que les références.",
+            )
+            visible_views = (
+                copy_views if show_all_copies else [
+                    view for view in copy_views
+                    if view["issues"] > 0 and not view["reference"]
+                ]
+            )
+            if not visible_views:
+                st.success("Aucune copie étudiante ne nécessite actuellement de vérification.")
+                visible_views = [view for view in copy_views if not view["reference"]] or copy_views
+
+            st.dataframe(
+                [
+                    {
+                        "Fichier": view["row"].display_name,
+                        "TP": view["row"].project_title or "—",
+                        "État": view["row"].status,
+                        "Points à examiner": view["issues"],
+                        "Note proposée": _suggested_grade_label(view["analysis"]),
+                    }
+                    for view in visible_views
+                ],
+                hide_index=True,
+                use_container_width=True,
+            )
+            view_ids = tuple(view["item"].source_id for view in visible_views)
+            views_by_id = {view["item"].source_id: view for view in visible_views}
+            selected_source_id = st.selectbox(
+                "Copie à examiner",
+                view_ids,
+                format_func=lambda source_id: views_by_id[source_id]["row"].display_name,
+                key="active-analysis-copy",
+            )
+            selected_view = views_by_id[selected_source_id]
+            row = selected_view["row"]
+            item = selected_view["item"]
+            active_analysis = selected_view["analysis"]
+            overview_rows = selected_view["overview"]
+            graph_rows = selected_view["graphs"]
+            semantic_rows = selected_view["semantics"]
+
+            st.markdown(f"### {row.display_name}")
+            summary_tab, responses_tab, results_tab, grading_tab, artifact_tab = st.tabs(
+                ["Synthèse", "Réponses scientifiques", "Résultats et graphes", "Notation", "Export"]
+            )
+            with summary_tab:
+                st.write(f"**État :** {row.status}")
+                st.write(f"**TP :** {row.project_title or '—'}")
+                if row.error_message:
+                    st.warning(row.error_message)
+                if item.status is BatchCopyDispatchStatus.RESOLVED_NOT_READY:
+                    st.info("TP reconnu, mais correction automatique complète indisponible.")
+                problem_rows = tuple(
+                    value for value in overview_rows
+                    if value.severity.value in {"review", "error"}
+                )
+                if problem_rows:
+                    for value in problem_rows:
+                        st.markdown(
+                            f"{scientific_severity_icon(value.severity)} "
+                            f"**{value.label}** — {value.summary}"
+                        )
+                elif active_analysis is not None:
+                    st.success("Aucun problème scientifique prioritaire repéré.")
+                with st.expander("Détection du TP et détails techniques", expanded=False):
+                    st.write(f"Provenance : {row.provenance}")
                     if row.confidence:
                         st.write(f"Confiance : {row.confidence}")
-                    st.write(f"Provenance : {row.provenance}")
-                    if row.validated_by_teacher:
-                        st.write("✓ Validé par l'enseignant")
-                    if row.error_message:
-                        st.warning(row.error_message)
-                    if item.status is BatchCopyDispatchStatus.RESOLVED_NOT_READY:
-                        st.info(
-                            "TP reconnu. La correction automatique complète de ce TP "
-                            "n’est pas encore disponible."
-                        )
-                    semantic_rows = semantic_response_rows(
-                        item.dispatch.semantic_response_analyses if item.dispatch else (),
-                        source_id=item.source_id,
+                    for kind, text in row.evidence:
+                        st.caption(f"{kind} : {text}")
+
+                if item.status.value == "unresolved" or active_analysis is not None:
+                    current_project = (
+                        active_analysis.project_id if active_analysis is not None else None
                     )
-                    if semantic_rows:
-                        st.markdown("### Analyse des réponses scientifiques")
-                        st.caption(
-                            "Aperçu sémantique partiel : les résultats sont soumis à la validation du professeur "
-                            "et ne constituent ni une note ni une correction complète."
+                    edit = active_analysis is None or st.checkbox(
+                        "Modifier le TP", key=f"edit-project-{item.source_id}"
+                    )
+                    if edit:
+                        choices = project_choices_for_source(
+                            dispatch_result, item.source_id
                         )
-                        for semantic_row in semantic_rows:
-                            with st.container(border=True):
-                                st.markdown(
-                                    f"**{semantic_row.production_id}** · {semantic_row.role_label} · "
-                                    f"{semantic_row.binding_label}"
+                        default_index = (
+                            choices.index(current_project)
+                            if current_project in choices else 0
+                        )
+                        chosen = st.selectbox(
+                            "TP à utiliser",
+                            choices,
+                            index=default_index,
+                            format_func=lambda value: project_descriptor(value).title,
+                            key=f"project-choice-{item.source_id}",
+                        )
+                        if st.button("Utiliser ce TP", key=f"use-project-{item.source_id}"):
+                            try:
+                                source = active_analysis.source if active_analysis else next(
+                                    request.source
+                                    for request in build_dispatch_requests_from_web_selection(tuple(copies))
+                                    if request.source_id == item.source_id
                                 )
-                                st.text_area(
-                                    "Réponse étudiante",
-                                    value=semantic_row.student_response or "",
-                                    height=100,
-                                    disabled=True,
-                                    key=f"{semantic_row.stable_key}-response",
+                                configured_provider = _build_semantic_provider(
+                                    semantic_enabled
                                 )
-                                for criterion in semantic_row.criteria:
-                                    st.markdown(
-                                        f"**{criterion.description}** · {criterion.status_label} · "
-                                        f"{criterion.importance_label}"
-                                    )
-                                    st.caption(f"Critère : {criterion.criterion_id}")
-                                    if criterion.evidence:
-                                        st.caption(f"Preuve : {criterion.evidence}")
-                                if semantic_row.contradictions:
-                                    st.warning(
-                                        "Contradictions à examiner par le professeur : "
-                                        + " ; ".join(semantic_row.contradictions)
-                                    )
-                                if semantic_row.confidence:
-                                    st.caption(f"Confiance déclarée : {semantic_row.confidence}")
-                                for diagnostic in semantic_row.diagnostics:
-                                    st.info(diagnostic)
-                    if row.evidence:
-                        st.markdown("**Détails de la détection**")
-                        with st.container():
-                            for kind, text in row.evidence:
-                                st.caption(f"{kind} : {text}")
-                    active_analysis = active_analysis_for_source(dispatch_result, overrides, item.source_id)
-                    if active_analysis is not None:
-                        from tpstudio.reporting import build_teacher_copy_report
-                        report = build_teacher_copy_report(active_analysis)
-                        st.markdown("**Contrôle scientifique**")
-                        overview = build_teacher_scientific_overview(report)
-                        for overview_row in overview.rows:
-                            st.markdown(
-                                f"{scientific_severity_icon(overview_row.severity)} "
-                                f"**{overview_row.label}** — {overview_row.summary}"
-                            )
-                            if overview_row.details:
-                                details_key = scientific_detail_widget_key(item.source_id, overview_row.key)
-                                if st.checkbox(
-                                    f"Afficher les détails — {overview_row.label}",
-                                    key=details_key,
+                                provider = configured_provider
+                                selected_copy = selected_by_id[item.source_id]
+                                if provider is not None and not should_use_semantic_provider(
+                                    selected_copy,
+                                    include_references=include_semantic_references,
                                 ):
-                                    with st.container():
-                                        for detail in overview_row.details:
-                                            st.caption(detail)
-                        graph_rows = graph_summary_rows(report, key_prefix=item.source_id)
-                        for graph_row in graph_rows:
-                            st.markdown(f"{graph_row.icon} **{graph_row.headline}**")
-                            for line in graph_row.summary_lines:
-                                st.caption(line)
-                        _render_first_lab_grading(st, active_analysis, item.source_id)
-                    export_state = export_results.get(item.source_id)
-                    if export_state is not None:
-                        if export_state.result is not None:
-                            st.success("Export réussi")
-                            st.markdown("**Artefacts**")
-                            st.caption(f"Notebook corrigé : {export_state.result.notebook_artifact.path}")
-                            st.caption(f"Version HTML : {export_state.result.html_artifact.path}")
-                            if st.button(
-                                "Ouvrir le HTML corrigé",
-                                key=f"open-html-{item.source_id}",
-                            ) and not _open_local_html_artifact(
-                                export_state.result.html_artifact.path
-                            ):
-                                st.warning("Le fichier HTML corrigé ne peut pas être ouvert.")
-                        else:
-                            st.error("❌ Erreur d'export")
-                            st.caption(export_state.error_message)
-                    if item.status.value == "unresolved" or active_analysis is not None:
-                        current_project = active_analysis.project_id if active_analysis is not None else None
-                        if active_analysis is not None and not row.validated_by_teacher:
-                            edit = st.checkbox("Modifier le TP", key=f"edit-project-{item.source_id}")
-                        else:
-                            edit = True
-                        if edit:
-                            choices = project_choices_for_source(dispatch_result, item.source_id)
-                            if current_project in choices:
-                                default_index = choices.index(current_project)
-                            else:
-                                default_index = 0
-                            chosen = st.selectbox(
-                                "TP à utiliser",
-                                choices,
-                                index=default_index,
-                                format_func=lambda value: project_descriptor(value).title,
-                                key=f"project-choice-{item.source_id}",
-                            )
-                            if st.button("Utiliser ce TP", key=f"use-project-{item.source_id}"):
-                                try:
-                                    source = active_analysis.source if active_analysis is not None else next(
-                                        request.source for request in build_dispatch_requests_from_web_selection(tuple(copies))
-                                        if request.source_id == item.source_id
+                                    provider = None
+                                if semantic_enabled and configured_provider is None:
+                                    st.warning("OPENAI_API_KEY est absente.")
+                                else:
+                                    explicit_dispatch = analyze_selected_copy(
+                                        source, chosen, semantic_provider=provider
+                                    ) if provider is not None else analyze_selected_copy(
+                                        source, chosen
                                     )
-                                    configured_provider = _build_semantic_provider(semantic_enabled)
-                                    provider = configured_provider
-                                    selected_copy = next(
-                                        copy for copy in copies
-                                        if copy.source_id == item.source_id
-                                    )
-                                    if provider is not None and not should_use_semantic_provider(
-                                        selected_copy,
-                                        include_references=include_semantic_references,
-                                    ):
-                                        provider = None
-                                    if semantic_enabled and configured_provider is None:
-                                        st.warning(
-                                            "Analyse sémantique activée, mais OPENAI_API_KEY est absente."
-                                        )
-                                        continue
-                                    if provider is None:
-                                        explicit_dispatch = analyze_selected_copy(source, chosen)
-                                    else:
-                                        explicit_dispatch = analyze_selected_copy(
-                                            source, chosen, semantic_provider=provider,
-                                        )
                                     if explicit_dispatch.analysis is None:
-                                        raise ValueError("Le projet choisi n'a pas permis d'analyser cette copie.")
-                                    set_project_override(st.session_state, WebCopyOverride(
-                                        item.source_id, chosen, explicit_dispatch.analysis,
-                                    ))
+                                        raise ValueError("Analyse indisponible.")
+                                    set_project_override(
+                                        st.session_state,
+                                        WebCopyOverride(
+                                            item.source_id, chosen,
+                                            explicit_dispatch.analysis,
+                                        ),
+                                    )
                                     st.rerun()
-                                except Exception:
-                                    st.error("Impossible d'analyser la copie avec ce TP.")
-                        if row.validated_by_teacher and st.button("Revenir à la détection automatique", key=f"auto-project-{item.source_id}"):
-                            remove_project_override(st.session_state, item.source_id)
-                            st.rerun()
-            st.markdown("### Options d'export")
-            export_output_text = st.text_input(
-                "Dossier des corrections",
-                value=str(default_output_dir()),
-                key="tpstudio_export_output_dir",
-            )
-            include_teacher_feedback = st.checkbox("Inclure le retour professeur", key="export-teacher-feedback")
-            include_diagnostics = st.checkbox("Inclure les diagnostics", key="export-diagnostics")
-            include_limitations = st.checkbox("Inclure les limitations", key="export-limitations")
-            hide_code = st.checkbox("Masquer le code dans le HTML", key="export-hide-code")
-            hide_outputs = st.checkbox("Masquer les sorties dans le HTML", key="export-hide-outputs")
-            embed_images = st.checkbox("Inclure les images", value=True, key="export-embed-images")
-            include_input_prompts = st.checkbox("Inclure les invites d'entrée", key="export-input-prompts")
-            include_output_prompts = st.checkbox("Inclure les invites de sortie", key="export-output-prompts")
-            overwrite = st.checkbox("Autoriser le remplacement des fichiers existants", key="export-overwrite")
-            ready_count = exportable_count(dispatch_result, overrides)
-            st.write(
-                f"Copies prêtes à exporter : {ready_count} · "
-                f"Copies sans analyse active : {non_exportable_count(dispatch_result, overrides)} "
-                f"(dont {dispatch_result.resolved_not_ready_count} reconnue(s) sans couverture)"
-            )
-            if st.button("Exporter les copies analysées", disabled=ready_count == 0, key="export-active-copies"):
-                try:
-                    output_dir = resolve_output_dir(export_output_text)
-                    export_options = CopyExportOptions(
-                        overwrite=overwrite,
-                        include_teacher_feedback=include_teacher_feedback,
-                        include_diagnostics=include_diagnostics,
-                        include_limitations=include_limitations,
-                        embed_images=embed_images,
-                        include_code=not hide_code,
-                        include_outputs=not hide_outputs,
-                        include_input_prompts=include_input_prompts,
-                        include_output_prompts=include_output_prompts,
+                            except Exception:
+                                st.error("Impossible d'analyser la copie avec ce TP.")
+                    if row.validated_by_teacher and st.button(
+                        "Revenir à la détection automatique",
+                        key=f"auto-project-{item.source_id}",
+                    ):
+                        remove_project_override(st.session_state, item.source_id)
+                        st.rerun()
+
+            with responses_tab:
+                if not semantic_rows:
+                    st.info("Aucune réponse scientifique analysable pour cette copie.")
+                for semantic_row in semantic_rows:
+                    with st.expander(
+                        f"{semantic_row.role_label} — {semantic_row.production_id}",
+                        expanded=False,
+                    ):
+                        st.caption(semantic_row.binding_label)
+                        st.text_area(
+                            "Réponse étudiante",
+                            value=semantic_row.student_response or "",
+                            height=100,
+                            disabled=True,
+                            key=f"{semantic_row.stable_key}-response",
+                        )
+                        for criterion in semantic_row.criteria:
+                            st.markdown(
+                                f"**{criterion.description}** — {criterion.status_label} "
+                                f"({criterion.importance_label})"
+                            )
+                            if criterion.evidence:
+                                st.caption(f"Preuve : {criterion.evidence}")
+                        if semantic_row.contradictions:
+                            st.warning(" ; ".join(semantic_row.contradictions))
+                        for diagnostic in semantic_row.diagnostics:
+                            st.info(diagnostic)
+
+            with results_tab:
+                if not overview_rows and not graph_rows:
+                    st.info("Aucun résultat scientifique détaillé disponible.")
+                for value in overview_rows:
+                    st.markdown(
+                        f"{scientific_severity_icon(value.severity)} "
+                        f"**{value.label}** — {value.summary}"
                     )
-                    set_export_results(
-                        st.session_state,
-                        export_active_copies(
-                            dispatch_result,
-                            overrides,
-                            output_dir=output_dir,
-                            options=export_options,
-                            selected_copies=copies,
-                        ),
-                    )
-                    st.rerun()
-                except (TypeError, ValueError, OSError) as exc:
-                    st.error(web_error_message(exc))
+                    if value.details and st.checkbox(
+                        f"Afficher les détails — {value.label}",
+                        key=scientific_detail_widget_key(item.source_id, value.key),
+                    ):
+                        for detail in value.details:
+                            st.caption(detail)
+                for graph_row in graph_rows:
+                    st.markdown(f"{graph_row.icon} **{graph_row.headline}**")
+                    for line in graph_row.summary_lines:
+                        st.caption(line)
+
+            with grading_tab:
+                if active_analysis is None:
+                    st.info("Aucune proposition de notation disponible.")
+                elif active_analysis.project_id == FIRST_LAB_FORMATIVE_GRADING_PROFILE.project_id:
+                    _render_first_lab_grading(st, active_analysis, item.source_id)
+                else:
+                    st.info("Le barème formatif est actuellement disponible pour la première séance.")
+
+            with artifact_tab:
+                export_state = export_results.get(item.source_id)
+                if export_state is None:
+                    st.info("Cette copie n’a pas encore été exportée.")
+                elif export_state.result is None:
+                    st.error("Erreur d'export")
+                    st.caption(export_state.error_message)
+                else:
+                    st.success("Export réussi")
+                    st.caption(f"Notebook : {export_state.result.notebook_artifact.path}")
+                    st.caption(f"HTML : {export_state.result.html_artifact.path}")
+                    if st.button(
+                        "Ouvrir le HTML corrigé",
+                        key=f"open-html-{item.source_id}",
+                    ) and not _open_local_html_artifact(
+                        export_state.result.html_artifact.path
+                    ):
+                        st.warning("Le fichier HTML corrigé ne peut pas être ouvert.")
+
+            with st.expander("Options d'export du lot", expanded=False):
+                export_output_text = st.text_input(
+                    "Dossier des corrections",
+                    value=str(default_output_dir()),
+                    key="tpstudio_export_output_dir",
+                )
+                include_teacher_feedback = st.checkbox("Inclure le retour professeur", key="export-teacher-feedback")
+                include_diagnostics = st.checkbox("Inclure les diagnostics", key="export-diagnostics")
+                include_limitations = st.checkbox("Inclure les limitations", key="export-limitations")
+                hide_code = st.checkbox("Masquer le code dans le HTML", key="export-hide-code")
+                hide_outputs = st.checkbox("Masquer les sorties dans le HTML", key="export-hide-outputs")
+                embed_images = st.checkbox("Inclure les images", value=True, key="export-embed-images")
+                include_input_prompts = st.checkbox("Inclure les invites d'entrée", key="export-input-prompts")
+                include_output_prompts = st.checkbox("Inclure les invites de sortie", key="export-output-prompts")
+                overwrite = st.checkbox("Autoriser le remplacement des fichiers existants", key="export-overwrite")
+                st.write(
+                    f"Copies prêtes à exporter : {ready_count} · "
+                    f"Copies sans analyse active : {non_exportable_count(dispatch_result, overrides)} "
+                    f"(dont {dispatch_result.resolved_not_ready_count} reconnue(s) sans couverture)"
+                )
+                if st.button("Exporter les copies analysées", disabled=ready_count == 0, key="export-active-copies"):
+                    try:
+                        output_dir = resolve_output_dir(export_output_text)
+                        export_options = CopyExportOptions(
+                            overwrite=overwrite,
+                            include_teacher_feedback=include_teacher_feedback,
+                            include_diagnostics=include_diagnostics,
+                            include_limitations=include_limitations,
+                            embed_images=embed_images,
+                            include_code=not hide_code,
+                            include_outputs=not hide_outputs,
+                            include_input_prompts=include_input_prompts,
+                            include_output_prompts=include_output_prompts,
+                        )
+                        set_export_results(
+                            st.session_state,
+                            export_active_copies(
+                                dispatch_result,
+                                overrides,
+                                output_dir=output_dir,
+                                options=export_options,
+                                selected_copies=copies,
+                            ),
+                        )
+                        st.rerun()
+                    except (TypeError, ValueError, OSError) as exc:
+                        st.error(web_error_message(exc))
     if st.button("Réinitialiser"):
         workspace.reset()
         reset_web_session(st.session_state)
