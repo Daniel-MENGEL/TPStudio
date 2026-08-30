@@ -1,10 +1,23 @@
+from pathlib import Path
+
 import nbformat
 
 from tpstudio.expectations import ComparisonPedagogicalContext, PresenceRequirement
 from tpstudio.notebooks import resolve_notebook_bindings
 from tpstudio.orchestration import AnalysisReadiness, assess_analysis_readiness
-from tpstudio.projects import first_lab_measurements_teacher_project
+from tpstudio.projects import (
+    first_lab_measurements_teacher_project,
+    resolve_project_for_copy,
+)
 from tpstudio.semantic_analysis import SemanticRole, extract_student_response
+
+
+REFERENCE_DIR = (
+    Path(__file__).parents[2]
+    / "reference-notebooks"
+    / "session-01"
+    / "first-lab-measurements"
+)
 
 
 def test_project_identity_references_and_readiness():
@@ -94,6 +107,29 @@ def test_all_bindings_resolve_once_on_aligned_markers():
     resolutions = resolve_notebook_bindings(notebook, project.notebook_binding_plan)
     assert len(resolutions) == len(project.notebook_binding_plan.bindings)
     assert all(item.resolved for item in resolutions)
+
+
+def test_realigned_statement_and_correction_are_registered_and_resolve_fully():
+    project = first_lab_measurements_teacher_project()
+    for filename in (
+        project.statement_reference.expected_filename,
+        project.correction_reference.expected_filename,
+    ):
+        notebook = nbformat.read(REFERENCE_DIR / filename, as_version=4)
+        nbformat.validate(notebook)
+
+        project_resolution = resolve_project_for_copy(notebook, filename=filename)
+        assert project_resolution.selected_project_id == project.identity.project_id
+        assert project_resolution.requires_teacher_choice is False
+
+        binding_resolutions = resolve_notebook_bindings(
+            notebook,
+            project.notebook_binding_plan,
+        )
+        assert len(binding_resolutions.resolved) == len(
+            project.notebook_binding_plan.bindings
+        )
+        assert len(binding_resolutions.failures) == 0
 
 
 def test_alert_wrapped_blank_response_is_empty():
