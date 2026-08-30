@@ -102,7 +102,7 @@ def test_first_lab_grading_panel_prefills_an_empty_copy_and_remains_teacher_only
 
         def selectbox(self, label, *, options, index, format_func, help, key):
             self.keys.append(key)
-            assert format_func(options[index]) == "Absent"
+            assert format_func(options[index]) == "Absence de réponse"
             return options[index]
 
         def metric(self, label, value):
@@ -121,7 +121,7 @@ def test_first_lab_grading_panel_prefills_an_empty_copy_and_remains_teacher_only
         ),
         "copy-001",
     )
-    assert fake.metrics == [("Note proposée", "8.0/20")]
+    assert fake.metrics == [("Note proposée", "4.0/20")]
     assert len(fake.keys) == 5
     assert all(key.startswith("grading-first-lab-formative-v1-copy-001-") for key in fake.keys)
 

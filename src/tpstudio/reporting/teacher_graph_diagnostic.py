@@ -31,6 +31,7 @@ class TeacherGraphDiagnosticReason(str, Enum):
     INFLUENTIAL_POINT_REVIEW = "influential_point_review"
     POSSIBLE_CURVATURE = "possible_curvature"
     MODEL_NOT_EVALUABLE = "model_not_evaluable"
+    TOO_FEW_POINTS_FOR_LINEAR_REGRESSION = "too_few_points_for_linear_regression"
     PLOT_COHERENT = "plot_coherent"
     PLOT_NOT_IDENTIFIED = "plot_not_identified"
     PLOT_REVIEW = "plot_review"
@@ -67,6 +68,8 @@ _MOTIF_TEXT = {
         "Une courbure possible apparaît dans le nuage de points.",
     TeacherGraphDiagnosticReason.MODEL_NOT_EVALUABLE:
         "Le modèle de régression n'a pas pu être évalué de manière fiable.",
+    TeacherGraphDiagnosticReason.TOO_FEW_POINTS_FOR_LINEAR_REGRESSION:
+        "Une régression linéaire doit reposer sur au moins cinq couples de mesures.",
     TeacherGraphDiagnosticReason.PLOT_COHERENT:
         "La courbe tracée correspond au modèle reconstruit.",
     TeacherGraphDiagnosticReason.PLOT_NOT_IDENTIFIED:
@@ -150,6 +153,7 @@ def _headline(
         or TeacherGraphDiagnosticReason.INFLUENTIAL_POINT_REVIEW in motifs
         or TeacherGraphDiagnosticReason.POSSIBLE_CURVATURE in motifs
         or TeacherGraphDiagnosticReason.MODEL_NOT_EVALUABLE in motifs
+        or TeacherGraphDiagnosticReason.TOO_FEW_POINTS_FOR_LINEAR_REGRESSION in motifs
         or TeacherGraphDiagnosticReason.PLOT_REVIEW in motifs
     ):
         return TeacherGraphHeadlineStatus.REVIEW, summary.headline_text, True
@@ -227,6 +231,13 @@ def build_teacher_graph_diagnostics(
         else:
             contract = expected_model
         motifs = _geometry_motifs(geometry)
+        if (
+            model is not None
+            and "trop_peu_de_points_pour_regression_lineaire" in model.diagnostics
+        ):
+            motifs.append(
+                TeacherGraphDiagnosticReason.TOO_FEW_POINTS_FOR_LINEAR_REGRESSION
+            )
         if model is None or model.technical_status is not RegressionModelTechnicalStatus.EVALUABLE:
             motifs.append(TeacherGraphDiagnosticReason.MODEL_NOT_EVALUABLE)
         consistency = summary.plot_consistency_status

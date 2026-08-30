@@ -9,9 +9,14 @@ from enum import IntEnum
 
 class RubricLevel(IntEnum):
     ABSENT = 0
-    PARTIAL = 1
-    SATISFACTORY = 2
-    VERY_GOOD = 3
+    TO_REVIEW = 1
+    PARTIAL = 2
+    GOOD = 3
+    VERY_GOOD = 4
+
+    # Compatibility alias for grading decisions created before the five-level
+    # scale.  It is intentionally absent from iteration over RubricLevel.
+    SATISFACTORY = GOOD
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,9 +131,17 @@ def build_formative_grade_proposal(
         (
             profile.maximum_deduction
             * weights[item.criterion_id]
-            * (Decimal("1") if item.level is RubricLevel.ABSENT else Decimal("0.5"))
+            * (
+                Decimal("1")
+                if item.level is RubricLevel.ABSENT
+                else Decimal("2") / Decimal("3")
+                if item.level is RubricLevel.TO_REVIEW
+                else Decimal("1") / Decimal("3")
+            )
             for item in values
-            if item.level in (RubricLevel.ABSENT, RubricLevel.PARTIAL)
+            if item.level in (
+                RubricLevel.ABSENT, RubricLevel.TO_REVIEW, RubricLevel.PARTIAL,
+            )
         ),
         Decimal("0"),
     )

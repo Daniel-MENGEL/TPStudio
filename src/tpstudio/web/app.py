@@ -46,7 +46,8 @@ from tpstudio.web.presenters import (
     semantic_response_rows,
 )
 from tpstudio.web.roster import (
-    default_roster_path, load_roster, parse_roster_csv, save_roster,
+    confirm_exact_roster_identity, default_roster_path, load_roster,
+    parse_roster_csv, save_roster,
     suggest_roster_students,
 )
 from tpstudio.web.presenters import review_prefill, select_interpretation_review_items
@@ -113,9 +114,10 @@ def _open_local_html_artifact(path, *, opener=None) -> bool:
 
 
 _RUBRIC_LEVEL_LABELS = {
-    RubricLevel.ABSENT: "Absent",
+    RubricLevel.ABSENT: "Absence de réponse",
+    RubricLevel.TO_REVIEW: "À revoir",
     RubricLevel.PARTIAL: "Partiel",
-    RubricLevel.SATISFACTORY: "Satisfaisant",
+    RubricLevel.GOOD: "Bien",
     RubricLevel.VERY_GOOD: "Très bien",
 }
 
@@ -128,7 +130,7 @@ def _render_first_lab_grading(st, analysis, source_id: str) -> None:
         return
     st.markdown("### Proposition de note formative")
     st.caption(
-        "Première séance : base 15/20. Cette proposition dépend uniquement des "
+        "Première séance : base 16/20. Cette proposition dépend uniquement des "
         "niveaux choisis par l’enseignant et n’est pas ajoutée au corrigé étudiant."
     )
     suggestions = suggest_first_lab_rubric(analysis)
@@ -401,6 +403,11 @@ def main() -> None:
             copies = []
             for item in workspace.replace_selection(payload):
                 identified = identify_selected_copy(item)
+                if identified.identity is not None and roster:
+                    identified = replace(
+                        identified,
+                        identity=confirm_exact_roster_identity(identified.identity, roster),
+                    )
                 prior = previous.get(item.source_id)
                 if prior is not None and prior.content_sha256 == item.content_sha256:
                     identified = replace(identified, identity=prior.identity)

@@ -10,7 +10,9 @@ from pathlib import Path
 import re
 import unicodedata
 
-from .identity import StudentIdentity
+from .identity import (
+    CopyIdentity, CopyIdentitySource, CopyIdentityStatus, StudentIdentity,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,6 +97,53 @@ def load_roster(path: Path | None = None) -> tuple[RosterStudent, ...]:
         return students
     except (OSError, json.JSONDecodeError, KeyError, TypeError) as exc:
         raise ValueError("Le fichier roster est invalide.") from exc
+
+
+def confirm_exact_roster_identity(
+    identity: CopyIdentity,
+    students: tuple[RosterStudent, ...],
+) -> CopyIdentity:
+    """Confirm an unambiguous notebook identity against the local roster.
+
+    Filename hints remain useful when the notebook does not identify its
+    authors.  They must not force a manual review when every author explicitly
+    named in the notebook has one exact roster match.
+    """
+
+    if type(identity) is not CopyIdentity:
+        raise TypeError("L'identité de copie est invalide.")
+    students = tuple(students)
+    if any(type(student) is not RosterStudent for student in students):
+        raise TypeError("Le roster est invalide.")
+    if (
+        identity.status is not CopyIdentityStatus.TO_REVIEW
+        or identity.source is not CopyIdentitySource.NOTEBOOK
+        or not identity.students
+    ):
+        return identity
+
+    roster_by_name: dict[str, list[RosterStudent]] = {}
+    for student in students:
+        roster_by_name.setdefault(_normalise_name(student.label), []).append(student)
+    matches: list[RosterStudent] = []
+    for detected in identity.students:
+        candidates = roster_by_name.get(_normalise_name(detected.display_name), ())
+        if len(candidates) != 1:
+            return identity
+        matches.append(candidates[0])
+    if len({student.email for student in matches}) != len(matches):
+        return identity
+    return CopyIdentity(
+        tuple(student.to_identity() for student in matches),
+        CopyIdentitySource.NOTEBOOK,
+        CopyIdentityStatus.CONFIRMED,
+        identity.raw_value,
+    )
+
+
+def _normalise_name(value: str) -> str:
+    value = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode().casefold()
+    return re.sub(r"[^a-z0-9]+", " ", value).strip()
 
 
 def suggest_roster_students(filename: str, students: tuple[RosterStudent, ...]) -> tuple[RosterStudent, ...]:

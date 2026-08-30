@@ -185,6 +185,26 @@ def test_non_evaluable_model_is_review(tmp_path: Path) -> None:
     assert TeacherGraphDiagnosticReason.MODEL_NOT_EVALUABLE in diagnostic.motifs
 
 
+def test_too_few_linear_points_are_explained_explicitly(tmp_path: Path) -> None:
+    result = _evaluable_result(tmp_path)
+    model = replace(
+        result.regression_model_analyses[0],
+        technical_status=RegressionModelTechnicalStatus.EVALUABLE,
+        diagnostics=("trop_peu_de_points_pour_regression_lineaire",),
+        requires_human_review=True,
+    )
+    result = replace(result, regression_model_analyses=(model,))
+
+    diagnostic = build_teacher_graph_diagnostics(result)[0]
+
+    assert diagnostic.headline_status is TeacherGraphHeadlineStatus.REVIEW
+    assert (
+        TeacherGraphDiagnosticReason.TOO_FEW_POINTS_FOR_LINEAR_REGRESSION
+        in diagnostic.motifs
+    )
+    assert any("au moins cinq" in line for line in diagnostic.summary_lines)
+
+
 def test_project_contract_conflict_blocks_global_fallback(tmp_path: Path) -> None:
     result = _project_conflict(_evaluable_result(tmp_path), ExpectedGraphModel.AFFINE)
     diagnostic = build_teacher_graph_diagnostics(

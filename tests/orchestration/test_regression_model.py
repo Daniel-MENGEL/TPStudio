@@ -50,11 +50,11 @@ def _match(status=RegressionSeriesMatchStatus.EXACT, series_id="s1"):
 
 
 def test_affine_reconstruction_matches_numpy_oracle():
-    series = _series([0, 1, 2, 3], [1, 3, 5, 7])
+    series = _series([0, 1, 2, 3, 4], [1, 3, 5, 7, 9])
     result = analyze_regression_model(_regression(), _match(), series)
     assert result.technical_status is RegressionModelTechnicalStatus.EVALUABLE
     assert np.allclose(result.coefficients, np.polyfit(series.x_values, series.y_values, 1))
-    assert result.predicted_y_values == (1.0, 3.0, 5.0, 7.0)
+    assert np.allclose(result.predicted_y_values, (1.0, 3.0, 5.0, 7.0, 9.0))
     assert result.requires_human_review is False
 
 
@@ -81,12 +81,22 @@ def test_noisy_quadratic_remains_technically_evaluable():
 
 
 def test_linregress_is_reconstructed_as_affine():
-    series = _series([0, 1, 2], [2, 4, 6])
+    series = _series([0, 1, 2, 3, 4], [2, 4, 6, 8, 10])
     result = analyze_regression_model(
         _regression(method=RegressionMethod.SCIPY_LINREGRESS), _match(), series
     )
     assert result.technical_status is RegressionModelTechnicalStatus.EVALUABLE
     assert np.allclose(result.coefficients, (2.0, 2.0))
+
+
+def test_linear_regression_requires_at_least_five_points():
+    result = analyze_regression_model(
+        _regression(), _match(), _series([0, 1, 2, 3], [1, 3, 5, 7])
+    )
+
+    assert result.technical_status is RegressionModelTechnicalStatus.EVALUABLE
+    assert "trop_peu_de_points_pour_regression_lineaire" in result.diagnostics
+    assert result.requires_human_review
 
 
 def test_linregress_quadratic_degree_is_rejected():

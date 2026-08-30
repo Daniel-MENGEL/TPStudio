@@ -1,8 +1,11 @@
 import pytest
 
 from tpstudio.web.roster import (
-    RosterStudent, load_roster, parse_roster_csv, save_roster,
+    RosterStudent, confirm_exact_roster_identity, load_roster, parse_roster_csv, save_roster,
     suggest_roster_students,
+)
+from tpstudio.web.identity import (
+    CopyIdentity, CopyIdentitySource, CopyIdentityStatus, StudentIdentity,
 )
 
 
@@ -32,6 +35,46 @@ def test_roster_persists_and_reloads_by_email(tmp_path):
     students = (RosterStudent("ABADELIA", "Abdallah", "abdallah@example.com"),)
     path = save_roster(students, tmp_path / "students.json")
     assert load_roster(path) == students
+
+
+def test_exact_notebook_names_are_confirmed_automatically_against_roster():
+    roster = (
+        RosterStudent("DURAND", "Alice", "alice@example.test"),
+        RosterStudent("ROUX", "Paul", "paul@example.test"),
+    )
+    identity = CopyIdentity(
+        (StudentIdentity("Alice DURAND"), StudentIdentity("Paul ROUX")),
+        CopyIdentitySource.NOTEBOOK,
+        CopyIdentityStatus.TO_REVIEW,
+        "Alice DURAND et Paul ROUX",
+        ("Le nom du fichier semble indiquer une identité différente.",),
+    )
+
+    confirmed = confirm_exact_roster_identity(identity, roster)
+
+    assert confirmed.status is CopyIdentityStatus.CONFIRMED
+    assert confirmed.source is CopyIdentitySource.NOTEBOOK
+    assert [student.email for student in confirmed.students] == [
+        "alice@example.test", "paul@example.test",
+    ]
+    assert confirmed.warnings == ()
+
+
+def test_roster_confirmation_abstains_for_ambiguous_or_filename_only_identity():
+    duplicate_names = (
+        RosterStudent("DURAND", "Alice", "alice.1@example.test"),
+        RosterStudent("DURAND", "Alice", "alice.2@example.test"),
+    )
+    notebook_identity = CopyIdentity(
+        (StudentIdentity("Alice DURAND"),), CopyIdentitySource.NOTEBOOK,
+        CopyIdentityStatus.TO_REVIEW,
+    )
+    filename_identity = CopyIdentity(
+        (), CopyIdentitySource.FILENAME, CopyIdentityStatus.TO_REVIEW,
+    )
+
+    assert confirm_exact_roster_identity(notebook_identity, duplicate_names) is notebook_identity
+    assert confirm_exact_roster_identity(filename_identity, duplicate_names) is filename_identity
 
 
 def test_filename_suggestions_are_only_suggestions():

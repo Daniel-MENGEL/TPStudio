@@ -20,9 +20,9 @@ FIRST_LAB_FORMATIVE_GRADING_PROFILE = FormativeGradingProfile(
     "first-lab-formative-v1",
     "first-lab-measurements",
     "Barème formatif — première séance",
-    Decimal("15"),
-    Decimal("5"),
-    Decimal("7"),
+    Decimal("16"),
+    Decimal("4"),
+    Decimal("12"),
     (
         RubricCriterion(
             "manipulation_objectives",
@@ -81,7 +81,7 @@ def _semantic_suggestion(analyses, roles, criterion_id: str) -> RubricSuggestion
     )
     if not provider_evaluable:
         return RubricSuggestion(
-            RubricDecision(criterion_id, RubricLevel.SATISFACTORY),
+            RubricDecision(criterion_id, RubricLevel.GOOD),
             "Toutes les réponses sont présentes, mais leur qualité reste à confirmer par le professeur.",
         )
     statuses = tuple(
@@ -99,11 +99,19 @@ def _semantic_suggestion(analyses, roles, criterion_id: str) -> RubricSuggestion
         level = RubricLevel.VERY_GOOD
         rationale = "Tous les critères attendus ont été repérés sans contradiction."
     elif all_required and not contradictions:
-        level = RubricLevel.SATISFACTORY
+        level = RubricLevel.GOOD
         rationale = "Tous les critères requis ont été repérés ; certains éléments recommandés restent incomplets."
     else:
-        level = RubricLevel.PARTIAL
-        rationale = "Une ou plusieurs attentes requises sont partielles, absentes ou contradictoires."
+        required_found = any(
+            status in (SemanticCriterionStatus.SATISFIED, SemanticCriterionStatus.PARTIAL)
+            for status in required
+        )
+        level = RubricLevel.PARTIAL if required_found and not contradictions else RubricLevel.TO_REVIEW
+        rationale = (
+            "Une ou plusieurs attentes requises sont partielles ou absentes."
+            if level is RubricLevel.PARTIAL
+            else "La réponse est présente, mais ses éléments essentiels sont absents ou contradictoires."
+        )
     return RubricSuggestion(RubricDecision(criterion_id, level), rationale)
 
 
@@ -120,11 +128,49 @@ def _results_suggestion(analysis) -> RubricSuggestion:
     )
     expected_count = len(quantities) + len(graphs)
     present_count = len(present) + len(graph_present)
+    structurally_incomplete = tuple(
+        item for item in present if not item.assessment.is_structurally_satisfied
+    )
+    formatting_criterion_ids = {
+        "period_with_uncertainty",
+        "dynamic_stiffness_with_uncertainty",
+        "static_stiffness_with_uncertainty",
+    }
+    formatting_statuses = tuple(
+        criterion_result.status
+        for semantic_analysis in analysis.semantic_response_analyses
+        if semantic_analysis.result is not None
+        and not any(
+            diagnostic.startswith("SEMANTIC_")
+            for diagnostic in semantic_analysis.result.diagnostics
+        )
+        for criterion_result in semantic_analysis.result.criterion_results
+        if criterion_result.criterion_id in formatting_criterion_ids
+    )
+    incomplete_formatting = tuple(
+        status for status in formatting_statuses
+        if status is not SemanticCriterionStatus.SATISFIED
+    )
+    insufficient_linear_regression = any(
+        item.degree == 1
+        and "trop_peu_de_points_pour_regression_lineaire" in item.diagnostics
+        for item in getattr(analysis, "regression_model_analyses", ())
+    )
     if present_count == 0:
         level = RubricLevel.ABSENT
+    elif formatting_statuses and len(incomplete_formatting) == len(formatting_statuses):
+        level = RubricLevel.TO_REVIEW
+    elif present and len(structurally_incomplete) == len(present):
+        level = RubricLevel.TO_REVIEW
+    elif incomplete_formatting or structurally_incomplete:
+        level = RubricLevel.PARTIAL
     elif present_count < expected_count:
         level = RubricLevel.PARTIAL
-    elif all(item.assessment.is_structurally_satisfied for item in present) and all(
+    elif insufficient_linear_regression:
+        level = RubricLevel.PARTIAL
+    elif not insufficient_linear_regression and all(
+        item.assessment.is_structurally_satisfied for item in present
+    ) and all(
         item.orientation_status.value == "matches"
         and item.label_status.value == "matches"
         and (
@@ -135,10 +181,20 @@ def _results_suggestion(analysis) -> RubricSuggestion:
     ):
         level = RubricLevel.VERY_GOOD
     else:
-        level = RubricLevel.SATISFACTORY
+        level = RubricLevel.GOOD
+    if formatting_statuses and len(incomplete_formatting) == len(formatting_statuses):
+        rationale = "Les résultats rédigés omettent les unités ou incertitudes attendues."
+    elif incomplete_formatting:
+        rationale = "Au moins un résultat rédigé omet une unité ou une incertitude attendue."
+    elif structurally_incomplete:
+        rationale = "Au moins un résultat numérique est incomplet : valeur, unité ou incertitude attendue manquante."
+    elif insufficient_linear_regression:
+        rationale = "La régression linéaire comporte moins de cinq couples de mesures."
+    else:
+        rationale = f"{present_count} production(s) quantitative ou graphique présente(s) sur {expected_count} attendue(s)."
     return RubricSuggestion(
         RubricDecision("results_presentation", level),
-        f"{present_count} production(s) quantitative ou graphique présente(s) sur {expected_count} attendue(s).",
+        rationale,
     )
 
 
@@ -160,10 +216,12 @@ def _completion_suggestion(analysis) -> RubricSuggestion:
     ratio = completed / expected if expected else 0
     if completed == 0:
         level = RubricLevel.ABSENT
+    elif ratio < 0.5 or (analysis.has_placeholders and ratio < 0.75):
+        level = RubricLevel.TO_REVIEW
     elif ratio < 0.75 or analysis.has_placeholders:
         level = RubricLevel.PARTIAL
     elif ratio < 1 or analysis.has_unexecuted_code:
-        level = RubricLevel.SATISFACTORY
+        level = RubricLevel.GOOD
     else:
         level = RubricLevel.VERY_GOOD
     return RubricSuggestion(

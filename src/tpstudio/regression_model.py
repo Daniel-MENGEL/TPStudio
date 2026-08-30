@@ -18,6 +18,9 @@ from tpstudio.graph_analysis import MAX_QUADRATIC_CONDITION
 from tpstudio.regression import RegressionMethod, RegressionObservation, RegressionTechnicalStatus
 from tpstudio.regression_matching import RegressionSeriesMatch, RegressionSeriesMatchStatus
 
+
+MINIMUM_LINEAR_REGRESSION_POINTS = 5
+
 if TYPE_CHECKING:
     from tpstudio.orchestration.graph_adapter import GraphSeriesData
 
@@ -190,9 +193,14 @@ def analyze_regression_model(
     if not _finite(x) or not _finite(y) or len(x) != len(y):
         return _empty(regression, match, RegressionModelTechnicalStatus.NONFINITE_DATA, "donnees_numeriques_absentes_ou_non_finies", series.series_id)
     assert x is not None and y is not None
-    minimum_points = regression.degree + 1
-    if len(x) < minimum_points:
-        return _empty(regression, match, RegressionModelTechnicalStatus.INSUFFICIENT_RANK, "trop_peu_de_points", series.series_id)
+    insufficient_linear_points = (
+        regression.degree == 1 and len(x) < MINIMUM_LINEAR_REGRESSION_POINTS
+    )
+    if regression.degree != 1 and len(x) < regression.degree + 1:
+        return _empty(
+            regression, match, RegressionModelTechnicalStatus.INSUFFICIENT_RANK,
+            "trop_peu_de_points", series.series_id,
+        )
     center, scale = _center_and_scale(x)
     if not math.isfinite(center):
         return _empty(regression, match, RegressionModelTechnicalStatus.NONFINITE_DATA, "centre_x_non_fini", series.series_id)
@@ -256,8 +264,16 @@ def analyze_regression_model(
         regression.regression_id, series.series_id, regression.method, regression.degree,
         match.status, tuple(coefficients), predictions, center, scale, rank, condition,
         RegressionModelTechnicalStatus.EVALUABLE,
-        ("modele_affine_reconstruit" if regression.degree == 1 else "modele_quadratique_reconstruit",),
-        False,
+        tuple(
+            diagnostic
+            for diagnostic in (
+                "modele_affine_reconstruit" if regression.degree == 1 else "modele_quadratique_reconstruit",
+                "trop_peu_de_points_pour_regression_lineaire"
+                if insufficient_linear_points else None,
+            )
+            if diagnostic is not None
+        ),
+        insufficient_linear_points,
         tuple(float(value) for value in normalized),
     )
 
