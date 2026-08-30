@@ -112,6 +112,24 @@ SEMANTIC_RESPONSE_EXPECTATIONS = (
         ),
     ),
     ExpectedSemanticResponse(
+        "period_neighbor_comparison",
+        SemanticRole.INTERPRETATION,
+        (
+            _criterion(
+                "cite_both_period_results",
+                "Rappeler les périodes des deux binômes avec leurs incertitudes et leurs unités.",
+            ),
+            _criterion(
+                "period_normalized_error_classification",
+                "Utiliser l'écart normalisé et le seuil 2 pour conclure sur la compatibilité des périodes.",
+            ),
+            _criterion(
+                "different_springs_context",
+                "Expliquer qu'une incompatibilité peut être légitime lorsque les binômes étudient des ressorts différents.",
+            ),
+        ),
+    ),
+    ExpectedSemanticResponse(
         "dynamic_stiffness_interpretation",
         SemanticRole.INTERPRETATION,
         (
@@ -245,6 +263,7 @@ def _plan() -> ScientificProductionPlan:
             ScientificProductionSpec("dynamic_protocol", "Protocole de la méthode dynamique", interpretation, (semantic,)),
             ScientificProductionSpec("period_result", "Période mesurée", quantity, (structural,)),
             ScientificProductionSpec("period_result_comment", "Interprétation de la période", interpretation, (semantic,), ("period_result",)),
+            ScientificProductionSpec("period_neighbor_comparison", "Comparaison de la période avec le groupe voisin", interpretation, (semantic,), ("period_result",)),
             ScientificProductionSpec("dynamic_stiffness", "Raideur dynamique", quantity, (structural,)),
             ScientificProductionSpec("dynamic_stiffness_interpretation", "Interprétation de la raideur dynamique", interpretation, (semantic,), ("dynamic_stiffness",)),
             ScientificProductionSpec("hooke_objective", "Objectif de l'étude statique", interpretation, (semantic,)),
@@ -292,6 +311,7 @@ def _bindings(plan: ScientificProductionPlan) -> NotebookBindingPlan:
                     "dynamic-objective-response",
                     "dynamic-protocol-response",
                     "period-result-response",
+                    "period-neighbor-comparison-response",
                     "dynamic-stiffness-interpretation-response",
                     "hooke-objective-response",
                     "hooke-protocol-response",
@@ -380,7 +400,7 @@ def first_lab_measurements_teacher_project() -> TeacherProjectConfiguration:
             "Premières mesures au labo",
             "Physique",
             "Lycée",
-            "A79d2",
+            "A79d8",
             "fr",
             "TP-cours guidé sur les incertitudes, la loi de Hooke et la rédaction scientifique.",
         ),

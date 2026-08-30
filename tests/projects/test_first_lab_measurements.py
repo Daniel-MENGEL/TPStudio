@@ -23,7 +23,7 @@ REFERENCE_DIR = (
 def test_project_identity_references_and_readiness():
     project = first_lab_measurements_teacher_project()
     assert project.identity.project_id == "first-lab-measurements"
-    assert project.identity.version == "A79d2"
+    assert project.identity.version == "A79d8"
     assert project.statement_reference.expected_filename == "Premieres-mesures-au-labo.ipynb"
     assert project.correction_reference is not None
     assert project.correction_reference.expected_filename == "Premieres-mesures-au-labo-Corrige.ipynb"
@@ -56,6 +56,7 @@ def test_semantic_contracts_follow_notebook_order():
         "dynamic_objective",
         "dynamic_protocol",
         "period_result_comment",
+        "period_neighbor_comparison",
         "dynamic_stiffness_interpretation",
         "hooke_objective",
         "hooke_protocol",
@@ -67,6 +68,7 @@ def test_semantic_contracts_follow_notebook_order():
     assert tuple(item.semantic_role for item in project.semantic_response_expectations) == (
         SemanticRole.OBJECTIVE,
         SemanticRole.PROTOCOL,
+        SemanticRole.INTERPRETATION,
         SemanticRole.INTERPRETATION,
         SemanticRole.INTERPRETATION,
         SemanticRole.OBJECTIVE,
@@ -92,6 +94,7 @@ def test_all_bindings_resolve_once_on_aligned_markers():
         "dynamic-objective-response",
         "dynamic-protocol-response",
         "period-result-response",
+        "period-neighbor-comparison-response",
         "dynamic-stiffness-interpretation-response",
         "hooke-objective-response",
         "hooke-protocol-response",
