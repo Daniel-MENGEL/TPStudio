@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <style>
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; }
+    iframe { border: 0; width: 100%; height: 760px; display: block; background: white; }
+  </style>
+</head>
+<body>
+  <iframe id="preview" title="Copie corrigée"></iframe>
+  <script>
+    const preview = document.getElementById("preview");
+    let selected = null;
+
+    function send(type, payload = {}) {
+      window.parent.postMessage({
+        isStreamlitMessage: true,
+        type,
+        ...payload,
+      }, "*");
+    }
+
+    function focusSelected() {
+      const doc = preview.contentDocument;
+      if (!doc) return;
+      doc.querySelectorAll(".tpstudio-review-focus").forEach(
+        element => element.classList.remove("tpstudio-review-focus")
+      );
+      if (!selected) return;
+      const target = doc.getElementById(selected);
+      if (target) {
+        target.classList.add("tpstudio-review-focus");
+        target.scrollIntoView({behavior: "smooth", block: "center"});
+      }
+    }
+
+    preview.addEventListener("load", () => {
+      const doc = preview.contentDocument;
+      if (!doc) return;
+      doc.querySelectorAll(".tpstudio-annotation, .tpstudio-summary-item").forEach(
+        element => {
+          element.style.cursor = "pointer";
+          element.title = "Sélectionner ce commentaire dans TPStudio";
+          element.addEventListener("click", event => {
+            event.preventDefault();
+            selected = element.id;
+            focusSelected();
+            send("streamlit:setComponentValue", {
+              value: {
+                annotation_id: selected,
+                event_id: `${Date.now()}-${Math.random()}`,
+              },
+              dataType: "json",
+            });
+          });
+        }
+      );
+      focusSelected();
+    });
+
+    window.addEventListener("message", event => {
+      if (event.data.type !== "streamlit:render") return;
+      const args = event.data.args || {};
+      selected = args.selected || null;
+      if (preview.srcdoc !== args.html) {
+        preview.srcdoc = args.html || "";
+      } else {
+        focusSelected();
+      }
+      send("streamlit:setFrameHeight", {height: 760});
+    });
+
+    send("streamlit:componentReady", {apiVersion: 1});
+    send("streamlit:setFrameHeight", {height: 760});
+  </script>
+</body>
+</html>

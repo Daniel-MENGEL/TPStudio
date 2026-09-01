@@ -18,9 +18,70 @@ from tpstudio.semantic_analysis import (
 
 from .model import (
     AnnotationKind, AnnotationOptions, AnnotationPlacement, AnnotationPlan,
+    AnnotationReview, AnnotationReviewAction, AnnotationReviewLevel,
     NotebookAnnotation, SkippedAnnotation, SkippedAnnotationReason,
     StudentSummaryAnnotation,
 )
+
+
+def apply_annotation_reviews(
+    plan: AnnotationPlan,
+    reviews: tuple[AnnotationReview, ...] = (),
+) -> AnnotationPlan:
+    """Return the reviewed plan without mutating the automatic proposal."""
+
+    if type(plan) is not AnnotationPlan:
+        raise TypeError("Le plan de revue est invalide.")
+    reviews = tuple(reviews)
+    if any(type(item) is not AnnotationReview for item in reviews):
+        raise TypeError("Une décision de revue est invalide.")
+    review_by_id = {item.annotation_id: item for item in reviews}
+    if len(review_by_id) != len(reviews):
+        raise ValueError("Une annotation ne peut recevoir qu'une décision.")
+    known_ids = {
+        item.annotation_id for item in plan.annotations + plan.summary_annotations
+    }
+    unknown = set(review_by_id) - known_ids
+    if unknown:
+        raise ValueError("Une décision cible une annotation inconnue.")
+
+    def reviewed(items):
+        result = []
+        for item in items:
+            decision = review_by_id.get(item.annotation_id)
+            if decision is None:
+                result.append(item)
+            elif decision.action is AnnotationReviewAction.KEEP:
+                result.append(_apply_review_level(item, decision.level))
+            elif decision.action is AnnotationReviewAction.EDIT:
+                result.append(_apply_review_level(
+                    replace(item, message=decision.message), decision.level
+                ))
+        return tuple(result)
+
+    return replace(
+        plan,
+        annotations=reviewed(plan.annotations),
+        summary_annotations=reviewed(plan.summary_annotations),
+    )
+
+
+_REVIEW_LEVEL_SEVERITY = {
+    AnnotationReviewLevel.ABSENT: TeacherReportSeverity.BLOCKING,
+    AnnotationReviewLevel.TO_REVIEW: TeacherReportSeverity.IMPORTANT,
+    AnnotationReviewLevel.PARTIAL: TeacherReportSeverity.ATTENTION,
+    AnnotationReviewLevel.GOOD: TeacherReportSeverity.INFO,
+    AnnotationReviewLevel.VERY_GOOD: TeacherReportSeverity.INFO,
+}
+
+
+def _apply_review_level(item, level: AnnotationReviewLevel | None):
+    if level is None:
+        return item
+    metadata = tuple(
+        pair for pair in item.metadata if pair[0] != "review_level"
+    ) + (("review_level", level.value),)
+    return replace(item, severity=_REVIEW_LEVEL_SEVERITY[level], metadata=metadata)
 
 
 _SEVERITY_ORDER = {

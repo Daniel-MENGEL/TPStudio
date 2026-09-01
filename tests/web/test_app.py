@@ -2,16 +2,26 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import tpstudio.web.app as app
+from tpstudio.semantic_analysis import CachedSemanticAnalysisProvider
 from tpstudio.web.app import (
     _analysis_signature,
     _build_semantic_provider,
     _copy_issue_count,
+    _consume_preview_click_event,
+    _focus_annotation_html,
     _input_signature,
     _open_local_html_artifact,
+    _ordered_review_annotations,
     _render_first_lab_grading,
     _suggested_grade_label,
     web_error_message,
 )
+from tpstudio.annotation import (
+    AnnotationKind, AnnotationPlacement, AnnotationPlan, NotebookAnnotation,
+    SkippedAnnotationReason, StudentSummaryAnnotation,
+)
+from tpstudio.feedback import FeedbackAudience
+from tpstudio.reporting import TeacherReportSeverity
 from tpstudio.web.model import SelectedCopy, WebBatchOptions
 
 
@@ -40,10 +50,14 @@ def test_semantic_provider_factory_is_explicit_and_does_not_store_key(monkeypatc
             observed["model"] = model
             observed["kwargs"] = kwargs
 
+        def analyze(self, contract, student_response):
+            raise AssertionError("Aucun appel réseau attendu dans ce test.")
+
     monkeypatch.setenv("TPSTUDIO_OPENAI_MODEL", "public-test-model")
     monkeypatch.setattr(app, "OpenAISemanticAnalysisProvider", FakeProvider)
     provider = _build_semantic_provider(True, environ={"OPENAI_API_KEY": "secret"})
-    assert isinstance(provider, FakeProvider)
+    assert isinstance(provider, CachedSemanticAnalysisProvider)
+    assert isinstance(provider.provider, FakeProvider)
     assert observed == {"model": "public-test-model", "kwargs": {}}
     assert "secret" not in repr(provider)
 
@@ -65,6 +79,51 @@ def test_open_local_html_artifact_delegates_to_operating_system(tmp_path):
     assert _open_local_html_artifact(html, opener=lambda uri: opened.append(uri) or True)
     assert opened == [html.resolve().as_uri()]
     assert not _open_local_html_artifact(tmp_path / "absent.html", opener=lambda uri: True)
+
+
+def test_html_preview_focuses_selected_annotation_safely():
+    document = '<html><body><blockquote id="tpstudio:item"></blockquote></body></html>'
+    focused = _focus_annotation_html(document, 'tpstudio:item')
+    assert 'getElementById("tpstudio:item")' in focused
+    assert "tpstudio-review-focus" in focused
+    assert "scrollIntoView" in focused
+    assert _focus_annotation_html(document, None) == document
+
+
+def test_review_annotations_follow_rendered_notebook_order():
+    def local(annotation_id, cell_index):
+        return NotebookAnnotation(
+            annotation_id, AnnotationKind.FEEDBACK, FeedbackAudience.STUDENT,
+            annotation_id, (annotation_id,), None, None, cell_index,
+            AnnotationPlacement.AFTER_CELL, TeacherReportSeverity.ATTENTION,
+        )
+
+    summary = StudentSummaryAnnotation(
+        "summary", FeedbackAudience.STUDENT, "Synthèse",
+        TeacherReportSeverity.IMPORTANT,
+        SkippedAnnotationReason.TARGET_UNAVAILABLE,
+    )
+    plan = AnnotationPlan(
+        "project", "source", (local("late", 12), local("early", 3)),
+        summary_annotations=(summary,),
+    )
+    assert tuple(
+        item.annotation_id for item in _ordered_review_annotations(plan)
+    ) == ("summary", "early", "late")
+
+
+def test_preview_click_event_is_consumed_once_and_updates_selection():
+    state = {"choice": "last"}
+    event = {"annotation_id": "first", "event_id": "event-1"}
+    assert _consume_preview_click_event(
+        state, event,
+        event_key="seen", choice_key="choice", valid_ids=("first", "last"),
+    )
+    assert state == {"choice": "first", "seen": "event-1"}
+    assert not _consume_preview_click_event(
+        state, event,
+        event_key="seen", choice_key="choice", valid_ids=("first", "last"),
+    )
 
 
 def test_compact_copy_issue_count_ignores_information_and_counts_reviews():

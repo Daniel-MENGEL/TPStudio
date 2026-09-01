@@ -5,15 +5,23 @@ from __future__ import annotations
 from pathlib import Path
 from dataclasses import replace
 from datetime import datetime, timezone
+import json
 import os
 import webbrowser
 
 from tpstudio.batch import BatchCopyStatus, render_batch_report_markdown
 from tpstudio.export import CopyExportOptions
+from tpstudio.export import render_analyzed_copy_html
+from tpstudio.annotation import (
+    AnnotationReview, AnnotationReviewAction, AnnotationReviewLevel,
+    build_annotation_plan,
+)
 from tpstudio.orchestration import BatchCopyDispatchStatus
 from tpstudio.semantic_analysis import (
+    CachedSemanticAnalysisProvider,
     DEFAULT_OPENAI_SEMANTIC_MODEL,
     OpenAISemanticAnalysisProvider,
+    SemanticRole,
 )
 from tpstudio.web.execution import (
     analyze_selected_copy,
@@ -73,6 +81,9 @@ from tpstudio.web.state import (
     invalidate_dispatch_if_signature_changed,
     get_project_overrides, set_project_override, remove_project_override,
     get_export_results, set_export_results,
+    get_annotation_reviews, set_annotation_review,
+    set_annotation_reviews_for_source,
+    get_html_preview, set_html_preview,
     SEMANTIC_ANALYSIS_ENABLED_KEY,
 )
 from tpstudio.web.workspace import WebWorkspace
@@ -113,6 +124,340 @@ def _open_local_html_artifact(path, *, opener=None) -> bool:
     return bool(open_in_browser(artifact.as_uri()))
 
 
+_ANNOTATION_REVIEW_LABELS = {
+    AnnotationReviewAction.KEEP: "Conserver",
+    AnnotationReviewAction.EDIT: "Modifier",
+    AnnotationReviewAction.REMOVE: "Retirer",
+}
+
+_ANNOTATION_LEVEL_LABELS = {
+    AnnotationReviewLevel.ABSENT: "Absence de réponse",
+    AnnotationReviewLevel.TO_REVIEW: "À revoir",
+    AnnotationReviewLevel.PARTIAL: "Partiel",
+    AnnotationReviewLevel.GOOD: "Bien",
+    AnnotationReviewLevel.VERY_GOOD: "Très bien",
+}
+
+_SEVERITY_DEFAULT_REVIEW_LEVEL = {
+    "blocking": AnnotationReviewLevel.ABSENT,
+    "important": AnnotationReviewLevel.TO_REVIEW,
+    "attention": AnnotationReviewLevel.PARTIAL,
+    "info": AnnotationReviewLevel.VERY_GOOD,
+}
+
+
+def _annotation_review_signature(reviews) -> tuple:
+    return tuple(sorted(
+        (
+            item.annotation_id,
+            item.action.value,
+            item.message,
+            item.level.value if item.level is not None else None,
+        )
+        for item in reviews
+    ))
+
+
+def _grading_widget_key(source_id: str, criterion_id: str) -> str:
+    profile = FIRST_LAB_FORMATIVE_GRADING_PROFILE
+    return f"grading-{profile.profile_id}-{source_id}-{criterion_id}"
+
+
+def _annotation_grading_criterion(analysis, annotation) -> str | None:
+    """Map a reviewed comment to the closest first-session rubric criterion."""
+
+    if analysis.project_id != FIRST_LAB_FORMATIVE_GRADING_PROFILE.project_id:
+        return None
+    if annotation in tuple(build_annotation_plan(analysis).summary_annotations):
+        return "completion"
+    contracts = {
+        item.production_id: item.semantic_role
+        for item in analysis.project.semantic_response_expectations
+    }
+    role = contracts.get(getattr(annotation, "production_id", None))
+    if role is SemanticRole.OBJECTIVE:
+        return "manipulation_objectives"
+    if role is SemanticRole.PROTOCOL:
+        return "protocols"
+    if role in (SemanticRole.INTERPRETATION, SemanticRole.CONCLUSION):
+        return "interpretation"
+    return "results_presentation"
+
+
+def _ordered_review_annotations(plan) -> tuple:
+    """Match the review selector order to the rendered notebook order."""
+
+    localized = tuple(sorted(
+        plan.annotations,
+        key=lambda item: item.target_cell_index,
+    ))
+    # Summary comments are rendered in a dedicated cell immediately after
+    # the notebook heading, before every localized annotation.
+    return tuple(plan.summary_annotations) + localized
+
+
+def _focus_annotation_html(document: str, annotation_id: str | None) -> str:
+    """Highlight and reveal one annotation inside the preview iframe."""
+
+    if annotation_id is None:
+        return document
+    script = f"""
+<script>
+document.addEventListener("DOMContentLoaded", () => {{
+  const target = document.getElementById({json.dumps(annotation_id)});
+  if (target) {{
+    target.classList.add("tpstudio-review-focus");
+    requestAnimationFrame(() => target.scrollIntoView({{
+      behavior: "smooth", block: "center", inline: "nearest"
+    }}));
+  }}
+}});
+</script>
+"""
+    return document.replace("</body>", script + "</body>", 1)
+
+
+def _review_preview_component(document: str, selected_id: str | None, *, key: str):
+    """Render the clickable notebook preview and return its selected comment."""
+
+    import streamlit.components.v1 as components
+
+    component = components.declare_component(
+        "tpstudio_review_preview",
+        path=str(Path(__file__).with_name("review_preview_component")),
+    )
+    return component(
+        html=document,
+        selected=selected_id,
+        default=None,
+        key=key,
+    )
+
+
+def _select_annotation(state, widget_key: str, annotation_id: str) -> None:
+    state[widget_key] = annotation_id
+
+
+def _consume_preview_click_event(
+    state, event, *, event_key: str, choice_key: str, valid_ids: tuple[str, ...],
+) -> bool:
+    """Apply one new component click exactly once."""
+
+    if not isinstance(event, dict):
+        return False
+    annotation_id = event.get("annotation_id")
+    event_id = event.get("event_id")
+    if (
+        annotation_id not in valid_ids
+        or not event_id
+        or event_id == state.get(event_key)
+    ):
+        return False
+    state[event_key] = event_id
+    state[choice_key] = annotation_id
+    return True
+
+
+def _render_copy_review_workspace(st, analysis, source_id: str) -> None:
+    """Render one corrected copy beside its teacher validation controls."""
+
+    reviews = get_annotation_reviews(st.session_state).get(source_id, ())
+    review_by_id = {item.annotation_id: item for item in reviews}
+    plan = build_annotation_plan(analysis)
+    annotations = _ordered_review_annotations(plan)
+    semantic_failures = sum(
+        semantic.result is not None
+        and any(
+            diagnostic.startswith("SEMANTIC_PROVIDER_ERROR:")
+            for diagnostic in semantic.result.diagnostics
+        )
+        for semantic in analysis.semantic_response_analyses
+    )
+    if semantic_failures:
+        st.warning(
+            f"{semantic_failures} réponse(s) scientifique(s) n'ont pas pu être "
+            "analysées par l'IA. La liste des commentaires est incomplète."
+        )
+    validated = sum(item.annotation_id in review_by_id for item in annotations)
+    st.caption(
+        f"Commentaires examinés : {validated} / {len(annotations)} · "
+        "la copie source reste inchangée"
+    )
+
+    preview_column, review_column = st.columns((2.2, 1.0), gap="large")
+    annotation_ids = tuple(item.annotation_id for item in annotations)
+    annotation_by_id = {item.annotation_id: item for item in annotations}
+    choice_key = f"annotation-choice-{source_id}"
+    current_selected = st.session_state.get(choice_key)
+    if current_selected not in annotation_ids:
+        current_selected = annotation_ids[0] if annotation_ids else None
+        if current_selected is not None:
+            st.session_state[choice_key] = current_selected
+
+    signature = (
+        analysis.source_id,
+        analysis.source.path.stat().st_mtime_ns,
+        _annotation_review_signature(reviews),
+    )
+    html = get_html_preview(st.session_state, source_id, signature)
+    if html is None:
+        html = render_analyzed_copy_html(
+            analysis.source,
+            analysis,
+            options=CopyExportOptions(embed_images=True),
+            annotation_reviews=reviews,
+        )
+        set_html_preview(st.session_state, source_id, signature, html)
+
+    with preview_column:
+        st.markdown("#### Copie corrigée")
+        click_event = _review_preview_component(
+            html,
+            current_selected,
+            key=f"review-preview-{source_id}",
+        )
+    event_key = f"review-preview-event-{source_id}"
+    if _consume_preview_click_event(
+        st.session_state,
+        click_event,
+        event_key=event_key,
+        choice_key=choice_key,
+        valid_ids=annotation_ids,
+    ):
+        # The component was rendered earlier in this Streamlit pass with the
+        # previous selection.  Start one clean pass so the preview, selector
+        # and navigation buttons all receive the clicked annotation together.
+        st.rerun()
+
+    selected_id = None
+    with review_column:
+        st.markdown("#### Validation des commentaires")
+        if not annotations:
+            st.info("Aucun commentaire automatique à valider.")
+        elif validated < len(annotations) and st.button(
+            "Tout conserver pour cette copie",
+            key=f"annotation-keep-all-{source_id}",
+        ):
+            set_annotation_reviews_for_source(
+                st.session_state,
+                source_id,
+                tuple(
+                    review_by_id.get(item.annotation_id)
+                    or AnnotationReview(
+                        item.annotation_id, AnnotationReviewAction.KEEP
+                    )
+                    for item in annotations
+                ),
+            )
+            st.rerun()
+        if annotations:
+            selected_id = st.selectbox(
+                "Commentaire",
+                annotation_ids,
+                format_func=lambda value: (
+                    ("✓ " if value in review_by_id else "• ")
+                    + annotation_by_id[value].message.replace("\n", " ")[:72]
+                ),
+                key=choice_key,
+            )
+            selected_index = annotation_ids.index(selected_id)
+            previous_column, position_column, next_column = st.columns((1, 1, 1))
+            with previous_column:
+                st.button(
+                    "← Précédent",
+                    disabled=selected_index == 0,
+                    key=f"annotation-previous-{source_id}",
+                    on_click=_select_annotation,
+                    args=(
+                        st.session_state,
+                        choice_key,
+                        annotation_ids[max(0, selected_index - 1)],
+                    ),
+                )
+            with position_column:
+                st.caption(f"{selected_index + 1} / {len(annotation_ids)}")
+            with next_column:
+                st.button(
+                    "Suivant →",
+                    disabled=selected_index == len(annotation_ids) - 1,
+                    key=f"annotation-next-{source_id}",
+                    on_click=_select_annotation,
+                    args=(
+                        st.session_state,
+                        choice_key,
+                        annotation_ids[min(len(annotation_ids) - 1, selected_index + 1)],
+                    ),
+                )
+            proposal = annotation_by_id[selected_id]
+            current = review_by_id.get(selected_id)
+            default_action = (
+                current.action if current is not None else AnnotationReviewAction.KEEP
+            )
+            st.caption("Proposition automatique")
+            st.write(proposal.message)
+            automatic_level = _SEVERITY_DEFAULT_REVIEW_LEVEL[
+                proposal.severity.value
+            ]
+            current_level = (
+                current.level
+                if current is not None and current.level is not None
+                else automatic_level
+            )
+            level = st.selectbox(
+                "Appréciation",
+                tuple(AnnotationReviewLevel),
+                index=tuple(AnnotationReviewLevel).index(current_level),
+                format_func=_ANNOTATION_LEVEL_LABELS.get,
+                key=f"annotation-level-{source_id}-{selected_id}",
+            )
+            action = st.radio(
+                "Décision",
+                tuple(_ANNOTATION_REVIEW_LABELS),
+                index=tuple(_ANNOTATION_REVIEW_LABELS).index(default_action),
+                format_func=_ANNOTATION_REVIEW_LABELS.get,
+                horizontal=True,
+                key=f"annotation-action-{source_id}-{selected_id}",
+            )
+            message = None
+            if action is AnnotationReviewAction.EDIT:
+                message = st.text_area(
+                    "Commentaire corrigé",
+                    value=(current.message if current and current.message else proposal.message),
+                    key=f"annotation-message-{source_id}-{selected_id}",
+                )
+            if st.button(
+                "Enregistrer la décision",
+                type="primary",
+                key=f"annotation-save-{source_id}-{selected_id}",
+            ):
+                criterion_id = _annotation_grading_criterion(
+                    analysis, proposal
+                )
+                if (
+                    criterion_id is not None
+                    and action is not AnnotationReviewAction.REMOVE
+                ):
+                    st.session_state[_grading_widget_key(
+                        source_id, criterion_id
+                    )] = RubricLevel[level.name]
+                set_annotation_review(
+                    st.session_state,
+                    source_id,
+                    AnnotationReview(selected_id, action, message, level),
+                )
+                st.rerun()
+
+        if (
+            analysis.project_id
+            == FIRST_LAB_FORMATIVE_GRADING_PROFILE.project_id
+        ):
+            st.divider()
+            _render_first_lab_grading(
+                st, analysis, source_id, compact=True
+            )
+
+
+
 _RUBRIC_LEVEL_LABELS = {
     RubricLevel.ABSENT: "Absence de réponse",
     RubricLevel.TO_REVIEW: "À revoir",
@@ -122,41 +467,56 @@ _RUBRIC_LEVEL_LABELS = {
 }
 
 
-def _render_first_lab_grading(st, analysis, source_id: str) -> None:
+def _render_first_lab_grading(
+    st, analysis, source_id: str, *, compact: bool = False,
+) -> None:
     """Render a teacher-only, non-exported formative grading experiment."""
 
     profile = FIRST_LAB_FORMATIVE_GRADING_PROFILE
     if analysis.project_id != profile.project_id:
         return
-    st.markdown("### Proposition de note formative")
-    st.caption(
-        "Première séance : base 16/20. Cette proposition dépend uniquement des "
-        "niveaux choisis par l’enseignant et n’est pas ajoutée au corrigé étudiant."
-    )
+    st.markdown("#### Note de la copie" if compact else "### Proposition de note formative")
+    if not compact:
+        st.caption(
+            "Cette proposition dépend uniquement des niveaux choisis par "
+            "l’enseignant et n’est pas ajoutée au corrigé étudiant."
+        )
     suggestions = suggest_first_lab_rubric(analysis)
     by_criterion = {
         item.decision.criterion_id: item for item in suggestions
     }
-    decisions = []
-    for criterion in profile.criteria:
-        suggestion = by_criterion[criterion.criterion_id]
-        levels = tuple(RubricLevel)
-        level = st.selectbox(
-            criterion.label,
-            options=levels,
-            index=levels.index(suggestion.decision.level),
-            format_func=lambda value: _RUBRIC_LEVEL_LABELS[value],
-            help=criterion.description,
-            key=f"grading-{profile.profile_id}-{source_id}-{criterion.criterion_id}",
+    session_state = getattr(st, "session_state", {})
+    decisions = tuple(
+        RubricDecision(
+            criterion.criterion_id,
+            session_state.get(
+                _grading_widget_key(source_id, criterion.criterion_id),
+                by_criterion[criterion.criterion_id].decision.level,
+            ),
         )
-        decisions.append(RubricDecision(criterion.criterion_id, level))
-        st.caption(f"Suggestion TPStudio : {suggestion.rationale}")
-    proposal = build_formative_grade_proposal(profile, tuple(decisions))
+        for criterion in profile.criteria
+    )
+    proposal = build_formative_grade_proposal(profile, decisions)
     st.metric("Note proposée", f"{proposal.proposed_score}/20")
     st.caption(
         f"Base : {proposal.base_score}/20 · Bonus : +{proposal.bonus} · "
         f"Retraits : −{proposal.deduction}"
     )
+    for criterion in profile.criteria:
+        suggestion = by_criterion[criterion.criterion_id]
+        levels = tuple(RubricLevel)
+        st.selectbox(
+            criterion.label,
+            options=levels,
+            index=levels.index(next(
+                item.level for item in decisions
+                if item.criterion_id == criterion.criterion_id
+            )),
+            format_func=lambda value: _RUBRIC_LEVEL_LABELS[value],
+            help=criterion.description,
+            key=_grading_widget_key(source_id, criterion.criterion_id),
+        )
+        st.caption(f"Suggestion TPStudio : {suggestion.rationale}")
 
 
 def _copy_issue_count(row, overview_rows=(), graph_rows=(), semantic_rows=()) -> int:
@@ -193,7 +553,11 @@ def _build_semantic_provider(enabled: bool, *, environ=None):
     environment = os.environ if environ is None else environ
     if not str(environment.get("OPENAI_API_KEY", "")).strip():
         return None
-    return OpenAISemanticAnalysisProvider(model=_semantic_model())
+    model = _semantic_model()
+    return CachedSemanticAnalysisProvider(
+        OpenAISemanticAnalysisProvider(model=model),
+        model=model,
+    )
 
 
 def web_error_message(exc: BaseException) -> str:
@@ -368,6 +732,10 @@ def main() -> None:
         )
         if semantic_enabled:
             st.caption(f"Modèle sémantique : {semantic_model}")
+            st.caption(
+                "Cache IA local actif : une réponse inchangée n'est pas "
+                "renvoyée à OpenAI."
+            )
         try:
             roster = load_roster()
             st.caption(f"Étudiants : {len(roster)} chargés")
@@ -653,9 +1021,19 @@ def main() -> None:
             semantic_rows = selected_view["semantics"]
 
             st.markdown(f"### {row.display_name}")
-            summary_tab, responses_tab, results_tab, grading_tab, artifact_tab = st.tabs(
-                ["Synthèse", "Réponses scientifiques", "Résultats et graphes", "Notation", "Export"]
-            )
+            if active_analysis is not None:
+                _render_copy_review_workspace(
+                    st, active_analysis, item.source_id,
+                )
+            else:
+                st.info("Aucun aperçu corrigé n'est disponible pour cette copie.")
+
+            st.markdown("#### Informations complémentaires")
+            summary_tab = st.expander("Synthèse et détection", expanded=False)
+            responses_tab = st.expander("Réponses scientifiques", expanded=False)
+            results_tab = st.expander("Résultats et graphes", expanded=False)
+            grading_tab = st.expander("Notation", expanded=False)
+            artifact_tab = st.expander("Fichiers exportés", expanded=False)
             with summary_tab:
                 st.write(f"**État :** {row.status}")
                 st.write(f"**TP :** {row.project_title or '—'}")
@@ -675,7 +1053,8 @@ def main() -> None:
                         )
                 elif active_analysis is not None:
                     st.success("Aucun problème scientifique prioritaire repéré.")
-                with st.expander("Détection du TP et détails techniques", expanded=False):
+                with st.container(border=True):
+                    st.markdown("**Détection du TP et détails techniques**")
                     st.write(f"Provenance : {row.provenance}")
                     if row.confidence:
                         st.write(f"Confiance : {row.confidence}")
@@ -752,10 +1131,11 @@ def main() -> None:
                 if not semantic_rows:
                     st.info("Aucune réponse scientifique analysable pour cette copie.")
                 for semantic_row in semantic_rows:
-                    with st.expander(
-                        f"{semantic_row.role_label} — {semantic_row.production_id}",
-                        expanded=False,
-                    ):
+                    with st.container(border=True):
+                        st.markdown(
+                            f"**{semantic_row.role_label} — "
+                            f"{semantic_row.production_id}**"
+                        )
                         st.caption(semantic_row.binding_label)
                         st.text_area(
                             "Réponse étudiante",
@@ -799,7 +1179,10 @@ def main() -> None:
                 if active_analysis is None:
                     st.info("Aucune proposition de notation disponible.")
                 elif active_analysis.project_id == FIRST_LAB_FORMATIVE_GRADING_PROFILE.project_id:
-                    _render_first_lab_grading(st, active_analysis, item.source_id)
+                    st.info(
+                        "La note et les appréciations sont maintenant modifiables "
+                        "dans le panneau de validation, à droite de la copie."
+                    )
                 else:
                     st.info("Le barème formatif est actuellement disponible pour la première séance.")
 
@@ -864,6 +1247,9 @@ def main() -> None:
                                 output_dir=output_dir,
                                 options=export_options,
                                 selected_copies=copies,
+                                annotation_reviews=get_annotation_reviews(
+                                    st.session_state
+                                ),
                             ),
                         )
                         st.rerun()

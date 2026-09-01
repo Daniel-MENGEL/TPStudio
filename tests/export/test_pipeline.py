@@ -10,7 +10,8 @@ from tpstudio.export import CopyExportOptions, export_snells_laws_copy
 import tpstudio.export.pipeline as pipeline
 from tpstudio.annotation import (
     AnnotationKind, AnnotationPlacement, AnnotationPlan, NotebookAnnotation,
-    SkippedAnnotationReason, StudentSummaryAnnotation,
+    AnnotationReview, AnnotationReviewAction, SkippedAnnotationReason,
+    StudentSummaryAnnotation,
 )
 from tpstudio.feedback import FeedbackAudience
 from tpstudio.reporting import TeacherReportSeverity
@@ -65,6 +66,70 @@ def test_pipeline_exports_student_summary_to_notebook_and_html(tmp_path, monkeyp
     assert "Conclusion — cette production attendue n'a pas été retrouvée." in notebook_text
     assert "Points à compléter ou à revoir" in html_text
     assert "Conclusion — cette production attendue n'a pas été retrouvée." in html_text
+
+
+def test_pipeline_applies_teacher_annotation_review_to_notebook_and_html(tmp_path, monkeypatch):
+    module = _fixture()
+    source = tmp_path / "copy.ipynb"
+    nbformat.write(module._notebook(), source)
+    analysis = analyze_snells_laws_copy(NotebookCopySource("local-copy", source.name, source))
+    local = NotebookAnnotation(
+        "local-feedback", AnnotationKind.FEEDBACK, FeedbackAudience.STUDENT,
+        "Commentaire automatique.", ("local",), None, None, 0,
+        AnnotationPlacement.APPEND_TO_MARKDOWN, TeacherReportSeverity.ATTENTION,
+    )
+    plan = AnnotationPlan(analysis.project_id, analysis.source_id, (local,))
+    monkeypatch.setattr(pipeline, "build_annotation_plan", lambda *args, **kwargs: plan)
+
+    result = pipeline.export_analyzed_copy(
+        analysis.source,
+        analysis,
+        tmp_path / "out",
+        annotation_reviews=(
+            AnnotationReview(
+                "local-feedback", AnnotationReviewAction.EDIT,
+                "Commentaire validé par le professeur.",
+            ),
+        ),
+    )
+
+    notebook_text = result.notebook_artifact.path.read_text(encoding="utf-8")
+    html_text = result.html_artifact.path.read_text(encoding="utf-8")
+    assert "Commentaire validé par le professeur." in notebook_text
+    assert "Commentaire validé par le professeur." in html_text
+    assert "Commentaire automatique." not in notebook_text
+    assert "Commentaire automatique." not in html_text
+
+
+def test_reviewed_html_preview_creates_no_file_and_preserves_source(tmp_path, monkeypatch):
+    module = _fixture()
+    source = tmp_path / "copy.ipynb"
+    nbformat.write(module._notebook(), source)
+    before = source.read_bytes()
+    analysis = analyze_snells_laws_copy(NotebookCopySource("local-copy", source.name, source))
+    local = NotebookAnnotation(
+        "preview-feedback", AnnotationKind.FEEDBACK, FeedbackAudience.STUDENT,
+        "Visible dans l'aperçu.", ("local",), None, None, 0,
+        AnnotationPlacement.APPEND_TO_MARKDOWN, TeacherReportSeverity.ATTENTION,
+    )
+    monkeypatch.setattr(
+        pipeline, "build_annotation_plan",
+        lambda *args, **kwargs: AnnotationPlan(
+            analysis.project_id, analysis.source_id, (local,)
+        ),
+    )
+
+    html = pipeline.render_analyzed_copy_html(
+        analysis.source,
+        analysis,
+        annotation_reviews=(
+            AnnotationReview("preview-feedback", AnnotationReviewAction.REMOVE),
+        ),
+    )
+
+    assert "Visible dans l'aperçu." not in html
+    assert source.read_bytes() == before
+    assert tuple(tmp_path.iterdir()) == (source,)
 
 
 def test_pipeline_renders_multiline_stream_output_as_text(tmp_path):

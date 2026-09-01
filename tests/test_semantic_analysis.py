@@ -6,6 +6,7 @@ from tpstudio.projects import (
     LEAKAGE_PROTOCOL_SEMANTIC_CONTRACT,
 )
 from tpstudio.semantic_analysis import (
+    CachedSemanticAnalysisProvider,
     FakeSemanticAnalysisProvider,
     OpenAISemanticAnalysisProvider,
     SemanticAnalysisResult,
@@ -70,6 +71,101 @@ def test_fake_provider_returns_structured_result_without_network():
     result = analyze_semantic_response(LEAKAGE_PROTOCOL_SEMANTIC_CONTRACT, "J'observe la décharge.", provider)
     assert result.criterion_results[0].status is SemanticCriterionStatus.SATISFIED
     assert provider.calls == 1
+
+
+def test_persistent_semantic_cache_avoids_second_provider_call(tmp_path):
+    provider = FakeSemanticAnalysisProvider(_result())
+    cached = CachedSemanticAnalysisProvider(
+        provider, model="test-model", cache_dir=tmp_path / "cache"
+    )
+    response = "J'observe la décharge et je règle le déclenchement."
+
+    first = cached.analyze(LEAKAGE_PROTOCOL_SEMANTIC_CONTRACT, response)
+    second = CachedSemanticAnalysisProvider(
+        provider, model="test-model", cache_dir=tmp_path / "cache"
+    ).analyze(LEAKAGE_PROTOCOL_SEMANTIC_CONTRACT, response)
+
+    assert provider.calls == 1
+    assert first.criterion_results == second.criterion_results
+    assert ("cache", "hit") in second.provider_metadata
+
+
+def test_semantic_cache_invalidates_for_response_contract_or_model(tmp_path):
+    provider = FakeSemanticAnalysisProvider(_result())
+    cache_dir = tmp_path / "cache"
+    first = CachedSemanticAnalysisProvider(
+        provider, model="model-a", cache_dir=cache_dir
+    )
+    first.analyze(LEAKAGE_PROTOCOL_SEMANTIC_CONTRACT, "Réponse A")
+    first.analyze(LEAKAGE_PROTOCOL_SEMANTIC_CONTRACT, "Réponse B")
+    CachedSemanticAnalysisProvider(
+        provider, model="model-b", cache_dir=cache_dir
+    ).analyze(LEAKAGE_PROTOCOL_SEMANTIC_CONTRACT, "Réponse A")
+    assert provider.calls == 3
+
+
+def test_semantic_cache_splits_large_batches_into_ten_requests(tmp_path):
+    class BatchProvider:
+        def __init__(self):
+            self.batch_sizes = []
+
+        def analyze(self, contract, student_response):
+            raise AssertionError("Le chemin groupé doit être utilisé.")
+
+        def analyze_many(self, requests):
+            self.batch_sizes.append(len(requests))
+            return tuple(
+                SemanticAnalysisResult(
+                    contract.production_id,
+                    response,
+                    tuple(
+                        SemanticCriterionResult(
+                            item.criterion_id,
+                            SemanticCriterionStatus.SATISFIED,
+                            "preuve",
+                        )
+                        for item in contract.criteria
+                    ),
+                    confidence="high",
+                )
+                for contract, response in requests
+            )
+
+    provider = BatchProvider()
+    cached = CachedSemanticAnalysisProvider(
+        provider, model="test-model", cache_dir=tmp_path / "cache"
+    )
+    results = cached.analyze_many(tuple(
+        (LEAKAGE_PROTOCOL_SEMANTIC_CONTRACT, f"Réponse {index}")
+        for index in range(11)
+    ))
+    assert len(results) == 11
+    assert provider.batch_sizes == [10, 1]
+
+
+def test_semantic_cache_keeps_hits_when_a_missing_chunk_fails(tmp_path):
+    cache_dir = tmp_path / "cache"
+    seed = FakeSemanticAnalysisProvider(_result())
+    cached = CachedSemanticAnalysisProvider(
+        seed, model="test-model", cache_dir=cache_dir
+    )
+    cached.analyze(LEAKAGE_PROTOCOL_SEMANTIC_CONTRACT, "Déjà analysée")
+
+    class FailingBatch:
+        def analyze(self, contract, student_response):
+            raise RuntimeError("indisponible")
+
+        def analyze_many(self, requests):
+            raise RuntimeError("indisponible")
+
+    results = CachedSemanticAnalysisProvider(
+        FailingBatch(), model="test-model", cache_dir=cache_dir
+    ).analyze_many((
+        (LEAKAGE_PROTOCOL_SEMANTIC_CONTRACT, "Déjà analysée"),
+        (LEAKAGE_PROTOCOL_SEMANTIC_CONTRACT, "Nouvelle réponse"),
+    ))
+    assert ("cache", "hit") in results[0].provider_metadata
+    assert results[1].diagnostics == ("SEMANTIC_PROVIDER_ERROR:RuntimeError",)
 
 
 def test_partial_and_contradiction_remain_structured_without_grade():

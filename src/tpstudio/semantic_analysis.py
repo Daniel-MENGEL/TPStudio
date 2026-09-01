@@ -9,6 +9,9 @@ from __future__ import annotations
 import json
 import os
 import re
+from hashlib import sha256
+from pathlib import Path
+import tempfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
@@ -269,6 +272,196 @@ class FakeSemanticAnalysisProvider:
     def analyze(self, contract: ExpectedSemanticResponse, student_response: str) -> SemanticAnalysisResult:
         self.calls += 1
         return self.result
+
+
+def default_semantic_cache_dir() -> Path:
+    configured = os.getenv("TPSTUDIO_SEMANTIC_CACHE_DIR")
+    if configured and configured.strip():
+        return Path(configured).expanduser()
+    return Path.home() / ".cache" / "tpstudio" / "semantic-v1"
+
+
+class CachedSemanticAnalysisProvider:
+    """Persistent local cache in front of an explicit semantic provider."""
+
+    def __init__(
+        self,
+        provider: SemanticAnalysisProvider,
+        *,
+        model: str,
+        cache_dir: Path | None = None,
+    ) -> None:
+        if not callable(getattr(provider, "analyze", None)):
+            raise TypeError("Le fournisseur sémantique est invalide.")
+        if not isinstance(model, str) or not model.strip():
+            raise ValueError("Le modèle du cache ne peut pas être vide.")
+        self.provider = provider
+        self.model = model.strip()
+        self.cache_dir = default_semantic_cache_dir() if cache_dir is None else cache_dir
+        if not isinstance(self.cache_dir, Path):
+            raise TypeError("cache_dir doit être un pathlib.Path.")
+
+    def _key(self, contract: ExpectedSemanticResponse, student_response: str) -> str:
+        payload = {
+            "version": 1,
+            "model": self.model,
+            "contract": {
+                "production_id": contract.production_id,
+                "semantic_role": contract.semantic_role.value,
+                "criteria": [
+                    {
+                        "criterion_id": item.criterion_id,
+                        "description": item.description,
+                        "importance": item.importance.value,
+                    }
+                    for item in contract.criteria
+                ],
+            },
+            "student_response": student_response,
+        }
+        canonical = json.dumps(
+            payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        )
+        return sha256(canonical.encode("utf-8")).hexdigest()
+
+    def _path(self, contract: ExpectedSemanticResponse, student_response: str) -> Path:
+        return self.cache_dir / (self._key(contract, student_response) + ".json")
+
+    def _load(
+        self, contract: ExpectedSemanticResponse, student_response: str,
+    ) -> SemanticAnalysisResult | None:
+        path = self._path(contract, student_response)
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            results = tuple(
+                SemanticCriterionResult(
+                    item["criterion_id"],
+                    SemanticCriterionStatus(item["status"]),
+                    item.get("evidence", ""),
+                )
+                for item in payload["criterion_results"]
+            )
+            result = SemanticAnalysisResult(
+                contract.production_id,
+                student_response,
+                results,
+                tuple(payload.get("contradictions", ())),
+                str(payload.get("confidence", "unknown")),
+                tuple(tuple(item) for item in payload.get("provider_metadata", ()))
+                + (("cache", "hit"),),
+                tuple(payload.get("diagnostics", ())),
+            )
+        except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+            return None
+        expected = {item.criterion_id for item in contract.criteria}
+        actual = [item.criterion_id for item in result.criterion_results]
+        if set(actual) != expected or len(actual) != len(set(actual)):
+            return None
+        return result
+
+    def _store(
+        self,
+        contract: ExpectedSemanticResponse,
+        student_response: str,
+        result: SemanticAnalysisResult,
+    ) -> None:
+        if (
+            type(result) is not SemanticAnalysisResult
+            or result.production_id != contract.production_id
+        ):
+            return
+        expected = {item.criterion_id for item in contract.criteria}
+        actual = [item.criterion_id for item in result.criterion_results]
+        if set(actual) != expected or len(actual) != len(set(actual)):
+            return
+        payload = {
+            "criterion_results": [
+                {
+                    "criterion_id": item.criterion_id,
+                    "status": item.status.value,
+                    "evidence": item.evidence,
+                }
+                for item in result.criterion_results
+            ],
+            "contradictions": list(result.contradictions),
+            "confidence": result.confidence,
+            "provider_metadata": [list(item) for item in result.provider_metadata],
+            "diagnostics": list(result.diagnostics),
+        }
+        try:
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
+            handle, name = tempfile.mkstemp(
+                prefix=".tpstudio-semantic-", suffix=".json", dir=self.cache_dir
+            )
+            with os.fdopen(handle, "w", encoding="utf-8") as stream:
+                json.dump(payload, stream, ensure_ascii=False, sort_keys=True)
+            os.chmod(name, 0o600)
+            os.replace(name, self._path(contract, student_response))
+        except OSError:
+            try:
+                Path(name).unlink(missing_ok=True)
+            except (OSError, UnboundLocalError):
+                pass
+
+    def analyze(
+        self, contract: ExpectedSemanticResponse, student_response: str,
+    ) -> SemanticAnalysisResult:
+        cached = self._load(contract, student_response)
+        if cached is not None:
+            return cached
+        result = self.provider.analyze(contract, student_response)
+        self._store(contract, student_response, result)
+        return result
+
+    def analyze_many(
+        self,
+        requests: Sequence[tuple[ExpectedSemanticResponse, str]],
+    ) -> tuple[SemanticAnalysisResult, ...]:
+        values = tuple(requests)
+        results: list[SemanticAnalysisResult | None] = [None] * len(values)
+        missing_indices = []
+        for index, (contract, student_response) in enumerate(values):
+            cached = self._load(contract, student_response)
+            if cached is None:
+                missing_indices.append(index)
+            else:
+                results[index] = cached
+        if missing_indices:
+            analyze_many = getattr(self.provider, "analyze_many", None)
+            # Ten contracts are already known to fit the strict structured
+            # output used by the OpenAI adapter.  Larger project contracts are
+            # split so one oversized request cannot invalidate every answer.
+            for start in range(0, len(missing_indices), 10):
+                chunk_indices = missing_indices[start:start + 10]
+                chunk = tuple(values[index] for index in chunk_indices)
+                try:
+                    if callable(analyze_many):
+                        fresh = tuple(analyze_many(chunk))
+                    else:
+                        fresh = tuple(
+                            self.provider.analyze(contract, response)
+                            for contract, response in chunk
+                        )
+                    if len(fresh) != len(chunk):
+                        raise ValueError("Le fournisseur a renvoyé un lot incomplet.")
+                except Exception as exc:
+                    fresh = tuple(
+                        _empty_result(
+                            contract,
+                            student_response,
+                            f"SEMANTIC_PROVIDER_ERROR:{type(exc).__name__}",
+                        )
+                        for contract, student_response in chunk
+                    )
+                for index, result in zip(chunk_indices, fresh, strict=True):
+                    contract, student_response = values[index]
+                    results[index] = result
+                    if not any(
+                        diagnostic.startswith("SEMANTIC_PROVIDER_ERROR:")
+                        for diagnostic in result.diagnostics
+                    ):
+                        self._store(contract, student_response, result)
+        return tuple(item for item in results if item is not None)
 
 
 DEFAULT_OPENAI_SEMANTIC_MODEL = "gpt-5-mini"

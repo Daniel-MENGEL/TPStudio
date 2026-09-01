@@ -1,4 +1,5 @@
 from tpstudio.annotation import AnnotationKind, AnnotationPlacement, NotebookAnnotation, render_notebook_annotation
+from dataclasses import replace
 from tpstudio.annotation.rendering import annotation_presentation
 from tpstudio.feedback import FeedbackAudience
 from tpstudio.reporting import TeacherReportSeverity
@@ -13,6 +14,7 @@ def test_appended_render_has_balanced_invisible_markers_and_exact_message() -> N
     assert "TPSTUDIO:BEGIN annotation_id=tpstudio:stable" in text
     assert "TPSTUDIO:END annotation_id=tpstudio:stable" in text
     assert "Message inchangé" in text and "score" not in text.lower()
+    assert 'id="tpstudio:stable"' in text
 
 
 def test_dedicated_render_is_deterministic() -> None:
@@ -49,3 +51,13 @@ def test_annotation_content_has_local_style_without_repeating_global_css() -> No
     assert first_rendered.count("tpstudio-annotation") == 1
     assert second_rendered.count("tpstudio-annotation") == 1
     assert "&lt;tag&gt; &amp; **gras**" in second_rendered
+
+
+def test_review_level_overrides_visible_annotation_label():
+    item = replace(
+        _item(AnnotationPlacement.AFTER_CELL),
+        metadata=(("review_level", "good"),),
+    )
+    rendered = render_notebook_annotation(item)
+    assert "<strong>Bien</strong>" in rendered
+    assert "<strong>Très bien</strong>" not in rendered

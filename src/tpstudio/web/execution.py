@@ -123,6 +123,7 @@ def export_active_copies(
     output_dir: Path,
     options: CopyExportOptions,
     selected_copies=(),
+    annotation_reviews: dict[str, tuple] | None = None,
 ) -> dict[str, WebCopyExportState]:
     """Export active analyses only; analysis and dispatch are never called here."""
     exported: dict[str, WebCopyExportState] = {}
@@ -131,6 +132,7 @@ def export_active_copies(
         for item in tuple(selected_copies)
         if item.identity is not None
     }
+    annotation_reviews = {} if annotation_reviews is None else dict(annotation_reviews)
     for item in result.copies:
         analysis = active_analysis_for_source(result, overrides, item.source_id)
         if analysis is None:
@@ -146,6 +148,7 @@ def export_active_copies(
                     output_stem=export_output_stem(
                         analysis, identities.get(item.source_id)
                     ),
+                    annotation_reviews=annotation_reviews.get(item.source_id, ()),
                 ),
             )
         except Exception as exc:

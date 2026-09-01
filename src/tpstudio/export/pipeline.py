@@ -11,7 +11,8 @@ from dataclasses import replace
 import nbformat
 
 from tpstudio.annotation import (
-    AnnotationOptions, apply_annotation_plan, build_annotation_plan,
+    AnnotationOptions, AnnotationReview, apply_annotation_plan,
+    apply_annotation_reviews, build_annotation_plan,
 )
 from tpstudio.orchestration import (
     CopyAnalysisResult, NotebookCopySource, analyze_snells_laws_copy, load_notebook_copy,
@@ -116,6 +117,7 @@ def export_analyzed_copy(
     output_stem: str | None = None,
     notebook_output_path: Path | None = None,
     html_output_path: Path | None = None,
+    annotation_reviews: tuple[AnnotationReview, ...] = (),
 ) -> CopyExportResult:
     """Export an already completed analysis without running analysis again."""
     if not isinstance(source, NotebookCopySource):
@@ -183,7 +185,10 @@ def export_analyzed_copy(
         include_diagnostics=options.include_diagnostics,
         include_limitations=options.include_limitations,
     )
-    plan = build_annotation_plan(analysis, report, annotation_options)
+    plan = apply_annotation_reviews(
+        build_annotation_plan(analysis, report, annotation_options),
+        annotation_reviews,
+    )
     original_notebook = load_notebook_copy(source)
     annotated = apply_annotation_plan(original_notebook, plan, annotation_options)
     notebook_validation = validate_notebook_object(annotated.notebook)
@@ -219,6 +224,43 @@ def export_analyzed_copy(
         tuple(analysis.limitations), analysis.interpretation_review_traces,
         report,
     )
+
+
+def render_analyzed_copy_html(
+    source: NotebookCopySource,
+    analysis: CopyAnalysisResult,
+    *,
+    options: CopyExportOptions | None = None,
+    annotation_reviews: tuple[AnnotationReview, ...] = (),
+) -> str:
+    """Render a read-only reviewed preview without creating an artifact."""
+
+    if not isinstance(source, NotebookCopySource):
+        raise TypeError("source doit être un NotebookCopySource.")
+    if type(analysis) is not CopyAnalysisResult:
+        raise TypeError("analysis doit être un CopyAnalysisResult.")
+    if (
+        source.source_id != analysis.source_id
+        or source.path.resolve() != analysis.source.path.resolve()
+    ):
+        raise ValueError("source et analysis ne désignent pas la même copie.")
+    options = CopyExportOptions() if options is None else options
+    if type(options) is not CopyExportOptions:
+        raise TypeError("Les options d'aperçu sont invalides.")
+    report = build_teacher_copy_report(analysis)
+    annotation_options = AnnotationOptions(
+        include_teacher_feedback=options.include_teacher_feedback,
+        include_diagnostics=options.include_diagnostics,
+        include_limitations=options.include_limitations,
+    )
+    plan = apply_annotation_reviews(
+        build_annotation_plan(analysis, report, annotation_options),
+        annotation_reviews,
+    )
+    original = load_notebook_copy(source)
+    annotated = apply_annotation_plan(original, plan, annotation_options)
+    title = f"TPStudio — {analysis.project.identity.title} — Aperçu"
+    return render_annotated_notebook_html(annotated.notebook, options=options, title=title)
 
 
 def summarize_copy_export(result: CopyExportResult) -> str:

@@ -15,8 +15,17 @@ _PRESENTATION = {
     TeacherReportSeverity.BLOCKING: ("blocking", "Problème"),
 }
 
+_REVIEW_LABELS = {
+    "absent": "Absence de réponse",
+    "to_review": "À revoir",
+    "partial": "Partiel",
+    "good": "Bien",
+    "very_good": "Très bien",
+}
+
 _ANNOTATION_CSS = """<style>
-.tpstudio-annotation { margin: .8em 0; padding: .65em .9em; border-left: .35em solid; }
+.tpstudio-annotation { margin: .8em 0; padding: .65em .9em; border-left: .35em solid; scroll-margin: 4em; }
+.tpstudio-review-focus { outline: .28em solid #7c3aed; box-shadow: 0 0 0 .45em rgba(124,58,237,.18); }
 .tpstudio-severity-info { background: #edf7ee; border-color: #6aa56f; }
 .tpstudio-severity-important { background: #eef5fb; border-color: #6c9bc4; }
 .tpstudio-severity-attention { background: #fff8e6; border-color: #c59a3b; }
@@ -35,7 +44,9 @@ _INLINE_STYLES = {
 def annotation_presentation(annotation: NotebookAnnotation) -> tuple[str, str]:
     if type(annotation) is not NotebookAnnotation:
         raise TypeError("Le rendu exige exactement une NotebookAnnotation.")
-    return _PRESENTATION[annotation.severity]
+    style, label = _PRESENTATION[annotation.severity]
+    review_level = dict(annotation.metadata).get("review_level")
+    return style, _REVIEW_LABELS.get(review_level, label)
 
 
 def annotation_css() -> str:
@@ -48,7 +59,8 @@ def render_notebook_annotation(annotation: NotebookAnnotation) -> str:
     style, label = annotation_presentation(annotation)
     safe_message = html.escape(annotation.message, quote=False)
     content = (
-        f'<blockquote class="tpstudio-annotation tpstudio-severity-{style}" role="note" '
+        f'<blockquote id="{html.escape(annotation.annotation_id, quote=True)}" '
+        f'class="tpstudio-annotation tpstudio-severity-{style}" role="note" '
         f'style="{_INLINE_STYLES[style]}">\n'
         f"<strong>{label}</strong>\n\n"
         f"{safe_message}\n"

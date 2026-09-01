@@ -6,6 +6,9 @@ from .model import (
     NotebookExportValidation,
 )
 from .notebook import default_export_names, validate_exported_notebook, validate_notebook_object
-from .pipeline import export_analyzed_copy, export_snells_laws_copy, summarize_copy_export
+from .pipeline import (
+    export_analyzed_copy, export_snells_laws_copy, render_analyzed_copy_html,
+    summarize_copy_export,
+)
 
 __all__ = [name for name in globals() if not name.startswith("_")]

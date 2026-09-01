@@ -22,6 +22,43 @@ class AnnotationPlacement(str, Enum):
     APPEND_TO_MARKDOWN = "append_to_markdown"
 
 
+class AnnotationReviewAction(str, Enum):
+    """Teacher decision applied to one proposed student annotation."""
+
+    KEEP = "keep"
+    EDIT = "edit"
+    REMOVE = "remove"
+
+
+class AnnotationReviewLevel(str, Enum):
+    ABSENT = "absent"
+    TO_REVIEW = "to_review"
+    PARTIAL = "partial"
+    GOOD = "good"
+    VERY_GOOD = "very_good"
+
+
+@dataclass(frozen=True, slots=True)
+class AnnotationReview:
+    annotation_id: str
+    action: AnnotationReviewAction
+    message: str | None = None
+    level: AnnotationReviewLevel | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.annotation_id, str) or not self.annotation_id.strip():
+            raise ValueError("annotation_id ne peut pas être vide.")
+        if type(self.action) is not AnnotationReviewAction:
+            raise TypeError("L'action de revue est invalide.")
+        if self.action is AnnotationReviewAction.EDIT:
+            if not isinstance(self.message, str) or not self.message.strip():
+                raise ValueError("Une annotation modifiée exige un message non vide.")
+        elif self.message is not None:
+            raise ValueError("Seule une annotation modifiée peut porter un message.")
+        if self.level is not None and type(self.level) is not AnnotationReviewLevel:
+            raise TypeError("Le niveau de revue est invalide.")
+
+
 class SkippedAnnotationReason(str, Enum):
     TARGET_UNAVAILABLE = "target_unavailable"
     TARGET_AMBIGUOUS = "target_ambiguous"
@@ -95,6 +132,7 @@ class StudentSummaryAnnotation:
     production_id: str | None = None
     comparison_id: str | None = None
     source_ids: tuple[str, ...] = ()
+    metadata: tuple[tuple[str, str], ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.annotation_id, str) or not self.annotation_id.strip():
@@ -111,6 +149,14 @@ class StudentSummaryAnnotation:
         if any(not isinstance(item, str) or not item.strip() for item in sources):
             raise ValueError("Les sources doivent être des chaînes non vides.")
         object.__setattr__(self, "source_ids", sources)
+        metadata = tuple(self.metadata)
+        if any(
+            not isinstance(item, tuple) or len(item) != 2
+            or not all(isinstance(value, str) for value in item)
+            for item in metadata
+        ):
+            raise TypeError("Les métadonnées doivent être des paires de chaînes.")
+        object.__setattr__(self, "metadata", metadata)
 
 
 @dataclass(frozen=True, slots=True)

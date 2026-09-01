@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import html
 import hashlib
 from pathlib import Path
 import re
@@ -105,10 +106,23 @@ def _student_summary_cell(items: tuple[StudentSummaryAnnotation, ...]) -> Notebo
         "attention": "À vérifier",
         "info": "Remarque",
     }
-    lines = ["## Points à compléter ou à revoir", ""]
+    lines = ["## Points à compléter ou à revoir", "", "<ul>"]
     for item in items:
-        severity = labels[item.severity.value]
-        lines.append(f"- **{severity}** — {item.message}")
+        severity = {
+            "absent": "Absence de réponse",
+            "to_review": "À revoir",
+            "partial": "Partiel",
+            "good": "Bien",
+            "very_good": "Très bien",
+        }.get(dict(item.metadata).get("review_level"), labels[item.severity.value])
+        safe_id = html.escape(item.annotation_id, quote=True)
+        safe_message = html.escape(item.message, quote=False)
+        lines.append(
+            f'<li id="{safe_id}" class="tpstudio-summary-item">'
+            f"<strong>{severity}</strong> — "
+            f"{safe_message}</li>"
+        )
+    lines.append("</ul>")
     cell = nbformat.v4.new_markdown_cell("\n".join(lines) + "\n")
     cell.metadata["tpstudio"] = {
         "annotation": True,

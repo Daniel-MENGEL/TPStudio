@@ -7,8 +7,11 @@ from tpstudio.web.state import (
     REVIEW_INDEX_KEY,
     DISPATCH_RESULT_KEY, DISPATCH_SIGNATURE_KEY, invalidate_dispatch_if_signature_changed,
     set_dispatch_result,
+    get_annotation_reviews, set_annotation_review,
+    set_annotation_reviews_for_source,
 )
 from tpstudio.orchestration import BatchDispatchResult
+from tpstudio.annotation import AnnotationReview, AnnotationReviewAction
 
 
 def test_state_initialization_and_invalidation():
@@ -66,3 +69,17 @@ def test_dispatch_signature_change_clears_analysis_without_clearing_plan():
     assert state[DISPATCH_RESULT_KEY] is None
     assert state[DISPATCH_SIGNATURE_KEY] is None
     assert state[PLAN_KEY] == "plan"
+
+
+def test_annotation_reviews_are_scoped_per_copy_and_cleared_with_analysis():
+    state = {}
+    initialize_session_state(state)
+    first = AnnotationReview("a", AnnotationReviewAction.KEEP)
+    second = AnnotationReview("b", AnnotationReviewAction.REMOVE)
+    set_annotation_review(state, "copy-1", first)
+    set_annotation_reviews_for_source(state, "copy-2", (second,))
+    assert get_annotation_reviews(state) == {
+        "copy-1": (first,), "copy-2": (second,),
+    }
+    set_dispatch_result(state, BatchDispatchResult(()), ("signature",))
+    assert get_annotation_reviews(state) == {}
