@@ -12,6 +12,8 @@
   <script>
     const preview = document.getElementById("preview");
     let selected = null;
+    let scrollRequest = null;
+    let lastScrollSequence = null;
 
     function send(type, payload = {}) {
       window.parent.postMessage({
@@ -21,18 +23,33 @@
       }, "*");
     }
 
-    function focusSelected() {
+    function focusSelected(shouldScroll = false) {
       const doc = preview.contentDocument;
       if (!doc) return;
       doc.querySelectorAll(".tpstudio-review-focus").forEach(
         element => element.classList.remove("tpstudio-review-focus")
       );
-      if (!selected) return;
+      if (!selected) {
+        return;
+      }
       const target = doc.getElementById(selected);
       if (target) {
         target.classList.add("tpstudio-review-focus");
-        target.scrollIntoView({behavior: "smooth", block: "center"});
+        if (shouldScroll) {
+          target.scrollIntoView({behavior: "auto", block: "center"});
+        }
       }
+    }
+
+    function consumeScrollRequest() {
+      if (
+        !scrollRequest ||
+        !scrollRequest.sequence ||
+        scrollRequest.annotation_id !== selected ||
+        scrollRequest.sequence === lastScrollSequence
+      ) return false;
+      lastScrollSequence = scrollRequest.sequence;
+      return true;
     }
 
     preview.addEventListener("load", () => {
@@ -56,17 +73,18 @@
           });
         }
       );
-      focusSelected();
+      focusSelected(consumeScrollRequest());
     });
 
     window.addEventListener("message", event => {
       if (event.data.type !== "streamlit:render") return;
       const args = event.data.args || {};
       selected = args.selected || null;
+      scrollRequest = args.scroll_request || null;
       if (preview.srcdoc !== args.html) {
         preview.srcdoc = args.html || "";
       } else {
-        focusSelected();
+        focusSelected(consumeScrollRequest());
       }
       send("streamlit:setFrameHeight", {height: 760});
     });

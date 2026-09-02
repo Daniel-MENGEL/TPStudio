@@ -10,6 +10,7 @@ from tpstudio.web.app import (
     _consume_preview_click_event,
     _focus_annotation_html,
     _input_signature,
+    _navigate_annotation,
     _open_local_html_artifact,
     _ordered_review_annotations,
     _render_first_lab_grading,
@@ -30,6 +31,48 @@ def test_signature_changes_for_same_size_content_hashes():
     second = SelectedCopy("copy-001", "tp.ipynb", Path("tp.ipynb"), "b" * 64)
     options = WebBatchOptions()
     assert _input_signature((first,), Path("out"), options) != _input_signature((second,), Path("out"), options)
+
+
+def test_review_preview_only_scrolls_for_an_explicit_navigation_request():
+    component = (
+        Path(app.__file__).with_name("review_preview_component") / "index.html"
+    ).read_text(encoding="utf-8")
+
+    assert "function consumeScrollRequest()" in component
+    assert "scrollRequest.sequence === lastScrollSequence" in component
+    assert 'behavior: "auto"' in component
+    assert 'behavior: "smooth"' not in component
+
+
+def test_annotation_navigation_selects_and_requests_one_scroll():
+    state = {}
+
+    _navigate_annotation(
+        state,
+        "choice",
+        "scroll-sequence",
+        "scroll-request",
+        "annotation-2",
+    )
+    assert state == {
+        "choice": "annotation-2",
+        "scroll-sequence": 1,
+        "scroll-request": {"annotation_id": "annotation-2", "sequence": 1},
+    }
+
+    state.pop("scroll-request")
+    _navigate_annotation(
+        state,
+        "choice",
+        "scroll-sequence",
+        "scroll-request",
+        "annotation-1",
+    )
+    assert state == {
+        "choice": "annotation-1",
+        "scroll-sequence": 2,
+        "scroll-request": {"annotation_id": "annotation-1", "sequence": 2},
+    }
 
 
 def test_web_errors_do_not_expose_workspace_paths():
@@ -147,7 +190,7 @@ def test_compact_grade_label_is_hidden_without_first_lab_analysis():
     assert _suggested_grade_label(SimpleNamespace(project_id="snells-laws-mvp")) == "—"
 
 
-def test_first_lab_grading_panel_prefills_an_empty_copy_and_remains_teacher_only():
+def test_first_lab_grading_panel_only_displays_the_proposed_grade():
     class FakeStreamlit:
         def __init__(self):
             self.metrics = []
@@ -181,8 +224,7 @@ def test_first_lab_grading_panel_prefills_an_empty_copy_and_remains_teacher_only
         "copy-001",
     )
     assert fake.metrics == [("Note proposée", "4.0/20")]
-    assert len(fake.keys) == 5
-    assert all(key.startswith("grading-first-lab-formative-v1-copy-001-") for key in fake.keys)
+    assert fake.keys == []
 
 
 def test_first_lab_grading_panel_is_hidden_for_other_projects():

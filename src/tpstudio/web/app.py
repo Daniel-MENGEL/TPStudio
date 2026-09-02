@@ -217,7 +217,13 @@ document.addEventListener("DOMContentLoaded", () => {{
     return document.replace("</body>", script + "</body>", 1)
 
 
-def _review_preview_component(document: str, selected_id: str | None, *, key: str):
+def _review_preview_component(
+    document: str,
+    selected_id: str | None,
+    *,
+    scroll_request: dict | None = None,
+    key: str,
+):
     """Render the clickable notebook preview and return its selected comment."""
 
     import streamlit.components.v1 as components
@@ -229,13 +235,28 @@ def _review_preview_component(document: str, selected_id: str | None, *, key: st
     return component(
         html=document,
         selected=selected_id,
+        scroll_request=scroll_request,
         default=None,
         key=key,
     )
 
 
-def _select_annotation(state, widget_key: str, annotation_id: str) -> None:
-    state[widget_key] = annotation_id
+def _navigate_annotation(
+    state,
+    choice_key: str,
+    scroll_sequence_key: str,
+    scroll_request_key: str,
+    annotation_id: str,
+) -> None:
+    """Select one comment and explicitly request preview scrolling."""
+
+    state[choice_key] = annotation_id
+    sequence = int(state.get(scroll_sequence_key, 0)) + 1
+    state[scroll_sequence_key] = sequence
+    state[scroll_request_key] = {
+        "annotation_id": annotation_id,
+        "sequence": sequence,
+    }
 
 
 def _consume_preview_click_event(
@@ -288,6 +309,8 @@ def _render_copy_review_workspace(st, analysis, source_id: str) -> None:
     annotation_ids = tuple(item.annotation_id for item in annotations)
     annotation_by_id = {item.annotation_id: item for item in annotations}
     choice_key = f"annotation-choice-{source_id}"
+    scroll_sequence_key = f"annotation-scroll-sequence-{source_id}"
+    scroll_request_key = f"annotation-scroll-request-{source_id}"
     current_selected = st.session_state.get(choice_key)
     if current_selected not in annotation_ids:
         current_selected = annotation_ids[0] if annotation_ids else None
@@ -314,6 +337,7 @@ def _render_copy_review_workspace(st, analysis, source_id: str) -> None:
         click_event = _review_preview_component(
             html,
             current_selected,
+            scroll_request=st.session_state.pop(scroll_request_key, None),
             key=f"review-preview-{source_id}",
         )
     event_key = f"review-preview-event-{source_id}"
@@ -325,8 +349,8 @@ def _render_copy_review_workspace(st, analysis, source_id: str) -> None:
         valid_ids=annotation_ids,
     ):
         # The component was rendered earlier in this Streamlit pass with the
-        # previous selection.  Start one clean pass so the preview, selector
-        # and navigation buttons all receive the clicked annotation together.
+        # previous selection. Start one clean pass so both columns receive the
+        # clicked annotation together.
         st.rerun()
 
     selected_id = None
@@ -351,15 +375,7 @@ def _render_copy_review_workspace(st, analysis, source_id: str) -> None:
             )
             st.rerun()
         if annotations:
-            selected_id = st.selectbox(
-                "Commentaire",
-                annotation_ids,
-                format_func=lambda value: (
-                    ("✓ " if value in review_by_id else "• ")
-                    + annotation_by_id[value].message.replace("\n", " ")[:72]
-                ),
-                key=choice_key,
-            )
+            selected_id = st.session_state[choice_key]
             selected_index = annotation_ids.index(selected_id)
             previous_column, position_column, next_column = st.columns((1, 1, 1))
             with previous_column:
@@ -367,10 +383,12 @@ def _render_copy_review_workspace(st, analysis, source_id: str) -> None:
                     "← Précédent",
                     disabled=selected_index == 0,
                     key=f"annotation-previous-{source_id}",
-                    on_click=_select_annotation,
+                    on_click=_navigate_annotation,
                     args=(
                         st.session_state,
                         choice_key,
+                        scroll_sequence_key,
+                        scroll_request_key,
                         annotation_ids[max(0, selected_index - 1)],
                     ),
                 )
@@ -381,10 +399,12 @@ def _render_copy_review_workspace(st, analysis, source_id: str) -> None:
                     "Suivant →",
                     disabled=selected_index == len(annotation_ids) - 1,
                     key=f"annotation-next-{source_id}",
-                    on_click=_select_annotation,
+                    on_click=_navigate_annotation,
                     args=(
                         st.session_state,
                         choice_key,
+                        scroll_sequence_key,
+                        scroll_request_key,
                         annotation_ids[min(len(annotation_ids) - 1, selected_index + 1)],
                     ),
                 )
@@ -498,25 +518,6 @@ def _render_first_lab_grading(
     )
     proposal = build_formative_grade_proposal(profile, decisions)
     st.metric("Note proposée", f"{proposal.proposed_score}/20")
-    st.caption(
-        f"Base : {proposal.base_score}/20 · Bonus : +{proposal.bonus} · "
-        f"Retraits : −{proposal.deduction}"
-    )
-    for criterion in profile.criteria:
-        suggestion = by_criterion[criterion.criterion_id]
-        levels = tuple(RubricLevel)
-        st.selectbox(
-            criterion.label,
-            options=levels,
-            index=levels.index(next(
-                item.level for item in decisions
-                if item.criterion_id == criterion.criterion_id
-            )),
-            format_func=lambda value: _RUBRIC_LEVEL_LABELS[value],
-            help=criterion.description,
-            key=_grading_widget_key(source_id, criterion.criterion_id),
-        )
-        st.caption(f"Suggestion TPStudio : {suggestion.rationale}")
 
 
 def _copy_issue_count(row, overview_rows=(), graph_rows=(), semantic_rows=()) -> int:
@@ -1027,183 +1028,6 @@ def main() -> None:
                 )
             else:
                 st.info("Aucun aperçu corrigé n'est disponible pour cette copie.")
-
-            st.markdown("#### Informations complémentaires")
-            summary_tab = st.expander("Synthèse et détection", expanded=False)
-            responses_tab = st.expander("Réponses scientifiques", expanded=False)
-            results_tab = st.expander("Résultats et graphes", expanded=False)
-            grading_tab = st.expander("Notation", expanded=False)
-            artifact_tab = st.expander("Fichiers exportés", expanded=False)
-            with summary_tab:
-                st.write(f"**État :** {row.status}")
-                st.write(f"**TP :** {row.project_title or '—'}")
-                if row.error_message:
-                    st.warning(row.error_message)
-                if item.status is BatchCopyDispatchStatus.RESOLVED_NOT_READY:
-                    st.info("TP reconnu, mais correction automatique complète indisponible.")
-                problem_rows = tuple(
-                    value for value in overview_rows
-                    if value.severity.value in {"review", "error"}
-                )
-                if problem_rows:
-                    for value in problem_rows:
-                        st.markdown(
-                            f"{scientific_severity_icon(value.severity)} "
-                            f"**{value.label}** — {value.summary}"
-                        )
-                elif active_analysis is not None:
-                    st.success("Aucun problème scientifique prioritaire repéré.")
-                with st.container(border=True):
-                    st.markdown("**Détection du TP et détails techniques**")
-                    st.write(f"Provenance : {row.provenance}")
-                    if row.confidence:
-                        st.write(f"Confiance : {row.confidence}")
-                    for kind, text in row.evidence:
-                        st.caption(f"{kind} : {text}")
-
-                if item.status.value == "unresolved" or active_analysis is not None:
-                    current_project = (
-                        active_analysis.project_id if active_analysis is not None else None
-                    )
-                    edit = active_analysis is None or st.checkbox(
-                        "Modifier le TP", key=f"edit-project-{item.source_id}"
-                    )
-                    if edit:
-                        choices = project_choices_for_source(
-                            dispatch_result, item.source_id
-                        )
-                        default_index = (
-                            choices.index(current_project)
-                            if current_project in choices else 0
-                        )
-                        chosen = st.selectbox(
-                            "TP à utiliser",
-                            choices,
-                            index=default_index,
-                            format_func=lambda value: project_descriptor(value).title,
-                            key=f"project-choice-{item.source_id}",
-                        )
-                        if st.button("Utiliser ce TP", key=f"use-project-{item.source_id}"):
-                            try:
-                                source = active_analysis.source if active_analysis else next(
-                                    request.source
-                                    for request in build_dispatch_requests_from_web_selection(tuple(copies))
-                                    if request.source_id == item.source_id
-                                )
-                                configured_provider = _build_semantic_provider(
-                                    semantic_enabled
-                                )
-                                provider = configured_provider
-                                selected_copy = selected_by_id[item.source_id]
-                                if provider is not None and not should_use_semantic_provider(
-                                    selected_copy,
-                                    include_references=include_semantic_references,
-                                ):
-                                    provider = None
-                                if semantic_enabled and configured_provider is None:
-                                    st.warning("OPENAI_API_KEY est absente.")
-                                else:
-                                    explicit_dispatch = analyze_selected_copy(
-                                        source, chosen, semantic_provider=provider
-                                    ) if provider is not None else analyze_selected_copy(
-                                        source, chosen
-                                    )
-                                    if explicit_dispatch.analysis is None:
-                                        raise ValueError("Analyse indisponible.")
-                                    set_project_override(
-                                        st.session_state,
-                                        WebCopyOverride(
-                                            item.source_id, chosen,
-                                            explicit_dispatch.analysis,
-                                        ),
-                                    )
-                                    st.rerun()
-                            except Exception:
-                                st.error("Impossible d'analyser la copie avec ce TP.")
-                    if row.validated_by_teacher and st.button(
-                        "Revenir à la détection automatique",
-                        key=f"auto-project-{item.source_id}",
-                    ):
-                        remove_project_override(st.session_state, item.source_id)
-                        st.rerun()
-
-            with responses_tab:
-                if not semantic_rows:
-                    st.info("Aucune réponse scientifique analysable pour cette copie.")
-                for semantic_row in semantic_rows:
-                    with st.container(border=True):
-                        st.markdown(
-                            f"**{semantic_row.role_label} — "
-                            f"{semantic_row.production_id}**"
-                        )
-                        st.caption(semantic_row.binding_label)
-                        st.text_area(
-                            "Réponse étudiante",
-                            value=semantic_row.student_response or "",
-                            height=100,
-                            disabled=True,
-                            key=f"{semantic_row.stable_key}-response",
-                        )
-                        for criterion in semantic_row.criteria:
-                            st.markdown(
-                                f"**{criterion.description}** — {criterion.status_label} "
-                                f"({criterion.importance_label})"
-                            )
-                            if criterion.evidence:
-                                st.caption(f"Preuve : {criterion.evidence}")
-                        if semantic_row.contradictions:
-                            st.warning(" ; ".join(semantic_row.contradictions))
-                        for diagnostic in semantic_row.diagnostics:
-                            st.info(diagnostic)
-
-            with results_tab:
-                if not overview_rows and not graph_rows:
-                    st.info("Aucun résultat scientifique détaillé disponible.")
-                for value in overview_rows:
-                    st.markdown(
-                        f"{scientific_severity_icon(value.severity)} "
-                        f"**{value.label}** — {value.summary}"
-                    )
-                    if value.details and st.checkbox(
-                        f"Afficher les détails — {value.label}",
-                        key=scientific_detail_widget_key(item.source_id, value.key),
-                    ):
-                        for detail in value.details:
-                            st.caption(detail)
-                for graph_row in graph_rows:
-                    st.markdown(f"{graph_row.icon} **{graph_row.headline}**")
-                    for line in graph_row.summary_lines:
-                        st.caption(line)
-
-            with grading_tab:
-                if active_analysis is None:
-                    st.info("Aucune proposition de notation disponible.")
-                elif active_analysis.project_id == FIRST_LAB_FORMATIVE_GRADING_PROFILE.project_id:
-                    st.info(
-                        "La note et les appréciations sont maintenant modifiables "
-                        "dans le panneau de validation, à droite de la copie."
-                    )
-                else:
-                    st.info("Le barème formatif est actuellement disponible pour la première séance.")
-
-            with artifact_tab:
-                export_state = export_results.get(item.source_id)
-                if export_state is None:
-                    st.info("Cette copie n’a pas encore été exportée.")
-                elif export_state.result is None:
-                    st.error("Erreur d'export")
-                    st.caption(export_state.error_message)
-                else:
-                    st.success("Export réussi")
-                    st.caption(f"Notebook : {export_state.result.notebook_artifact.path}")
-                    st.caption(f"HTML : {export_state.result.html_artifact.path}")
-                    if st.button(
-                        "Ouvrir le HTML corrigé",
-                        key=f"open-html-{item.source_id}",
-                    ) and not _open_local_html_artifact(
-                        export_state.result.html_artifact.path
-                    ):
-                        st.warning("Le fichier HTML corrigé ne peut pas être ouvert.")
 
             with st.expander("Options d'export du lot", expanded=False):
                 export_output_text = st.text_input(

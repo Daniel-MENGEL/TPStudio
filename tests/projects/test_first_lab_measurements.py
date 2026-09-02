@@ -36,7 +36,6 @@ def test_quantities_graph_and_open_comparison_are_declared():
     assert tuple(item.production_id for item in quantities) == (
         "period_result",
         "dynamic_stiffness",
-        "hooke_slope",
         "static_stiffness",
     )
     assert quantities.get("period_result").uncertainty_requirement is PresenceRequirement.OPTIONAL
@@ -45,6 +44,8 @@ def test_quantities_graph_and_open_comparison_are_declared():
     graph = project.graph_expectation_set.get("hooke_graph")
     assert (graph.x_expression, graph.y_expression) == ("m_static", "l_static")
     assert graph.expected_model.value == "affine"
+    assert graph.regression_required is True
+    assert graph.slope_quantity_id is None
     comparison = project.quantity_comparison_expectation_set.get("stiffness_comparison")
     assert comparison.pedagogical_context is ComparisonPedagogicalContext.OPEN
     assert project.student_normalized_error_expectation_set.get("stiffness_comparison").absolute_tolerance.is_finite()
@@ -78,6 +79,43 @@ def test_semantic_contracts_follow_notebook_order():
         SemanticRole.INTERPRETATION,
         SemanticRole.CONCLUSION,
     )
+
+
+def test_first_dynamic_objective_is_the_period_measurement_not_stiffness():
+    project = first_lab_measurements_teacher_project()
+    objective = next(
+        item
+        for item in project.semantic_response_expectations
+        if item.production_id == "dynamic_objective"
+    )
+
+    assert tuple(criterion.criterion_id for criterion in objective.criteria) == (
+        "measure_oscillation_period",
+        "measure_repeated_durations",
+    )
+    descriptions = " ".join(
+        criterion.description for criterion in objective.criteria
+    ).lower()
+    assert "période t" in descriptions
+    assert "raideur" not in descriptions
+
+
+def test_hooke_validation_is_semantic_but_slope_is_not_a_required_quantity():
+    project = first_lab_measurements_teacher_project()
+    validation = next(
+        item
+        for item in project.semantic_response_expectations
+        if item.production_id == "hooke_law_validation"
+    )
+
+    assert tuple(criterion.criterion_id for criterion in validation.criteria) == (
+        "points_aligned_with_uncertainties",
+        "hooke_law_verified_in_studied_range",
+    )
+    assert project.quantity_expectation_set.get("hooke_slope") is None
+    graph = project.graph_expectation_set.get("hooke_graph")
+    assert graph.regression_required is True
+    assert graph.slope_quantity_id is None
 
 
 def test_all_bindings_resolve_once_on_aligned_markers():

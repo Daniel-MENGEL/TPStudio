@@ -68,12 +68,12 @@ SEMANTIC_RESPONSE_EXPECTATIONS = (
         SemanticRole.OBJECTIVE,
         (
             _criterion(
-                "determine_dynamic_stiffness",
-                "Identifier que la manipulation vise à déterminer la raideur du ressort par une méthode dynamique.",
+                "measure_oscillation_period",
+                "Identifier que la manipulation vise à mesurer la période T des oscillations du système masse-ressort.",
             ),
             _criterion(
-                "measure_mass_and_period",
-                "Identifier la masse suspendue et la période des oscillations comme grandeurs à mesurer.",
+                "measure_repeated_durations",
+                "Identifier la durée de plusieurs oscillations, mesurée plusieurs fois, comme grandeur permettant de déterminer T.",
             ),
         ),
     ),
@@ -270,7 +270,6 @@ def _plan() -> ScientificProductionPlan:
             ScientificProductionSpec("hooke_protocol", "Protocole de l'étude statique", interpretation, (semantic,)),
             ScientificProductionSpec("hooke_graph", "Graphe statique de la loi de Hooke", ScientificProductionKind.PLOT, (structural,)),
             ScientificProductionSpec("hooke_law_validation", "Conclusion sur la vérification de la loi de Hooke", interpretation, (semantic,), ("hooke_graph",)),
-            ScientificProductionSpec("hooke_slope", "Pente de l'ajustement affine", quantity, (structural,)),
             ScientificProductionSpec("static_stiffness", "Raideur statique", quantity, (structural,)),
             ScientificProductionSpec("hooke_interpretation", "Détermination statique de la raideur", interpretation, (semantic,), ("hooke_law_validation", "static_stiffness")),
             ScientificProductionSpec("stiffness_comparison", "Comparaison des deux raideurs", ScientificProductionKind.COMPARISON, (structural,), ("dynamic_stiffness", "static_stiffness")),
@@ -296,7 +295,6 @@ def _bindings(plan: ScientificProductionPlan) -> NotebookBindingPlan:
         _marker("period-result-cell", "period_result", "T_mean = T_values.mean()"),
         _marker("dynamic-stiffness-cell", "dynamic_stiffness", "k_dyn = k_dyn_samples.mean()"),
         _marker("hooke-graph-cell", "hooke_graph", 'plt.title("Vérification statique de la loi de Hooke")'),
-        _marker("hooke-slope-cell", "hooke_slope", "a_fit, l0_fit = np.polyfit(m_static, l_static, 1)"),
         _marker("static-stiffness-cell", "static_stiffness", "k_static = k_static_samples.mean()"),
         _marker("stiffness-comparison-cell", "stiffness_comparison", "E_N = abs(k_dyn - k_static)"),
         *(
@@ -342,7 +340,6 @@ def first_lab_measurements_teacher_project() -> TeacherProjectConfiguration:
         (
             ExpectedQuantity("period_result", "T", ("T_mean",), "s", (), required, PresenceRequirement.OPTIONAL, ignored, "Période moyenne du ressort du binôme."),
             ExpectedQuantity("dynamic_stiffness", "k_dyn", ("k_dynamique", "k dynamique"), "N/m", ("N.m^-1", "N·m^-1"), required, required, ignored, "Raideur obtenue par la méthode dynamique."),
-            ExpectedQuantity("hooke_slope", "a_fit", ("a",), "m/kg", ("m.kg^-1", "m·kg^-1"), required, ignored, ignored, "Pente de l'ajustement affine l(m)."),
             ExpectedQuantity("static_stiffness", "k_static", ("k_statique", "k statique"), "N/m", ("N.m^-1", "N·m^-1"), required, required, ignored, "Raideur obtenue par la méthode statique."),
         ),
     )
@@ -359,8 +356,8 @@ def first_lab_measurements_teacher_project() -> TeacherProjectConfiguration:
                 "l_static",
                 ("Masse suspendue m (kg)", "m_static"),
                 ("Longueur du ressort l (m)", "l_static"),
-                False,
-                "hooke_slope",
+                True,
+                None,
                 None,
                 None,
                 True,

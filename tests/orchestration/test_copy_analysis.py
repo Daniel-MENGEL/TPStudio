@@ -245,6 +245,8 @@ def test_semantic_results_become_local_student_annotations(tmp_path: Path) -> No
     assert len(annotations) == 3
     assert all(item.audience is FeedbackAudience.STUDENT for item in annotations)
     assert all("Points repérés" in item.message for item in annotations)
+    assert all("Analyse sémantique assistée" not in item.message for item in annotations)
+    assert all(".." not in item.message for item in annotations)
     assert {item.production_id for item in annotations} == {
         "charge_objective", "energy_objective", "leakage_protocol",
     }

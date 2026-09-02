@@ -200,6 +200,10 @@ def _production_summary_severity(report: TeacherCopyReport, production_id: str) 
 def _semantic_annotation_message(analysis) -> tuple[str, TeacherReportSeverity]:
     """Render a concise student-facing projection of one semantic result."""
 
+    def sentence(label: str, items: list[str] | tuple[str, ...]) -> str:
+        cleaned = tuple(item.strip().rstrip(".").rstrip() for item in items if item.strip())
+        return label + " ; ".join(cleaned) + "."
+
     result = analysis.result
     contract = analysis.contract
     assert result is not None
@@ -226,17 +230,15 @@ def _semantic_annotation_message(analysis) -> tuple[str, TeacherReportSeverity]:
             SemanticCriterionStatus.UNCERTAIN,
         }
     ]
-    parts = ["Analyse sémantique assistée de cette réponse."]
+    parts = []
     if satisfied:
-        parts.append("Points repérés : " + " ; ".join(satisfied) + ".")
+        parts.append(sentence("Points repérés : ", satisfied))
     if required_to_improve:
-        parts.append("À compléter ou préciser : " + " ; ".join(required_to_improve) + ".")
+        parts.append(sentence("À compléter ou préciser : ", required_to_improve))
     if recommended_to_improve:
-        parts.append("Piste d'amélioration : " + " ; ".join(recommended_to_improve) + ".")
+        parts.append(sentence("Piste d'amélioration : ", recommended_to_improve))
     if result.contradictions:
-        parts.append(
-            "Contradictions à examiner : " + " ; ".join(result.contradictions) + "."
-        )
+        parts.append(sentence("Contradictions à examiner : ", result.contradictions))
     if not (satisfied or required_to_improve or recommended_to_improve or result.contradictions):
         parts.append("Aucun élément suffisamment fiable n'a pu être dégagé.")
     severity = (
