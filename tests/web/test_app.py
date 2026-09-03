@@ -44,6 +44,17 @@ def test_review_preview_only_scrolls_for_an_explicit_navigation_request():
     assert 'behavior: "smooth"' not in component
 
 
+def test_review_preview_preserves_position_when_reviewed_html_changes():
+    component = (
+        Path(app.__file__).with_name("review_preview_component") / "index.html"
+    ).read_text(encoding="utf-8")
+
+    assert "pendingScrollTop = preview.contentWindow" in component
+    assert "preview.contentWindow.scrollY" in component
+    assert "if (!explicitScroll && pendingScrollTop !== null)" in component
+    assert "preview.contentWindow.scrollTo" in component
+
+
 def test_annotation_navigation_selects_and_requests_one_scroll():
     state = {}
 

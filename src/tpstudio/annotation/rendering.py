@@ -27,17 +27,17 @@ _ANNOTATION_CSS = """<style>
 .tpstudio-annotation { margin: .8em 0; padding: .65em .9em; border-left: .35em solid; scroll-margin: 4em; }
 .tpstudio-review-focus { outline: .28em solid #7c3aed; box-shadow: 0 0 0 .45em rgba(124,58,237,.18); }
 .tpstudio-severity-info { background: #edf7ee; border-color: #6aa56f; }
-.tpstudio-severity-important { background: #eef5fb; border-color: #6c9bc4; }
-.tpstudio-severity-attention { background: #fff8e6; border-color: #c59a3b; }
-.tpstudio-severity-blocking { background: #fceeee; border-color: #c76b6b; }
+.tpstudio-severity-important { background: #fcefee; border-color: #d25555; }
+.tpstudio-severity-attention { background: #fff4dc; border-color: #d49a2a; }
+.tpstudio-severity-blocking { background: #fde8e8; border-color: #b91c1c; }
 @media print { .tpstudio-annotation { background: transparent !important; } }
 </style>"""
 
 _INLINE_STYLES = {
     "info": "background:#edf7ee;border-left:.35em solid #6aa56f",
-    "important": "background:#eef5fb;border-left:.35em solid #6c9bc4",
-    "attention": "background:#fff8e6;border-left:.35em solid #c59a3b",
-    "blocking": "background:#fceeee;border-left:.35em solid #c76b6b",
+    "important": "background:#fcefee;border-left:.35em solid #d25555",
+    "attention": "background:#fff4dc;border-left:.35em solid #d49a2a",
+    "blocking": "background:#fde8e8;border-left:.35em solid #b91c1c",
 }
 
 

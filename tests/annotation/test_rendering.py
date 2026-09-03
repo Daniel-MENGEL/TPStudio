@@ -1,6 +1,6 @@
 from tpstudio.annotation import AnnotationKind, AnnotationPlacement, NotebookAnnotation, render_notebook_annotation
 from dataclasses import replace
-from tpstudio.annotation.rendering import annotation_presentation
+from tpstudio.annotation.rendering import annotation_css, annotation_presentation
 from tpstudio.feedback import FeedbackAudience
 from tpstudio.reporting import TeacherReportSeverity
 
@@ -61,3 +61,11 @@ def test_review_level_overrides_visible_annotation_label():
     rendered = render_notebook_annotation(item)
     assert "<strong>Bien</strong>" in rendered
     assert "<strong>Très bien</strong>" not in rendered
+
+
+def test_corrective_palette_progresses_from_amber_to_deep_red():
+    css = annotation_css()
+
+    assert ".tpstudio-severity-attention { background: #fff4dc; border-color: #d49a2a; }" in css
+    assert ".tpstudio-severity-important { background: #fcefee; border-color: #d25555; }" in css
+    assert ".tpstudio-severity-blocking { background: #fde8e8; border-color: #b91c1c; }" in css

@@ -14,6 +14,7 @@
     let selected = null;
     let scrollRequest = null;
     let lastScrollSequence = null;
+    let pendingScrollTop = null;
 
     function send(type, payload = {}) {
       window.parent.postMessage({
@@ -73,7 +74,15 @@
           });
         }
       );
-      focusSelected(consumeScrollRequest());
+      const explicitScroll = consumeScrollRequest();
+      focusSelected(explicitScroll);
+      if (!explicitScroll && pendingScrollTop !== null) {
+        const scrollTop = pendingScrollTop;
+        pendingScrollTop = null;
+        requestAnimationFrame(() => {
+          preview.contentWindow.scrollTo({top: scrollTop, behavior: "auto"});
+        });
+      }
     });
 
     window.addEventListener("message", event => {
@@ -82,6 +91,9 @@
       selected = args.selected || null;
       scrollRequest = args.scroll_request || null;
       if (preview.srcdoc !== args.html) {
+        pendingScrollTop = preview.contentWindow
+          ? preview.contentWindow.scrollY
+          : null;
         preview.srcdoc = args.html || "";
       } else {
         focusSelected(consumeScrollRequest());

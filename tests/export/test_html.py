@@ -39,6 +39,23 @@ def test_html_contains_annotation_palette_css():
     assert "background: #edf7ee" in html
 
 
+def test_html_tolerates_missing_student_attachment_without_mutation():
+    cell = nbformat.v4.new_markdown_cell(
+        "### Schéma expérimental\n\n![Schéma du binôme](attachment:??)"
+    )
+    notebook = nbformat.v4.new_notebook(cells=[cell])
+
+    html = render_annotated_notebook_html(
+        notebook,
+        options=CopyExportOptions(),
+    )
+
+    assert "Image non insérée" in html
+    assert "Schéma du binôme" in html
+    assert "attachment:??" not in html
+    assert "attachment:??" in notebook.cells[0].source
+
+
 def test_html_multiple_annotations_use_one_global_palette_and_escape_message():
     cells = [
         nbformat.v4.new_markdown_cell('<blockquote class="tpstudio-annotation tpstudio-severity-info" style="background:#edf7ee"><strong>Très bien</strong><br>Premier</blockquote>'),

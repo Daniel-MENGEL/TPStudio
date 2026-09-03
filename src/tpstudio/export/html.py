@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 import nbformat
 import re
 from html import escape
@@ -16,6 +17,32 @@ from .model import CopyExportOptions
 _DEFAULT_TITLE = "TPStudio — Lois de Snell-Descartes — Correction"
 _STYLE = "<style>.tpstudio-banner{padding:0.8em;margin:0 0 1.2em;border:1px solid #ccd;background:#f7f8fa}.tpstudio-banner strong{display:block;margin-bottom:.25em}</style>" + annotation_css()
 _BANNER = "<div class=\"tpstudio-banner\"><strong>TPStudio — copie annotée</strong>Générée en lecture seule ; le notebook n'a pas été exécuté. Les annotations proviennent de la configuration professeur. Aucune note automatique.</div>"
+_MARKDOWN_ATTACHMENT = re.compile(
+    r"!\[(?P<label>[^\]]*)\]\(attachment:(?P<name>[^)]+)\)"
+)
+
+
+def _sanitize_missing_attachment_references(notebook: NotebookNode) -> NotebookNode:
+    """Make incomplete student image placeholders safe for nbconvert."""
+
+    sanitized = deepcopy(notebook)
+    for cell in sanitized.cells:
+        if cell.cell_type != "markdown":
+            continue
+        attachments = cell.get("attachments", {})
+
+        def replace_missing(match: re.Match[str]) -> str:
+            if match.group("name") in attachments:
+                return match.group(0)
+            label = match.group("label").strip()
+            detail = f" — {label}" if label else ""
+            return f"*Image non insérée{detail}.*"
+
+        source = cell.source
+        if not isinstance(source, str):
+            source = "".join(source)
+        cell.source = _MARKDOWN_ATTACHMENT.sub(replace_missing, source)
+    return sanitized
 
 
 def _customize_nbconvert_html(document: str, *, title: str = _DEFAULT_TITLE) -> str:
@@ -48,11 +75,12 @@ def render_annotated_notebook_html(
     if type(options) is not CopyExportOptions:
         raise TypeError("Les options d'export sont invalides.")
     nbformat.validate(notebook)
+    renderable_notebook = _sanitize_missing_attachment_references(notebook)
     exporter = HTMLExporter(template_name="lab")
     exporter.exclude_input = not options.include_code
     exporter.exclude_output = not options.include_outputs
     exporter.exclude_input_prompt = not options.include_input_prompts
     exporter.exclude_output_prompt = not options.include_output_prompts
     resources = {"embed_images": options.embed_images}
-    body, _ = exporter.from_notebook_node(notebook, resources=resources)
+    body, _ = exporter.from_notebook_node(renderable_notebook, resources=resources)
     return _customize_nbconvert_html(body, title=title)
