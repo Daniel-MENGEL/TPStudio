@@ -53,6 +53,7 @@ class NotebookTechnicalInspection:
     stored_output_cell_indices: tuple[int, ...]
     kernel_name: str | None
     has_attachments: bool
+    attachment_cell_indices: tuple[int, ...]
     referenced_external_paths: tuple[str, ...]
 
     def __post_init__(self) -> None:
@@ -70,7 +71,8 @@ class NotebookTechnicalInspection:
         for name in (
             "unexecuted_code_cell_indices", "error_output_cell_indices",
             "question_mark_code_cell_indices", "empty_code_cell_indices",
-            "stored_output_cell_indices", "referenced_external_paths",
+            "stored_output_cell_indices", "attachment_cell_indices",
+            "referenced_external_paths",
         ):
             object.__setattr__(self, name, tuple(getattr(self, name)))
 
@@ -172,13 +174,16 @@ def inspect_notebook(notebook: NotebookNode) -> NotebookTechnicalInspection:
     empty: list[int] = []
     outputs: list[int] = []
     paths: list[str] = []
+    attachment_cells: list[int] = []
     executed = 0
     has_attachments = False
     for index, cell in enumerate(cells):
         source = cell.get("source", "")
         if not isinstance(source, str):
             source = "".join(source)
-        has_attachments = has_attachments or bool(cell.get("attachments"))
+        if cell.get("attachments"):
+            has_attachments = True
+            attachment_cells.append(index)
         for match in _PATH_PATTERN.finditer(source):
             value = match.group(0)
             if value not in paths:
@@ -218,5 +223,6 @@ def inspect_notebook(notebook: NotebookNode) -> NotebookTechnicalInspection:
         tuple(outputs),
         kernel if isinstance(kernel, str) else None,
         has_attachments,
+        tuple(attachment_cells),
         tuple(paths),
     )

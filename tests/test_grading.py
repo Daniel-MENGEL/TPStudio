@@ -222,3 +222,29 @@ def test_missing_units_in_written_results_require_review() -> None:
 
     assert suggestion.decision.level is RubricLevel.TO_REVIEW
     assert "unités ou incertitudes" in suggestion.rationale
+
+
+def test_one_numeric_result_without_unit_caps_presentation_at_to_review() -> None:
+    complete = SimpleNamespace(
+        assessment=SimpleNamespace(
+            selected_observation=SimpleNamespace(unit="N/m"),
+            is_structurally_satisfied=True,
+        )
+    )
+    missing_unit = SimpleNamespace(
+        assessment=SimpleNamespace(
+            selected_observation=SimpleNamespace(unit=None),
+            is_structurally_satisfied=False,
+        )
+    )
+    analysis = SimpleNamespace(
+        semantic_response_analyses=(),
+        quantity_evaluations=(complete, missing_unit),
+        graph_evaluations=(),
+        regression_model_analyses=(),
+    )
+
+    suggestion = _results_suggestion(analysis)
+
+    assert suggestion.decision.level is RubricLevel.TO_REVIEW
+    assert suggestion.rationale == "Au moins un résultat numérique est donné sans unité."

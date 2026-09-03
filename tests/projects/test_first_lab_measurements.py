@@ -131,11 +131,13 @@ def test_all_bindings_resolve_once_on_aligned_markers():
     for marker in (
         "dynamic-objective-response",
         "dynamic-protocol-response",
+        "dynamic-protocol-schematic",
         "period-result-response",
         "period-neighbor-comparison-response",
         "dynamic-stiffness-interpretation-response",
         "hooke-objective-response",
         "hooke-protocol-response",
+        "static-protocol-schematic",
         "hooke-law-validation-response",
         "hooke-interpretation-response",
         "stiffness-comparison-response",

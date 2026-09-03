@@ -26,7 +26,7 @@ from tpstudio.semantic_analysis import (
     SemanticRole,
 )
 from tpstudio.orchestration import NotebookCopySource, SnellsLawsCopyAnalyzer
-from tpstudio.projects import snells_laws_teacher_project
+from tpstudio.projects import first_lab_measurements_teacher_project, snells_laws_teacher_project
 
 
 def _module():
@@ -95,6 +95,39 @@ def test_legacy_narrative_feedback_remains_without_semantic_provider() -> None:
     )
     assert any("ComparisonJustificationFeedbackItem" in item for item in source_ids)
     assert any("ProtocolFeedbackItem" in item for item in source_ids)
+
+
+def test_first_lab_schematics_are_localized_and_checked_for_attachments() -> None:
+    directory = (
+        Path(__file__).parents[2]
+        / "reference-notebooks/session-01/first-lab-measurements"
+    )
+    project = first_lab_measurements_teacher_project()
+
+    expectations = (
+        ("Premieres-mesures-au-labo.ipynb", False),
+        ("Premieres-mesures-au-labo-Corrige.ipynb", True),
+    )
+    for filename, expected_present in expectations:
+        result = SnellsLawsCopyAnalyzer().analyze(
+            NotebookCopySource(filename, filename, directory / filename),
+            project=project,
+        )
+        schematic_annotations = tuple(
+            item
+            for item in build_annotation_plan(result).annotations
+            if ("origin", "attachment_check") in item.metadata
+        )
+
+        assert tuple(item.production_id for item in schematic_annotations) == (
+            "dynamic_schematic",
+            "static_schematic",
+        )
+        assert all(
+            ("Schéma inséré" in item.message) is expected_present
+            for item in schematic_annotations
+        )
+        assert all(item.kind is AnnotationKind.REVIEW for item in schematic_annotations)
 
 
 def test_low_priority_corrective_feedback_is_attention_not_positive_info() -> None:

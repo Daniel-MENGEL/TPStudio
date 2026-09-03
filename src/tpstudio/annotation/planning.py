@@ -274,6 +274,44 @@ def build_annotation_plan(
     summary_keys: set[tuple] = set()
     summarized_productions: set[str] = set()
 
+    # An experimental schematic is a visual production: TPStudio
+    # can verify that an attachment exists in the expected cell, while its
+    # scientific correctness remains an explicit teacher decision.
+    attachment_cells = set(result.technical_inspection.attachment_cell_indices)
+    for schematic_id in ("dynamic_schematic", "static_schematic"):
+        resolution, reason = _target(result, schematic_id, None)
+        if reason is not None or resolution is None or resolution.cell is None:
+            continue
+        cell_index = resolution.cell.index
+        present = cell_index in attachment_cells
+        source_key = f"schematic:{schematic_id}"
+        annotation_id = _stable_id(
+            result.project_id,
+            result.source_id,
+            AnnotationKind.REVIEW,
+            FeedbackAudience.STUDENT,
+            source_key,
+            cell_index,
+        )
+        annotations.append(NotebookAnnotation(
+            annotation_id,
+            AnnotationKind.REVIEW,
+            FeedbackAudience.STUDENT,
+            (
+                "Schéma inséré : vérifiez sa lisibilité, ses légendes et sa "
+                "cohérence avec le protocole."
+                if present else
+                "Le schéma expérimental demandé n’a pas été inséré."
+            ),
+            (source_key,),
+            schematic_id,
+            None,
+            cell_index,
+            AnnotationPlacement.APPEND_TO_MARKDOWN,
+            TeacherReportSeverity.INFO if present else TeacherReportSeverity.BLOCKING,
+            (("origin", "attachment_check"),),
+        ))
+
     # When an actual semantic result exists, it is the authoritative
     # student-facing assessment of the corresponding free response.  Keep the
     # legacy phrase-based evaluations in the analysis/report for auditability,

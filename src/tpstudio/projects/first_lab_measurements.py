@@ -261,6 +261,7 @@ def _plan() -> ScientificProductionPlan:
         (
             ScientificProductionSpec("dynamic_objective", "Objectif de la méthode dynamique", interpretation, (semantic,)),
             ScientificProductionSpec("dynamic_protocol", "Protocole de la méthode dynamique", interpretation, (semantic,)),
+            ScientificProductionSpec("dynamic_schematic", "Schéma expérimental dynamique", interpretation, (structural,), ("dynamic_protocol",)),
             ScientificProductionSpec("period_result", "Période mesurée", quantity, (structural,)),
             ScientificProductionSpec("period_result_comment", "Interprétation de la période", interpretation, (semantic,), ("period_result",)),
             ScientificProductionSpec("period_neighbor_comparison", "Comparaison de la période avec le groupe voisin", interpretation, (semantic,), ("period_result",)),
@@ -268,6 +269,7 @@ def _plan() -> ScientificProductionPlan:
             ScientificProductionSpec("dynamic_stiffness_interpretation", "Interprétation de la raideur dynamique", interpretation, (semantic,), ("dynamic_stiffness",)),
             ScientificProductionSpec("hooke_objective", "Objectif de l'étude statique", interpretation, (semantic,)),
             ScientificProductionSpec("hooke_protocol", "Protocole de l'étude statique", interpretation, (semantic,)),
+            ScientificProductionSpec("static_schematic", "Schéma expérimental statique", interpretation, (structural,), ("hooke_protocol",)),
             ScientificProductionSpec("hooke_graph", "Graphe statique de la loi de Hooke", ScientificProductionKind.PLOT, (structural,)),
             ScientificProductionSpec("hooke_law_validation", "Conclusion sur la vérification de la loi de Hooke", interpretation, (semantic,), ("hooke_graph",)),
             ScientificProductionSpec("static_stiffness", "Raideur statique", quantity, (structural,)),
@@ -293,8 +295,10 @@ def _marker(identifier: str, production_id: str, marker: str) -> CellProductionB
 def _bindings(plan: ScientificProductionPlan) -> NotebookBindingPlan:
     bindings = (
         _marker("period-result-cell", "period_result", "T_mean = T_values.mean()"),
+        _marker("dynamic-schematic-cell", "dynamic_schematic", "dynamic-protocol-schematic"),
         _marker("dynamic-stiffness-cell", "dynamic_stiffness", "k_dyn = k_dyn_samples.mean()"),
         _marker("hooke-graph-cell", "hooke_graph", 'plt.title("Vérification statique de la loi de Hooke")'),
+        _marker("static-schematic-cell", "static_schematic", "static-protocol-schematic"),
         _marker("static-stiffness-cell", "static_stiffness", "k_static = k_static_samples.mean()"),
         _marker("stiffness-comparison-cell", "stiffness_comparison", "E_N = abs(k_dyn - k_static)"),
         *(

@@ -175,6 +175,10 @@ def _annotation_grading_criterion(analysis, annotation) -> str | None:
         for item in analysis.project.semantic_response_expectations
     }
     role = contracts.get(getattr(annotation, "production_id", None))
+    if getattr(annotation, "production_id", None) in {
+        "dynamic_schematic", "static_schematic",
+    }:
+        return "protocols"
     if role is SemanticRole.OBJECTIVE:
         return "manipulation_objectives"
     if role is SemanticRole.PROTOCOL:

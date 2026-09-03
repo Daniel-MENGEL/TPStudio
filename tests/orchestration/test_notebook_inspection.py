@@ -155,6 +155,7 @@ def test_technical_inspection_distinguishes_code_markers_outputs_and_questions()
     assert result.stored_output_cell_indices == (3,)
     assert result.empty_code_cell_indices == (4,)
     assert result.kernel_name == "python3" and result.has_attachments
+    assert result.attachment_cell_indices == (0,)
     assert "./mesures.csv" in result.referenced_external_paths
 
 

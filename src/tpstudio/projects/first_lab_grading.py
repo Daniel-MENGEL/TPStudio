@@ -131,6 +131,12 @@ def _results_suggestion(analysis) -> RubricSuggestion:
     structurally_incomplete = tuple(
         item for item in present if not item.assessment.is_structurally_satisfied
     )
+    missing_units = tuple(
+        item
+        for item in present
+        if hasattr(item.assessment.selected_observation, "unit")
+        and item.assessment.selected_observation.unit is None
+    )
     formatting_criterion_ids = {
         "period_with_uncertainty",
         "dynamic_stiffness_with_uncertainty",
@@ -158,6 +164,8 @@ def _results_suggestion(analysis) -> RubricSuggestion:
     )
     if present_count == 0:
         level = RubricLevel.ABSENT
+    elif missing_units:
+        level = RubricLevel.TO_REVIEW
     elif formatting_statuses and len(incomplete_formatting) == len(formatting_statuses):
         level = RubricLevel.TO_REVIEW
     elif present and len(structurally_incomplete) == len(present):
@@ -182,7 +190,9 @@ def _results_suggestion(analysis) -> RubricSuggestion:
         level = RubricLevel.VERY_GOOD
     else:
         level = RubricLevel.GOOD
-    if formatting_statuses and len(incomplete_formatting) == len(formatting_statuses):
+    if missing_units:
+        rationale = "Au moins un résultat numérique est donné sans unité."
+    elif formatting_statuses and len(incomplete_formatting) == len(formatting_statuses):
         rationale = "Les résultats rédigés omettent les unités ou incertitudes attendues."
     elif incomplete_formatting:
         rationale = "Au moins un résultat rédigé omet une unité ou une incertitude attendue."
