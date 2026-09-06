@@ -121,7 +121,7 @@ def test_hooke_validation_is_semantic_but_slope_is_not_a_required_quantity():
 def test_all_bindings_resolve_once_on_aligned_markers():
     project = first_lab_measurements_teacher_project()
     cells = [
-        nbformat.v4.new_code_cell("T_mean = T_values.mean()"),
+            nbformat.v4.new_code_cell('T_mean = T_values.mean()\nprint("Moyenne de T =", T_mean, "s")'),
         nbformat.v4.new_code_cell("k_dyn = k_dyn_samples.mean()"),
         nbformat.v4.new_code_cell('plt.title("Vérification statique de la loi de Hooke")'),
         nbformat.v4.new_code_cell("a_fit, l0_fit = np.polyfit(m_static, l_static, 1)"),

@@ -26,7 +26,7 @@ def test_project_identity_and_notebook_references_are_public_safe() -> None:
     assert project.identity.project_id == "snells-laws-mvp"
     assert project.identity.title == "Lois de Snell-Descartes"
     assert project.identity.level == "CPGE"
-    assert project.identity.version == "A79e1"
+    assert project.identity.version == "A79e2"
     assert [item.expected_filename for item in project.notebook_references] == [
         "Lois-de-Snell-Descartes.ipynb",
         "Lois-de-Snell-Descartes-Corrige.ipynb",
@@ -66,6 +66,17 @@ def test_semantic_contracts_follow_the_aligned_notebook_order() -> None:
     )
     assert project.semantic_response_expectations[0].semantic_role is SemanticRole.PROTOCOL
     assert project.semantic_response_expectations[-1].semantic_role is SemanticRole.CONCLUSION
+
+
+def test_setup_contract_covers_the_new_tex_alignment_checks() -> None:
+    setup = snells_laws_teacher_project().semantic_response_expectations[0]
+    assert tuple(criterion.criterion_id for criterion in setup.criteria) == (
+        "own_annotated_diagram",
+        "identify_angle_readings",
+        "justify_angle_uncertainties",
+        "verify_zero_incidence",
+        "correct_laser_alignment",
+    )
 
 
 def test_quantities_declare_angles_and_dimensionless_results() -> None:

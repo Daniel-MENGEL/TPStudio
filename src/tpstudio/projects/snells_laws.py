@@ -80,7 +80,7 @@ def _production_plan() -> ScientificProductionPlan:
         "snells-laws-productions",
         "Productions scientifiques — Lois de Snell-Descartes",
         (
-            _spec("setup_understanding", "Compréhension du montage", interpretation, (semantic,)),
+            _spec("setup_understanding", "Mise en place et vérification du montage", interpretation, (semantic,)),
             _spec("critical_protocol", "Protocole de mesure de l'angle limite", interpretation, (semantic,)),
             _spec("critical_angle", "Angle limite", quantity, (structural, derived)),
             _spec("incidence_angle", "Angle d'incidence", quantity, (structural, derived)),
@@ -397,8 +397,10 @@ SEMANTIC_RESPONSE_EXPECTATIONS = (
         "setup_understanding", SemanticRole.PROTOCOL,
         (
             _criterion("own_annotated_diagram", "Présenter le schéma personnel annoté du montage et des rayons utiles."),
-            _criterion("center_normal_incidence", "Expliquer que le passage par le centre impose une incidence normale sur la face courbe."),
-            _criterion("simplified_angle_reading", "Relier cette géométrie à l'absence de déviation sur la face courbe et à une lecture plus simple des angles."),
+            _criterion("identify_angle_readings", "Repérer où et par rapport à quelle normale sont lus les angles d'incidence, de réflexion et de réfraction."),
+            _criterion("justify_angle_uncertainties", "Proposer une incertitude-type pour chaque angle et signaler les principales erreurs de lecture."),
+            _criterion("verify_zero_incidence", "Vérifier qu'une incidence nulle donne une réfraction nulle."),
+            _criterion("correct_laser_alignment", "En cas de décalage, expliquer que le laser doit être réaligné pour traverser le centre du disque suivant un rayon du demi-cylindre."),
         ),
     ),
     ExpectedSemanticResponse(
@@ -481,7 +483,7 @@ def snells_laws_teacher_project() -> TeacherProjectConfiguration:
     configuration = TeacherProjectConfiguration(
         TeacherProjectIdentity(
             "snells-laws-mvp", "Lois de Snell-Descartes", "Physique", "CPGE",
-            "A79e1", "fr", "Configuration professeur du notebook aligné avec l'énoncé TeX.",
+            "A79e2", "fr", "Configuration professeur réalignée avec l'énoncé TeX du 4 septembre 2026.",
         ),
         (
             NotebookReference("statement", NotebookReferenceRole.STATEMENT, "Lois-de-Snell-Descartes.ipynb"),

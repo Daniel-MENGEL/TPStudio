@@ -294,7 +294,7 @@ def _marker(identifier: str, production_id: str, marker: str) -> CellProductionB
 
 def _bindings(plan: ScientificProductionPlan) -> NotebookBindingPlan:
     bindings = (
-        _marker("period-result-cell", "period_result", "T_mean = T_values.mean()"),
+        _marker("period-result-cell", "period_result", 'print("Moyenne de T =", T_mean'),
         _marker("dynamic-schematic-cell", "dynamic_schematic", "dynamic-protocol-schematic"),
         _marker("dynamic-stiffness-cell", "dynamic_stiffness", "k_dyn = k_dyn_samples.mean()"),
         _marker("hooke-graph-cell", "hooke_graph", 'plt.title("Vérification statique de la loi de Hooke")'),
