@@ -16,6 +16,48 @@
     let lastScrollSequence = null;
     let pendingScrollTop = null;
 
+    function isTextEntry(target) {
+      if (!target) return false;
+      const tag = (target.tagName || "").toLowerCase();
+      return tag === "input" || tag === "textarea" || target.isContentEditable;
+    }
+
+    function handleKeyboardShortcut(event) {
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+      if (isTextEntry(event.target)) return;
+      const actions = {
+        Enter: "validate",
+        ArrowUp: "better",
+        ArrowDown: "worse",
+        ArrowLeft: "previous",
+        ArrowRight: "next",
+      };
+      const action = actions[event.key];
+      if (!action) return;
+      event.preventDefault();
+      send("streamlit:setComponentValue", {
+        value: {
+          keyboard_action: action,
+          event_id: `${Date.now()}-${Math.random()}`,
+        },
+        dataType: "json",
+      });
+    }
+
+    document.addEventListener("keydown", handleKeyboardShortcut);
+    try {
+      const parentDocument = window.parent.document;
+      if (window.parent.__tpstudioReviewKeyboardHandler) {
+        parentDocument.removeEventListener(
+          "keydown", window.parent.__tpstudioReviewKeyboardHandler
+        );
+      }
+      window.parent.__tpstudioReviewKeyboardHandler = handleKeyboardShortcut;
+      parentDocument.addEventListener("keydown", handleKeyboardShortcut);
+    } catch (_) {
+      // The preview listener below still provides shortcuts inside the notebook.
+    }
+
     function send(type, payload = {}) {
       window.parent.postMessage({
         isStreamlitMessage: true,
@@ -56,6 +98,7 @@
     preview.addEventListener("load", () => {
       const doc = preview.contentDocument;
       if (!doc) return;
+      doc.addEventListener("keydown", handleKeyboardShortcut);
       doc.querySelectorAll(".tpstudio-annotation, .tpstudio-summary-item").forEach(
         element => {
           element.style.cursor = "pointer";

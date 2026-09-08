@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
+import json
 import re
 
 from tpstudio.batch import BatchPlan, BatchRunResult, run_snells_laws_batch
@@ -11,6 +13,7 @@ from tpstudio.export import CopyExportOptions, export_analyzed_copy
 from tpstudio.orchestration import BatchDispatchResult, CopyAnalysisOptions, NotebookCopySource, analyze_copy, run_batch
 from tpstudio.projects import project_descriptor
 from tpstudio.semantic_analysis import SemanticAnalysisProvider
+from tpstudio.notebook_execution import execute_notebook_copy
 
 from .planning import build_dispatch_requests_from_web_selection
 from .model import WebCopyExportState, WebCopyOverride
@@ -19,6 +22,50 @@ from .presenters import active_analysis_for_source
 
 
 _SEMANTIC_REFERENCE_STATUSES = {"reference_correction", "empty_statement"}
+
+
+def has_unrecoverable_basthon_graph_outputs(path: Path) -> bool:
+    """Detect Basthon graph placeholders whose image data was not saved."""
+
+    notebook = json.loads(Path(path).read_text(encoding="utf-8"))
+    for cell in notebook.get("cells", ()):
+        outputs = cell.get("outputs", ())
+        has_image = any(
+            any(str(kind).startswith("image/") for kind in output.get("data", ()))
+            for output in outputs
+        )
+        has_basthon_placeholder = any(
+            "_basthonDomNodeBus" in str(output.get("data", {}).get("application/javascript", ""))
+            for output in outputs
+        )
+        if has_basthon_placeholder and not has_image:
+            return True
+    return False
+
+
+def regenerate_missing_graph_outputs(copies, *, cell_timeout: int = 30):
+    """Execute temporary copies when Basthon saved placeholders instead of images."""
+
+    prepared = []
+    results = {}
+    for item in tuple(copies):
+        if not has_unrecoverable_basthon_graph_outputs(item.workspace_path):
+            prepared.append(item)
+            continue
+        output = item.workspace_path.with_name(
+            f".{item.workspace_path.stem}-tpstudio-executed.ipynb"
+        )
+        result = execute_notebook_copy(
+            item.workspace_path,
+            output,
+            cell_timeout=cell_timeout,
+            continue_on_error=True,
+            overwrite=True,
+            force_inline_matplotlib=True,
+        )
+        results[item.source_id] = result
+        prepared.append(replace(item, workspace_path=output))
+    return tuple(prepared), results
 
 
 def should_use_semantic_provider(selected_copy, *, include_references: bool = False) -> bool:

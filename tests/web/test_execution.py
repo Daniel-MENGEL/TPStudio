@@ -5,7 +5,13 @@ import importlib.util
 import pytest
 
 from tpstudio.batch import BatchCopyResult, BatchCopySource, BatchCopyStatus, BatchOptions, BatchRunResult, build_batch_plan
-from tpstudio.web.execution import can_run_batch, export_output_stem, run_prepared_batch
+from tpstudio.web.execution import (
+    can_run_batch,
+    export_output_stem,
+    has_unrecoverable_basthon_graph_outputs,
+    regenerate_missing_graph_outputs,
+    run_prepared_batch,
+)
 from tpstudio.web.identity import CopyIdentity, CopyIdentityStatus, StudentIdentity
 from tpstudio.web.presenters import identity_resolution_candidates
 from tpstudio.web.model import SelectedCopy
@@ -33,6 +39,62 @@ def test_can_run_requires_confirmed_identities_and_plan(tmp_path):
     assert not can_run_batch((review,), plan)[0]
     assert not can_run_batch((missing,), plan)[0]
     assert not can_run_batch((confirmed,), None)[0]
+
+
+def test_detects_basthon_placeholder_without_saved_image(tmp_path):
+    import nbformat
+
+    source = tmp_path / "copy.ipynb"
+    notebook = nbformat.v4.new_notebook(cells=[nbformat.v4.new_code_cell("plt.show()")])
+    notebook.cells[0].outputs = [
+        nbformat.v4.new_output(
+            "display_data",
+            data={
+                "application/javascript": "element.append(window._basthonDomNodeBus.pop(0));"
+            },
+        )
+    ]
+    nbformat.write(notebook, source)
+
+    assert has_unrecoverable_basthon_graph_outputs(source)
+    notebook.cells[0].outputs[0].data["image/png"] = "aGVsbG8="
+    nbformat.write(notebook, source)
+    assert not has_unrecoverable_basthon_graph_outputs(source)
+
+
+def test_regenerates_only_temporary_basthon_copies(tmp_path, monkeypatch):
+    import nbformat
+    from types import SimpleNamespace
+
+    source = tmp_path / "copy.ipynb"
+    notebook = nbformat.v4.new_notebook(cells=[nbformat.v4.new_code_cell("plt.show()")])
+    notebook.cells[0].outputs = [
+        nbformat.v4.new_output(
+            "display_data",
+            data={
+                "application/javascript": "element.append(window._basthonDomNodeBus.pop(0));"
+            },
+        )
+    ]
+    nbformat.write(notebook, source)
+    original = source.read_bytes()
+    selected = SelectedCopy("copy-001", source.name, source, "a" * 64)
+
+    observed = {}
+
+    def fake_execute(source_path, output_path, **kwargs):
+        observed.update(kwargs)
+        Path(output_path).write_bytes(Path(source_path).read_bytes())
+        return SimpleNamespace(success=True, output=Path(output_path))
+
+    monkeypatch.setattr("tpstudio.web.execution.execute_notebook_copy", fake_execute)
+    prepared, results = regenerate_missing_graph_outputs((selected,))
+
+    assert source.read_bytes() == original
+    assert prepared[0].workspace_path != source
+    assert prepared[0].workspace_path.exists()
+    assert results["copy-001"].success
+    assert observed["force_inline_matplotlib"] is True
 
 
 def test_run_prepared_batch_delegates_to_a71g(monkeypatch, tmp_path):

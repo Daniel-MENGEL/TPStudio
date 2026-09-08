@@ -40,20 +40,21 @@ def test_html_contains_annotation_palette_css():
 
 
 def test_html_tolerates_missing_student_attachment_without_mutation():
-    cell = nbformat.v4.new_markdown_cell(
-        "### Schéma expérimental\n\n![Schéma du binôme](attachment:??)"
-    )
-    notebook = nbformat.v4.new_notebook(cells=[cell])
+    for reference in ("attachment:??", "attachment:"):
+        cell = nbformat.v4.new_markdown_cell(
+            f"### Schéma expérimental\n\n![Schéma du binôme]({reference})"
+        )
+        notebook = nbformat.v4.new_notebook(cells=[cell])
 
-    html = render_annotated_notebook_html(
-        notebook,
-        options=CopyExportOptions(),
-    )
+        html = render_annotated_notebook_html(
+            notebook,
+            options=CopyExportOptions(),
+        )
 
-    assert "Image non insérée" in html
-    assert "Schéma du binôme" in html
-    assert "attachment:??" not in html
-    assert "attachment:??" in notebook.cells[0].source
+        assert "Image non insérée" in html
+        assert "Schéma du binôme" in html
+        assert reference not in html
+        assert reference in notebook.cells[0].source
 
 
 def test_html_multiple_annotations_use_one_global_palette_and_escape_message():

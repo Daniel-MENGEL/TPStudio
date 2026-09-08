@@ -134,6 +134,21 @@ def test_array_min_max_methods_feed_safe_linspace() -> None:
     assert series.y_values == pytest.approx((1.0, 2.0, 3.0, 4.0, 5.0))
 
 
+def test_bare_variable_annotation_does_not_abort_later_graph_analysis() -> None:
+    notebook = nbformat.v4.new_notebook(cells=[
+        nbformat.v4.new_code_cell(
+            "x = np.array([0, 1, 2], dtype=float)\n"
+            "print: (x)\n"
+        ),
+        nbformat.v4.new_code_cell("plt.plot(x, 2 * x + 1)"),
+    ])
+
+    series = extract_all_graph_series_data(notebook)[0]
+    assert series.technical_status.value == "extracted"
+    assert series.x_values == pytest.approx((0.0, 1.0, 2.0))
+    assert series.y_values == pytest.approx((1.0, 3.0, 5.0))
+
+
 def test_no_pixel_or_ocr_dependency_is_present() -> None:
     source = __import__("inspect").getsource(observe_saved_graph)
     assert "ocr" not in source.lower()

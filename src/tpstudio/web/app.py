@@ -27,6 +27,7 @@ from tpstudio.web.execution import (
     analyze_selected_copy,
     can_run_batch,
     export_active_copies,
+    regenerate_missing_graph_outputs,
     run_selected_dispatch,
     should_use_semantic_provider,
 )
@@ -100,6 +101,7 @@ def _analysis_signature(
     semantic_enabled: bool,
     model: str,
     include_semantic_references: bool = False,
+    regenerate_graph_outputs: bool = False,
 ) -> tuple:
     """Signature for analysis results; planning remains independent of AI."""
     return (
@@ -107,6 +109,7 @@ def _analysis_signature(
         bool(semantic_enabled),
         model,
         bool(include_semantic_references),
+        bool(regenerate_graph_outputs),
     )
 
 
@@ -283,6 +286,23 @@ def _consume_preview_click_event(
     return True
 
 
+def _consume_review_keyboard_event(state, event, *, event_key: str) -> str | None:
+    """Return one new review keyboard action exactly once."""
+
+    if not isinstance(event, dict):
+        return None
+    action = event.get("keyboard_action")
+    event_id = event.get("event_id")
+    if (
+        action not in {"validate", "better", "worse", "previous", "next"}
+        or not event_id
+        or event_id == state.get(event_key)
+    ):
+        return None
+    state[event_key] = event_id
+    return action
+
+
 def _render_copy_review_workspace(st, analysis, source_id: str) -> None:
     """Render one corrected copy beside its teacher validation controls."""
 
@@ -357,6 +377,79 @@ def _render_copy_review_workspace(st, analysis, source_id: str) -> None:
         # clicked annotation together.
         st.rerun()
 
+    keyboard_event_key = f"review-keyboard-event-{source_id}"
+    keyboard_action = _consume_review_keyboard_event(
+        st.session_state,
+        click_event,
+        event_key=keyboard_event_key,
+    )
+    if keyboard_action is not None and annotations:
+        selected_id = st.session_state[choice_key]
+        selected_index = annotation_ids.index(selected_id)
+        if keyboard_action in {"previous", "next"}:
+            offset = -1 if keyboard_action == "previous" else 1
+            target_index = max(0, min(len(annotation_ids) - 1, selected_index + offset))
+            if target_index != selected_index:
+                _navigate_annotation(
+                    st.session_state,
+                    choice_key,
+                    scroll_sequence_key,
+                    scroll_request_key,
+                    annotation_ids[target_index],
+                )
+        elif keyboard_action in {"better", "worse"}:
+            proposal = annotation_by_id[selected_id]
+            current = review_by_id.get(selected_id)
+            automatic_level = _SEVERITY_DEFAULT_REVIEW_LEVEL[proposal.severity.value]
+            level_key = f"annotation-level-{source_id}-{selected_id}"
+            pending_level_key = f"annotation-pending-level-{source_id}-{selected_id}"
+            current_level = st.session_state.get(
+                level_key,
+                current.level
+                if current is not None and current.level is not None
+                else automatic_level,
+            )
+            levels = tuple(AnnotationReviewLevel)
+            offset = 1 if keyboard_action == "better" else -1
+            target_index = max(
+                0, min(len(levels) - 1, levels.index(current_level) + offset)
+            )
+            # Streamlit warns when a widget key is assigned through session
+            # state and the same widget is also created with an explicit
+            # default. Carry the keyboard choice through a separate, one-shot
+            # key and let the selectbox own its state on the following pass.
+            st.session_state.pop(level_key, None)
+            st.session_state[pending_level_key] = levels[target_index]
+        else:
+            proposal = annotation_by_id[selected_id]
+            current = review_by_id.get(selected_id)
+            level = st.session_state.get(
+                f"annotation-level-{source_id}-{selected_id}",
+                current.level
+                if current is not None and current.level is not None
+                else _SEVERITY_DEFAULT_REVIEW_LEVEL[proposal.severity.value],
+            )
+            action = st.session_state.get(
+                f"annotation-action-{source_id}-{selected_id}",
+                current.action if current is not None else AnnotationReviewAction.KEEP,
+            )
+            message = (
+                st.session_state.get(f"annotation-message-{source_id}-{selected_id}")
+                if action is AnnotationReviewAction.EDIT
+                else None
+            )
+            criterion_id = _annotation_grading_criterion(analysis, proposal)
+            if criterion_id is not None and action is not AnnotationReviewAction.REMOVE:
+                st.session_state[_grading_widget_key(source_id, criterion_id)] = (
+                    RubricLevel[level.name]
+                )
+            set_annotation_review(
+                st.session_state,
+                source_id,
+                AnnotationReview(selected_id, action, message, level),
+            )
+        st.rerun()
+
     selected_id = None
     with review_column:
         st.markdown("#### Validation des commentaires")
@@ -427,12 +520,18 @@ def _render_copy_review_workspace(st, analysis, source_id: str) -> None:
                 if current is not None and current.level is not None
                 else automatic_level
             )
+            level_key = f"annotation-level-{source_id}-{selected_id}"
+            pending_level_key = f"annotation-pending-level-{source_id}-{selected_id}"
+            pending_level = st.session_state.pop(pending_level_key, None)
+            if pending_level is not None:
+                st.session_state.pop(level_key, None)
+                current_level = pending_level
             level = st.selectbox(
                 "Appréciation",
                 tuple(AnnotationReviewLevel),
                 index=tuple(AnnotationReviewLevel).index(current_level),
                 format_func=_ANNOTATION_LEVEL_LABELS.get,
-                key=f"annotation-level-{source_id}-{selected_id}",
+                key=level_key,
             )
             action = st.radio(
                 "Décision",
@@ -735,6 +834,21 @@ def main() -> None:
                 "mais leurs réponses ne sont pas envoyées à OpenAI."
             ),
         )
+        regenerate_graph_outputs = st.checkbox(
+            "Régénérer les graphes absents",
+            value=False,
+            help=(
+                "Exécute le code des copies étudiantes dans des fichiers temporaires. "
+                "Les notebooks déposés restent inchangés. À n'activer que pour des "
+                "copies provenant d'une source de confiance."
+            ),
+            key="tpstudio-regenerate-graph-outputs",
+        )
+        if regenerate_graph_outputs:
+            st.warning(
+                "Le code des notebooks sera exécuté localement pour reconstruire "
+                "les graphes que Basthon n'a pas enregistrés."
+            )
         if semantic_enabled:
             st.caption(f"Modèle sémantique : {semantic_model}")
             st.caption(
@@ -889,14 +1003,38 @@ def main() -> None:
                             )
 
                         try:
+                            analysis_copies = tuple(copies)
+                            execution_results = {}
+                            if regenerate_graph_outputs:
+                                progress.progress(
+                                    0.0, text="Régénération des graphes absents…"
+                                )
+                                analysis_copies, execution_results = (
+                                    regenerate_missing_graph_outputs(copies)
+                                )
+                                if execution_results:
+                                    incomplete = sum(
+                                        not execution.success
+                                        for execution in execution_results.values()
+                                    )
+                                    if incomplete:
+                                        st.warning(
+                                            f"Graphes régénérés partiellement pour {incomplete} "
+                                            "copie(s) comportant des erreurs de code."
+                                        )
+                                    else:
+                                        st.caption(
+                                            f"Graphes régénérés dans {len(execution_results)} "
+                                            "copie(s) temporaire(s)."
+                                        )
                             if provider is None:
                                 result = run_selected_dispatch(
-                                    copies,
+                                    analysis_copies,
                                     progress_callback=update_progress,
                                 )
                             else:
                                 result = run_selected_dispatch(
-                                    copies,
+                                    analysis_copies,
                                     semantic_provider=provider,
                                     include_semantic_references=include_semantic_references,
                                     progress_callback=update_progress,
@@ -911,6 +1049,7 @@ def main() -> None:
                             semantic_enabled,
                             semantic_model,
                             include_semantic_references,
+                            regenerate_graph_outputs,
                         ),
                     )
                 clear_run_result(st.session_state)
@@ -925,6 +1064,7 @@ def main() -> None:
             semantic_enabled,
             semantic_model,
             include_semantic_references,
+            regenerate_graph_outputs,
         )
         invalidate_dispatch_if_signature_changed(st.session_state, current_analysis_signature)
         dispatch_result = get_current_dispatch_result(st.session_state, current_analysis_signature)

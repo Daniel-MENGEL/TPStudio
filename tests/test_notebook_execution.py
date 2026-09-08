@@ -93,6 +93,46 @@ def test_execute_notebook_copy_preserves_original_and_saves_outputs(
     assert executed.cells[0].outputs[0].text == "ok\n"
 
 
+def test_force_inline_matplotlib_uses_and_removes_temporary_setup_cell(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    source = tmp_path / "copie.ipynb"
+    output = tmp_path / "copie-executed.ipynb"
+    _write_code_notebook(source, "print('student')")
+
+    class FakeClient:
+        def __init__(self, notebook, **kwargs):
+            self.notebook = notebook
+            self.kwargs = kwargs
+
+        def execute(self):
+            assert self.notebook.cells[0].source == "%matplotlib inline"
+            for index, cell in enumerate(self.notebook.cells):
+                self.kwargs["on_cell_start"](cell=cell, cell_index=index)
+                cell.execution_count = index + 1
+            self.notebook.cells[1].outputs = [
+                nbformat.v4.new_output("stream", name="stdout", text="student\n")
+            ]
+            return self.notebook
+
+    monkeypatch.setattr(
+        execution_module,
+        "_load_execution_backend",
+        lambda: _backend(FakeClient),
+    )
+
+    result = execute_notebook_copy(
+        source, output, force_inline_matplotlib=True
+    )
+    executed = nbformat.read(output, as_version=4)
+
+    assert result.attempted_code_cells == 1
+    assert result.total_code_cells == 1
+    assert len(executed.cells) == 1
+    assert executed.cells[0].source == "print('student')"
+
+
 def test_execute_notebook_copy_saves_partial_notebook_on_cell_error(
     tmp_path: Path,
     monkeypatch,

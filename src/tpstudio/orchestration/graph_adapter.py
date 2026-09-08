@@ -640,7 +640,14 @@ def _apply_taint_statement(
             bindings.pop(name, None)
             tainted.add(name)
         return
-    assert value is not None
+    if value is None:
+        # A bare annotation such as ``print: (values)`` is valid Python and
+        # does not assign a runtime value.  Treat its target as unavailable
+        # instead of aborting the whole notebook analysis.
+        for name in names:
+            bindings.pop(name, None)
+            tainted.add(name)
+        return
     if _loaded_names(value) & tainted:
         for name in names:
             bindings.pop(name, None)

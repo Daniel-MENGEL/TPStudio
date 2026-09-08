@@ -8,6 +8,7 @@ from tpstudio.web.app import (
     _build_semantic_provider,
     _copy_issue_count,
     _consume_preview_click_event,
+    _consume_review_keyboard_event,
     _focus_annotation_html,
     _input_signature,
     _navigate_annotation,
@@ -53,6 +54,44 @@ def test_review_preview_preserves_position_when_reviewed_html_changes():
     assert "preview.contentWindow.scrollY" in component
     assert "if (!explicitScroll && pendingScrollTop !== null)" in component
     assert "preview.contentWindow.scrollTo" in component
+
+
+def test_review_preview_exposes_expected_keyboard_shortcuts():
+    component = (
+        Path(app.__file__).with_name("review_preview_component") / "index.html"
+    ).read_text(encoding="utf-8")
+
+    assert 'Enter: "validate"' in component
+    assert 'ArrowUp: "better"' in component
+    assert 'ArrowDown: "worse"' in component
+    assert 'ArrowLeft: "previous"' in component
+    assert 'ArrowRight: "next"' in component
+    assert 'tag === "input" || tag === "textarea"' in component
+
+
+def test_keyboard_level_change_uses_one_shot_state_instead_of_widget_assignment():
+    source = Path(app.__file__).read_text(encoding="utf-8")
+
+    assert "st.session_state.pop(level_key, None)" in source
+    assert "st.session_state[pending_level_key] = levels[target_index]" in source
+    assert "pending_level = st.session_state.pop(pending_level_key, None)" in source
+
+
+def test_review_keyboard_event_is_consumed_only_once():
+    state = {}
+    event = {"keyboard_action": "next", "event_id": "keyboard-1"}
+
+    assert _consume_review_keyboard_event(
+        state, event, event_key="last-keyboard"
+    ) == "next"
+    assert _consume_review_keyboard_event(
+        state, event, event_key="last-keyboard"
+    ) is None
+    assert _consume_review_keyboard_event(
+        state,
+        {"keyboard_action": "unknown", "event_id": "keyboard-2"},
+        event_key="last-keyboard",
+    ) is None
 
 
 def test_annotation_navigation_selects_and_requests_one_scroll():
@@ -124,6 +163,9 @@ def test_analysis_signature_is_stable_and_option_model_specific():
     assert _analysis_signature(base, True, "gpt-5-mini", False) != _analysis_signature(
         base, True, "gpt-5-mini", True
     )
+    assert _analysis_signature(
+        base, True, "gpt-5-mini", False, False
+    ) != _analysis_signature(base, True, "gpt-5-mini", False, True)
 
 
 def test_open_local_html_artifact_delegates_to_operating_system(tmp_path):

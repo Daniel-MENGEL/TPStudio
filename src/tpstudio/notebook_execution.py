@@ -38,6 +38,7 @@ def execute_notebook_copy(
     kernel_name: str | None = None,
     continue_on_error: bool = False,
     overwrite: bool = False,
+    force_inline_matplotlib: bool = False,
 ) -> NotebookExecutionResult:
     """Execute a notebook copy without ever modifying the source notebook."""
 
@@ -49,9 +50,22 @@ def execute_notebook_copy(
 
     if cell_timeout <= 0:
         raise ValueError("Le timeout par cellule doit être strictement positif.")
+    if type(force_inline_matplotlib) is not bool:
+        raise TypeError("force_inline_matplotlib doit être booléen.")
 
     nbformat, notebook_client_class, execution_exceptions = _load_execution_backend()
     notebook = nbformat.read(source, as_version=4)
+
+    execution_index_offset = 0
+    if force_inline_matplotlib:
+        notebook.cells.insert(
+            0,
+            nbformat.v4.new_code_cell(
+                "%matplotlib inline",
+                metadata={"tags": ["tpstudio-temporary-runtime-setup"]},
+            ),
+        )
+        execution_index_offset = 1
 
     kernel_selection = resolve_kernel_selection(
         notebook,
@@ -62,15 +76,18 @@ def execute_notebook_copy(
         1
         for cell in notebook.cells
         if getattr(cell, "cell_type", "") == "code"
-    )
+    ) - execution_index_offset
 
     attempted_indices: set[int] = set()
     failed_cell_index: int | None = None
     caught_exception: BaseException | None = None
 
     def on_cell_start(*, cell: Any, cell_index: int, **_: Any) -> None:
-        if getattr(cell, "cell_type", "") == "code":
-            attempted_indices.add(cell_index)
+        if (
+            getattr(cell, "cell_type", "") == "code"
+            and cell_index >= execution_index_offset
+        ):
+            attempted_indices.add(cell_index - execution_index_offset)
 
     def on_cell_error(
         *,
@@ -80,8 +97,8 @@ def execute_notebook_copy(
         **_: Any,
     ) -> None:
         nonlocal failed_cell_index
-        if failed_cell_index is None:
-            failed_cell_index = cell_index
+        if failed_cell_index is None and cell_index >= execution_index_offset:
+            failed_cell_index = cell_index - execution_index_offset
 
     client_kwargs: dict[str, Any] = {
         "timeout": cell_timeout,
@@ -102,6 +119,9 @@ def execute_notebook_copy(
     except Exception as error:
         # Kernel startup/configuration failures are execution failures too.
         caught_exception = error
+
+    if force_inline_matplotlib:
+        notebook.cells.pop(0)
 
     error_outputs = _collect_error_outputs(notebook)
 
