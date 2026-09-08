@@ -285,6 +285,11 @@ def test_export_active_analyses_excludes_unresolved(tmp_path):
     assert set(states) == {"copy-001", "copy-002"}
     assert all(isinstance(value, WebCopyExportState) and value.result is not None for value in states.values())
     assert all(path.exists() for value in states.values() for path in value.result.output_paths)
+    assert all(
+        not value.result.notebook_artifact.created
+        and value.result.html_artifact.created
+        for value in states.values()
+    )
 
 
 def test_export_active_copy_uses_confirmed_identity_in_html_name(tmp_path):

@@ -20,7 +20,8 @@ def test_html_preserves_markdown_latex_images_and_hides_internal_markers():
     assert html.lower().count("</body>") == 1
     assert html.lower().count("<title") == 1
     assert html.count('class="tpstudio-banner"') == 1
-    assert "TPStudio" in html and "sin" in html and "\\sin" in html
+    assert "Copie corrigée" in html and "TPStudio" not in html
+    assert "sin" in html and "\\sin" in html
     assert "plot" in html and "data:image/png" in html
 
 

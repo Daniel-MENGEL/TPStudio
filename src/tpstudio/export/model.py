@@ -30,6 +30,7 @@ class CopyExportOptions:
     include_outputs: bool = True
     include_input_prompts: bool = False
     include_output_prompts: bool = False
+    include_notebook: bool = True
 
     def __post_init__(self) -> None:
         for name in self.__dataclass_fields__:
@@ -92,8 +93,12 @@ class CopyExportResult:
         object.__setattr__(self, "interpretation_review_traces", tuple(self.interpretation_review_traces))
 
     @property
-    def output_paths(self) -> tuple[Path, Path]:
-        return self.notebook_artifact.path, self.html_artifact.path
+    def output_paths(self) -> tuple[Path, ...]:
+        return tuple(
+            artifact.path
+            for artifact in (self.notebook_artifact, self.html_artifact)
+            if artifact.created
+        )
 
     @property
     def success(self) -> bool:

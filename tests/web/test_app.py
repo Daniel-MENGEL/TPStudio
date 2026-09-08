@@ -56,6 +56,18 @@ def test_review_preview_preserves_position_when_reviewed_html_changes():
     assert "preview.contentWindow.scrollTo" in component
 
 
+def test_review_preview_fits_notebook_content_to_available_width():
+    component = (
+        Path(app.__file__).with_name("review_preview_component") / "index.html"
+    ).read_text(encoding="utf-8")
+
+    assert "function makeNotebookResponsive(doc)" in component
+    assert "min-width: 0 !important" in component
+    assert "white-space: pre-wrap !important" in component
+    assert "max-width: 100% !important" in component
+    assert "makeNotebookResponsive(doc);" in component
+
+
 def test_review_preview_exposes_expected_keyboard_shortcuts():
     component = (
         Path(app.__file__).with_name("review_preview_component") / "index.html"

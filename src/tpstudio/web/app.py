@@ -88,6 +88,10 @@ from tpstudio.web.state import (
     SEMANTIC_ANALYSIS_ENABLED_KEY,
 )
 from tpstudio.web.workspace import WebWorkspace
+from tpstudio.web.annotation_review_cache import (
+    load_annotation_reviews,
+    save_annotation_reviews,
+)
 
 
 def _input_signature(copies, output_dir: Path, options: WebBatchOptions) -> tuple:
@@ -303,13 +307,44 @@ def _consume_review_keyboard_event(state, event, *, event_key: str) -> str | Non
     return action
 
 
-def _render_copy_review_workspace(st, analysis, source_id: str) -> None:
+def _render_copy_review_workspace(
+    st, analysis, source_id: str, copy_sha256: str,
+) -> None:
     """Render one corrected copy beside its teacher validation controls."""
 
-    reviews = get_annotation_reviews(st.session_state).get(source_id, ())
-    review_by_id = {item.annotation_id: item for item in reviews}
     plan = build_annotation_plan(analysis)
     annotations = _ordered_review_annotations(plan)
+    reviews = get_annotation_reviews(st.session_state).get(source_id, ())
+    if not reviews:
+        cached_reviews = load_annotation_reviews(copy_sha256, annotations)
+        if cached_reviews:
+            set_annotation_reviews_for_source(
+                st.session_state, source_id, cached_reviews
+            )
+            reviews = cached_reviews
+            cached_by_id = {
+                review.annotation_id: review for review in cached_reviews
+            }
+            for annotation in annotations:
+                review = cached_by_id.get(annotation.annotation_id)
+                criterion_id = _annotation_grading_criterion(
+                    analysis, annotation
+                )
+                if (
+                    review is not None
+                    and review.level is not None
+                    and review.action is not AnnotationReviewAction.REMOVE
+                    and criterion_id is not None
+                ):
+                    st.session_state.setdefault(
+                        _grading_widget_key(source_id, criterion_id),
+                        RubricLevel[review.level.name],
+                    )
+    if reviews:
+        # Also migrate decisions already present in the live Streamlit session
+        # when this persistent cache is introduced or after an application reload.
+        save_annotation_reviews(copy_sha256, reviews, annotations)
+    review_by_id = {item.annotation_id: item for item in reviews}
     semantic_failures = sum(
         semantic.result is not None
         and any(
@@ -448,6 +483,11 @@ def _render_copy_review_workspace(st, analysis, source_id: str) -> None:
                 source_id,
                 AnnotationReview(selected_id, action, message, level),
             )
+            save_annotation_reviews(
+                copy_sha256,
+                get_annotation_reviews(st.session_state).get(source_id, ()),
+                annotations,
+            )
         st.rerun()
 
     selected_id = None
@@ -469,6 +509,11 @@ def _render_copy_review_workspace(st, analysis, source_id: str) -> None:
                     )
                     for item in annotations
                 ),
+            )
+            save_annotation_reviews(
+                copy_sha256,
+                get_annotation_reviews(st.session_state).get(source_id, ()),
+                annotations,
             )
             st.rerun()
         if annotations:
@@ -567,6 +612,11 @@ def _render_copy_review_workspace(st, analysis, source_id: str) -> None:
                     st.session_state,
                     source_id,
                     AnnotationReview(selected_id, action, message, level),
+                )
+                save_annotation_reviews(
+                    copy_sha256,
+                    get_annotation_reviews(st.session_state).get(source_id, ()),
+                    annotations,
                 )
                 st.rerun()
 
@@ -1009,8 +1059,23 @@ def main() -> None:
                                 progress.progress(
                                     0.0, text="Régénération des graphes absents…"
                                 )
+                                def update_graph_progress(
+                                    completed, total, source_id, cached,
+                                ):
+                                    suffix = " (cache)" if cached else ""
+                                    progress.progress(
+                                        completed / total if total else 1.0,
+                                        text=(
+                                            f"Graphes : copie {completed} sur {total}"
+                                            f"{suffix}"
+                                        ),
+                                    )
+
                                 analysis_copies, execution_results = (
-                                    regenerate_missing_graph_outputs(copies)
+                                    regenerate_missing_graph_outputs(
+                                        copies,
+                                        progress_callback=update_graph_progress,
+                                    )
                                 )
                                 if execution_results:
                                     incomplete = sum(
@@ -1025,7 +1090,9 @@ def main() -> None:
                                     else:
                                         st.caption(
                                             f"Graphes régénérés dans {len(execution_results)} "
-                                            "copie(s) temporaire(s)."
+                                            "copie(s) temporaire(s), dont "
+                                            f"{sum(item.cached for item in execution_results.values())} "
+                                            "depuis le cache."
                                         )
                             if provider is None:
                                 result = run_selected_dispatch(
@@ -1168,12 +1235,19 @@ def main() -> None:
             st.markdown(f"### {row.display_name}")
             if active_analysis is not None:
                 _render_copy_review_workspace(
-                    st, active_analysis, item.source_id,
+                    st,
+                    active_analysis,
+                    item.source_id,
+                    selected_by_id[item.source_id].content_sha256,
                 )
             else:
                 st.info("Aucun aperçu corrigé n'est disponible pour cette copie.")
 
             with st.expander("Options d'export du lot", expanded=False):
+                st.caption(
+                    "Un seul fichier HTML autonome sera créé par copie. Il pourra "
+                    "ultérieurement être joint directement à un courriel."
+                )
                 export_output_text = st.text_input(
                     "Dossier des corrections",
                     value=str(default_output_dir()),

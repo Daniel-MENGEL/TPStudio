@@ -84,17 +84,30 @@ def test_regenerates_only_temporary_basthon_copies(tmp_path, monkeypatch):
 
     def fake_execute(source_path, output_path, **kwargs):
         observed.update(kwargs)
-        Path(output_path).write_bytes(Path(source_path).read_bytes())
+        executed = nbformat.read(source_path, as_version=4)
+        executed.cells[0].outputs[0].data["image/png"] = "aGVsbG8="
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        nbformat.write(executed, output_path)
         return SimpleNamespace(success=True, output=Path(output_path))
 
     monkeypatch.setattr("tpstudio.web.execution.execute_notebook_copy", fake_execute)
-    prepared, results = regenerate_missing_graph_outputs((selected,))
+    prepared, results = regenerate_missing_graph_outputs(
+        (selected,), cache_dir=tmp_path / "cache"
+    )
 
     assert source.read_bytes() == original
     assert prepared[0].workspace_path != source
     assert prepared[0].workspace_path.exists()
     assert results["copy-001"].success
     assert observed["force_inline_matplotlib"] is True
+
+    observed.clear()
+    cached_prepared, cached_results = regenerate_missing_graph_outputs(
+        (selected,), cache_dir=tmp_path / "cache"
+    )
+    assert observed == {}
+    assert cached_prepared[0].workspace_path == prepared[0].workspace_path
+    assert cached_results["copy-001"].cached is True
 
 
 def test_run_prepared_batch_delegates_to_a71g(monkeypatch, tmp_path):

@@ -40,7 +40,7 @@ def test_export_analyzed_copy_exports_lens_without_reanalysis(tmp_path, monkeypa
     assert result.teacher_report is not None
     assert result.teacher_report.project_id == "thin-lens-image"
     html = result.html_artifact.path.read_text(encoding="utf-8")
-    assert "<title>TPStudio — Formation d&#x27;une image par une lentille mince — Correction</title>" in html
+    assert "<title>Formation d&#x27;une image par une lentille mince — Correction</title>" in html
     assert "Attendu Snell-Descartes" not in html
 
 
@@ -87,7 +87,7 @@ def test_export_uses_explicit_analysis_project_over_source_content(tmp_path):
     result = export_analyzed_copy(source, analysis, tmp_path / "out")
     assert result.project_id == "snells-laws-mvp"
     html = result.html_artifact.path.read_text(encoding="utf-8")
-    assert "<title>TPStudio — Lois de Snell-Descartes — Correction</title>" in html
+    assert "<title>Lois de Snell-Descartes — Correction</title>" in html
 
 
 def test_html_title_is_escaped(tmp_path):

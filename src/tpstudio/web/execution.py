@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import replace
+from dataclasses import dataclass
+from hashlib import sha256
 from pathlib import Path
 import json
 import re
@@ -22,6 +24,16 @@ from .presenters import active_analysis_for_source
 
 
 _SEMANTIC_REFERENCE_STATUSES = {"reference_correction", "empty_statement"}
+
+
+@dataclass(frozen=True, slots=True)
+class GraphRegenerationStatus:
+    success: bool
+    cached: bool
+
+
+def default_graph_output_cache_dir() -> Path:
+    return Path.home() / ".cache" / "tpstudio" / "graph-outputs-v1"
 
 
 def has_unrecoverable_basthon_graph_outputs(path: Path) -> bool:
@@ -43,18 +55,44 @@ def has_unrecoverable_basthon_graph_outputs(path: Path) -> bool:
     return False
 
 
-def regenerate_missing_graph_outputs(copies, *, cell_timeout: int = 30):
+def has_saved_image_outputs(path: Path) -> bool:
+    notebook = json.loads(Path(path).read_text(encoding="utf-8"))
+    return any(
+        any(str(kind).startswith("image/") for kind in output.get("data", ()))
+        for cell in notebook.get("cells", ())
+        for output in cell.get("outputs", ())
+    )
+
+
+def regenerate_missing_graph_outputs(
+    copies,
+    *,
+    cell_timeout: int = 30,
+    cache_dir: Path | None = None,
+    progress_callback=None,
+):
     """Execute temporary copies when Basthon saved placeholders instead of images."""
 
+    selected = tuple(copies)
+    directory = default_graph_output_cache_dir() if cache_dir is None else cache_dir
     prepared = []
     results = {}
-    for item in tuple(copies):
+    total = len(selected)
+    for completed, item in enumerate(selected, 1):
         if not has_unrecoverable_basthon_graph_outputs(item.workspace_path):
             prepared.append(item)
+            if progress_callback is not None:
+                progress_callback(completed, total, item.source_id, False)
             continue
-        output = item.workspace_path.with_name(
-            f".{item.workspace_path.stem}-tpstudio-executed.ipynb"
-        )
+        digest = item.content_sha256 or sha256(item.workspace_path.read_bytes()).hexdigest()
+        output = directory / f"{digest}.ipynb"
+        cached = output.is_file() and has_saved_image_outputs(output)
+        if cached:
+            results[item.source_id] = GraphRegenerationStatus(True, True)
+            prepared.append(replace(item, workspace_path=output))
+            if progress_callback is not None:
+                progress_callback(completed, total, item.source_id, True)
+            continue
         result = execute_notebook_copy(
             item.workspace_path,
             output,
@@ -63,8 +101,12 @@ def regenerate_missing_graph_outputs(copies, *, cell_timeout: int = 30):
             overwrite=True,
             force_inline_matplotlib=True,
         )
-        results[item.source_id] = result
+        results[item.source_id] = GraphRegenerationStatus(
+            result.success and has_saved_image_outputs(output), False
+        )
         prepared.append(replace(item, workspace_path=output))
+        if progress_callback is not None:
+            progress_callback(completed, total, item.source_id, False)
     return tuple(prepared), results
 
 
@@ -174,6 +216,7 @@ def export_active_copies(
 ) -> dict[str, WebCopyExportState]:
     """Export active analyses only; analysis and dispatch are never called here."""
     exported: dict[str, WebCopyExportState] = {}
+    options = replace(options, include_notebook=False)
     identities = {
         item.source_id: item.identity
         for item in tuple(selected_copies)

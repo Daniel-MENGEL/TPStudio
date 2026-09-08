@@ -84,6 +84,57 @@
       }
     }
 
+    function makeNotebookResponsive(doc) {
+      const style = doc.createElement("style");
+      style.id = "tpstudio-responsive-preview";
+      style.textContent = `
+        html, body {
+          width: 100% !important;
+          min-width: 0 !important;
+          max-width: 100% !important;
+          overflow-x: hidden !important;
+        }
+        .jp-Notebook, .jp-NotebookPanel-notebook, main {
+          box-sizing: border-box !important;
+          width: 100% !important;
+          min-width: 0 !important;
+          max-width: 100% !important;
+          padding-left: 12px !important;
+          padding-right: 12px !important;
+        }
+        .jp-Cell, .jp-Cell-inputWrapper, .jp-Cell-outputWrapper,
+        .jp-InputArea, .jp-OutputArea, .jp-RenderedHTMLCommon {
+          box-sizing: border-box !important;
+          min-width: 0 !important;
+          max-width: 100% !important;
+        }
+        .jp-RenderedHTMLCommon p, .jp-RenderedHTMLCommon li,
+        .jp-RenderedHTMLCommon div, .tpstudio-annotation {
+          overflow-wrap: anywhere !important;
+          word-break: normal !important;
+        }
+        .jp-InputArea-editor, .jp-OutputArea-output pre,
+        .highlight pre, pre {
+          box-sizing: border-box !important;
+          max-width: 100% !important;
+          white-space: pre-wrap !important;
+          overflow-wrap: anywhere !important;
+        }
+        img, svg, canvas {
+          height: auto !important;
+          max-width: 100% !important;
+        }
+        table {
+          display: block !important;
+          max-width: 100% !important;
+          overflow-x: auto !important;
+        }
+      `;
+      const previous = doc.getElementById(style.id);
+      if (previous) previous.remove();
+      (doc.head || doc.documentElement).appendChild(style);
+    }
+
     function consumeScrollRequest() {
       if (
         !scrollRequest ||
@@ -98,6 +149,7 @@
     preview.addEventListener("load", () => {
       const doc = preview.contentDocument;
       if (!doc) return;
+      makeNotebookResponsive(doc);
       doc.addEventListener("keydown", handleKeyboardShortcut);
       doc.querySelectorAll(".tpstudio-annotation, .tpstudio-summary-item").forEach(
         element => {
