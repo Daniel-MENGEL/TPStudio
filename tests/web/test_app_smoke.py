@@ -12,7 +12,12 @@ def test_streamlit_app_smoke_without_network():
     assert any("détection automatique du TP par copie" in item.value for item in app.info)
     assert any("Vérifier le lot" in button.label for button in app.button)
     semantic = next(item for item in app.checkbox if item.label == "Activer l’analyse sémantique (API OpenAI)")
-    assert semantic.value is False
+    regenerate_graphs = next(
+        item for item in app.checkbox
+        if item.label == "Régénérer les graphes absents"
+    )
+    assert semantic.value is True
+    assert regenerate_graphs.value is True
     assert any("Réinitialiser" in button.label for button in app.button)
 
 

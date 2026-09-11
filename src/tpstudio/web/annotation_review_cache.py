@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import tempfile
 from hashlib import sha256
+import nbformat
 
 from tpstudio.annotation import (
     AnnotationReview,
@@ -17,6 +18,10 @@ from tpstudio.annotation import (
 
 def default_annotation_review_cache_dir() -> Path:
     return Path.home() / ".cache" / "tpstudio" / "annotation-reviews-v1"
+
+
+def default_shared_review_cache_dir() -> Path:
+    return Path.home() / ".cache" / "tpstudio" / "shared-response-reviews-v1"
 
 
 def _cache_path(copy_sha256: str, cache_dir: Path) -> Path:
@@ -37,6 +42,28 @@ def _annotation_key(annotation) -> str:
         "reason": getattr(getattr(annotation, "reason", None), "value", None),
     }
     canonical = json.dumps(identity, ensure_ascii=False, sort_keys=True)
+    return sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _normalized_cell_source(notebook, annotation) -> str | None:
+    index = getattr(annotation, "target_cell_index", None)
+    if not isinstance(index, int) or index < 0 or index >= len(notebook.cells):
+        return None
+    source = notebook.cells[index].source
+    if not isinstance(source, str):
+        source = "".join(source)
+    return " ".join(source.split())
+
+
+def _shared_review_key(annotation, response: str) -> str:
+    canonical = json.dumps(
+        {
+            "annotation": _annotation_key(annotation),
+            "response": response,
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
     return sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -110,3 +137,80 @@ def save_annotation_reviews(
         Path(name).replace(path)
     finally:
         Path(name).unlink(missing_ok=True)
+
+
+def load_shared_response_reviews(
+    notebook_path: Path,
+    annotations,
+    *,
+    cache_dir: Path | None = None,
+) -> tuple[AnnotationReview, ...]:
+    """Restore decisions for identical responses to the same question."""
+
+    directory = default_shared_review_cache_dir() if cache_dir is None else cache_dir
+    notebook = nbformat.read(notebook_path, as_version=4)
+    restored = []
+    for annotation in tuple(annotations):
+        response = _normalized_cell_source(notebook, annotation)
+        if response is None:
+            continue
+        path = directory / f"{_shared_review_key(annotation, response)}.json"
+        if not path.exists():
+            continue
+        try:
+            item = json.loads(path.read_text(encoding="utf-8"))
+            restored.append(AnnotationReview(
+                annotation.annotation_id,
+                AnnotationReviewAction(item["action"]),
+                item.get("message"),
+                AnnotationReviewLevel(item["level"])
+                if item.get("level") is not None else None,
+            ))
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            continue
+    return tuple(restored)
+
+
+def save_shared_response_reviews(
+    notebook_path: Path,
+    reviews,
+    annotations,
+    *,
+    cache_dir: Path | None = None,
+) -> None:
+    """Persist reviewed identical-response decisions without storing responses."""
+
+    directory = default_shared_review_cache_dir() if cache_dir is None else cache_dir
+    notebook = nbformat.read(notebook_path, as_version=4)
+    annotation_by_id = {
+        annotation.annotation_id: annotation for annotation in tuple(annotations)
+    }
+    directory.mkdir(parents=True, exist_ok=True)
+    for review in tuple(reviews):
+        annotation = annotation_by_id.get(review.annotation_id)
+        if annotation is None:
+            continue
+        response = _normalized_cell_source(notebook, annotation)
+        if response is None:
+            continue
+        path = directory / f"{_shared_review_key(annotation, response)}.json"
+        payload = {
+            "action": review.action.value,
+            "message": review.message,
+            "level": review.level.value if review.level is not None else None,
+        }
+        if path.exists():
+            try:
+                if json.loads(path.read_text(encoding="utf-8")) == payload:
+                    continue
+            except (OSError, ValueError, json.JSONDecodeError):
+                pass
+        handle, name = tempfile.mkstemp(
+            prefix=".tpstudio-shared-review-", suffix=".json", dir=directory
+        )
+        try:
+            with os.fdopen(handle, "w", encoding="utf-8") as stream:
+                json.dump(payload, stream, ensure_ascii=False, sort_keys=True)
+            Path(name).replace(path)
+        finally:
+            Path(name).unlink(missing_ok=True)

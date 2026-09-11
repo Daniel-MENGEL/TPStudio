@@ -86,12 +86,34 @@ from tpstudio.web.state import (
     set_annotation_reviews_for_source,
     get_html_preview, set_html_preview,
     SEMANTIC_ANALYSIS_ENABLED_KEY,
+    REGENERATE_GRAPH_OUTPUTS_KEY,
 )
 from tpstudio.web.workspace import WebWorkspace
 from tpstudio.web.annotation_review_cache import (
     load_annotation_reviews,
+    load_shared_response_reviews,
     save_annotation_reviews,
+    save_shared_response_reviews,
 )
+
+
+_ACTIVE_ANALYSIS_COPY_KEY = "active-analysis-copy"
+_REVIEW_COPY_RESTORE_KEY = "tpstudio-review-copy-to-restore"
+
+
+def _rerun_copy_review(st, source_id: str) -> None:
+    """Rerun the UI while explicitly preserving the reviewed copy."""
+
+    st.session_state[_REVIEW_COPY_RESTORE_KEY] = source_id
+    st.rerun()
+
+
+def _restore_reviewed_copy(state, valid_source_ids: tuple[str, ...]) -> None:
+    """Restore a copy selected before an annotation-review rerun."""
+
+    source_id = state.pop(_REVIEW_COPY_RESTORE_KEY, None)
+    if source_id in valid_source_ids:
+        state[_ACTIVE_ANALYSIS_COPY_KEY] = source_id
 
 
 def _input_signature(copies, output_dir: Path, options: WebBatchOptions) -> tuple:
@@ -307,43 +329,93 @@ def _consume_review_keyboard_event(state, event, *, event_key: str) -> str | Non
     return action
 
 
+def _validation_status_label(reviewed: int, total: int) -> str:
+    if total <= 0:
+        return "—"
+    if reviewed >= total:
+        return "✅ Vérifiée"
+    if reviewed <= 0:
+        return "À vérifier"
+    return f"En cours ({reviewed}/{total})"
+
+
+def _next_unverified_copy_id(
+    progress: tuple[tuple[str, int, int, bool], ...], current_source_id: str,
+) -> str | None:
+    """Return the next non-reference copy whose review is incomplete."""
+
+    source_ids = tuple(item[0] for item in progress)
+    if current_source_id not in source_ids:
+        return None
+    start = source_ids.index(current_source_id)
+    ordered = progress[start + 1:] + progress[:start]
+    for source_id, reviewed, total, is_reference in ordered:
+        if not is_reference and total > 0 and reviewed < total:
+            return source_id
+    return None
+
+
+def _restore_cached_reviews(st, analysis, source_id: str, copy_sha256: str):
+    plan = build_annotation_plan(analysis)
+    annotations = _ordered_review_annotations(plan)
+    valid_ids = {annotation.annotation_id for annotation in annotations}
+    current = get_annotation_reviews(st.session_state).get(source_id, ())
+    merged = {}
+    for review in load_shared_response_reviews(analysis.source.path, annotations):
+        merged[review.annotation_id] = review
+    copy_cached_reviews = load_annotation_reviews(copy_sha256, annotations)
+    for review in copy_cached_reviews:
+        merged[review.annotation_id] = review
+    if copy_cached_reviews:
+        # Seed the shared cache from validations produced before response-level
+        # reuse was introduced. Existing identical entries are not rewritten.
+        save_shared_response_reviews(
+            analysis.source.path, copy_cached_reviews, annotations
+        )
+    for review in current:
+        if review.annotation_id in valid_ids:
+            merged[review.annotation_id] = review
+    reviews = tuple(
+        merged[annotation.annotation_id]
+        for annotation in annotations
+        if annotation.annotation_id in merged
+    )
+    if reviews != current:
+        set_annotation_reviews_for_source(st.session_state, source_id, reviews)
+    cached_by_id = {review.annotation_id: review for review in reviews}
+    for annotation in annotations:
+        review = cached_by_id.get(annotation.annotation_id)
+        criterion_id = _annotation_grading_criterion(analysis, annotation)
+        if (
+            review is not None
+            and review.level is not None
+            and review.action is not AnnotationReviewAction.REMOVE
+            and criterion_id is not None
+        ):
+            st.session_state.setdefault(
+                _grading_widget_key(source_id, criterion_id),
+                RubricLevel[review.level.name],
+            )
+    return plan, annotations, reviews
+
+
+def _persist_cached_reviews(
+    st, analysis, source_id: str, copy_sha256: str, annotations,
+) -> None:
+    reviews = get_annotation_reviews(st.session_state).get(source_id, ())
+    save_annotation_reviews(copy_sha256, reviews, annotations)
+    save_shared_response_reviews(analysis.source.path, reviews, annotations)
+
+
 def _render_copy_review_workspace(
     st, analysis, source_id: str, copy_sha256: str,
+    next_unverified_source_id: str | None = None,
 ) -> None:
     """Render one corrected copy beside its teacher validation controls."""
 
-    plan = build_annotation_plan(analysis)
-    annotations = _ordered_review_annotations(plan)
-    reviews = get_annotation_reviews(st.session_state).get(source_id, ())
-    if not reviews:
-        cached_reviews = load_annotation_reviews(copy_sha256, annotations)
-        if cached_reviews:
-            set_annotation_reviews_for_source(
-                st.session_state, source_id, cached_reviews
-            )
-            reviews = cached_reviews
-            cached_by_id = {
-                review.annotation_id: review for review in cached_reviews
-            }
-            for annotation in annotations:
-                review = cached_by_id.get(annotation.annotation_id)
-                criterion_id = _annotation_grading_criterion(
-                    analysis, annotation
-                )
-                if (
-                    review is not None
-                    and review.level is not None
-                    and review.action is not AnnotationReviewAction.REMOVE
-                    and criterion_id is not None
-                ):
-                    st.session_state.setdefault(
-                        _grading_widget_key(source_id, criterion_id),
-                        RubricLevel[review.level.name],
-                    )
-    if reviews:
-        # Also migrate decisions already present in the live Streamlit session
-        # when this persistent cache is introduced or after an application reload.
-        save_annotation_reviews(copy_sha256, reviews, annotations)
+    plan, annotations, reviews = _restore_cached_reviews(
+        st, analysis, source_id, copy_sha256
+    )
     review_by_id = {item.annotation_id: item for item in reviews}
     semantic_failures = sum(
         semantic.result is not None
@@ -410,7 +482,7 @@ def _render_copy_review_workspace(
         # The component was rendered earlier in this Streamlit pass with the
         # previous selection. Start one clean pass so both columns receive the
         # clicked annotation together.
-        st.rerun()
+        _rerun_copy_review(st, source_id)
 
     keyboard_event_key = f"review-keyboard-event-{source_id}"
     keyboard_action = _consume_review_keyboard_event(
@@ -483,12 +555,10 @@ def _render_copy_review_workspace(
                 source_id,
                 AnnotationReview(selected_id, action, message, level),
             )
-            save_annotation_reviews(
-                copy_sha256,
-                get_annotation_reviews(st.session_state).get(source_id, ()),
-                annotations,
+            _persist_cached_reviews(
+                st, analysis, source_id, copy_sha256, annotations,
             )
-        st.rerun()
+        _rerun_copy_review(st, source_id)
 
     selected_id = None
     with review_column:
@@ -510,12 +580,10 @@ def _render_copy_review_workspace(
                     for item in annotations
                 ),
             )
-            save_annotation_reviews(
-                copy_sha256,
-                get_annotation_reviews(st.session_state).get(source_id, ()),
-                annotations,
+            _persist_cached_reviews(
+                st, analysis, source_id, copy_sha256, annotations,
             )
-            st.rerun()
+            _rerun_copy_review(st, source_id)
         if annotations:
             selected_id = st.session_state[choice_key]
             selected_index = annotation_ids.index(selected_id)
@@ -613,12 +681,26 @@ def _render_copy_review_workspace(
                     source_id,
                     AnnotationReview(selected_id, action, message, level),
                 )
-                save_annotation_reviews(
-                    copy_sha256,
-                    get_annotation_reviews(st.session_state).get(source_id, ()),
-                    annotations,
+                _persist_cached_reviews(
+                    st, analysis, source_id, copy_sha256, annotations,
                 )
-                st.rerun()
+                saved_ids = {
+                    item.annotation_id
+                    for item in get_annotation_reviews(st.session_state).get(
+                        source_id, ()
+                    )
+                }
+                copy_is_complete = all(
+                    annotation_id in saved_ids for annotation_id in annotation_ids
+                )
+                destination_source_id = (
+                    next_unverified_source_id
+                    if selected_index == len(annotation_ids) - 1
+                    and copy_is_complete
+                    and next_unverified_source_id is not None
+                    else source_id
+                )
+                _rerun_copy_review(st, destination_source_id)
 
         if (
             analysis.project_id
@@ -871,7 +953,6 @@ def main() -> None:
         st.caption("Les options d’export seront disponibles après la phase d’analyse.")
         semantic_enabled = st.checkbox(
             "Activer l’analyse sémantique (API OpenAI)",
-            value=False,
             key=SEMANTIC_ANALYSIS_ENABLED_KEY,
         )
         semantic_model = _semantic_model()
@@ -886,13 +967,12 @@ def main() -> None:
         )
         regenerate_graph_outputs = st.checkbox(
             "Régénérer les graphes absents",
-            value=False,
             help=(
                 "Exécute le code des copies étudiantes dans des fichiers temporaires. "
                 "Les notebooks déposés restent inchangés. À n'activer que pour des "
                 "copies provenant d'une source de confiance."
             ),
-            key="tpstudio-regenerate-graph-outputs",
+            key=REGENERATE_GRAPH_OUTPUTS_KEY,
         )
         if regenerate_graph_outputs:
             st.warning(
@@ -1160,6 +1240,19 @@ def main() -> None:
                     source_id=item.source_id,
                 )
                 selected_copy = selected_by_id.get(item.source_id)
+                validation_reviewed = 0
+                validation_total = 0
+                if active_analysis is not None and selected_copy is not None:
+                    _, validation_annotations, validation_reviews = (
+                        _restore_cached_reviews(
+                            st,
+                            active_analysis,
+                            item.source_id,
+                            selected_copy.content_sha256,
+                        )
+                    )
+                    validation_total = len(validation_annotations)
+                    validation_reviewed = len(validation_reviews)
                 identity_status = getattr(
                     getattr(selected_copy, "identity", None), "status", None
                 )
@@ -1175,6 +1268,11 @@ def main() -> None:
                     "semantics": semantics,
                     "issues": _copy_issue_count(row, overview_rows, graphs, semantics),
                     "reference": is_reference,
+                    "validation": _validation_status_label(
+                        validation_reviewed, validation_total
+                    ),
+                    "validation_reviewed": validation_reviewed,
+                    "validation_total": validation_total,
                 })
 
             attention_count = sum(
@@ -1202,29 +1300,47 @@ def main() -> None:
                 st.success("Aucune copie étudiante ne nécessite actuellement de vérification.")
                 visible_views = [view for view in copy_views if not view["reference"]] or copy_views
 
-            st.dataframe(
-                [
-                    {
-                        "Fichier": view["row"].display_name,
-                        "TP": view["row"].project_title or "—",
-                        "État": view["row"].status,
-                        "Points à examiner": view["issues"],
-                        "Note proposée": _suggested_grade_label(view["analysis"]),
-                    }
-                    for view in visible_views
-                ],
-                hide_index=True,
-                use_container_width=True,
-            )
+            with st.expander("Tableau récapitulatif du lot", expanded=False):
+                st.dataframe(
+                    [
+                        {
+                            "Fichier": view["row"].display_name,
+                            "TP": view["row"].project_title or "—",
+                            "État": view["row"].status,
+                            "Validation": view["validation"],
+                            "Points à examiner": view["issues"],
+                            "Note proposée": _suggested_grade_label(view["analysis"]),
+                        }
+                        for view in visible_views
+                    ],
+                    hide_index=True,
+                    use_container_width=True,
+                )
             view_ids = tuple(view["item"].source_id for view in visible_views)
             views_by_id = {view["item"].source_id: view for view in visible_views}
+            _restore_reviewed_copy(st.session_state, view_ids)
             selected_source_id = st.selectbox(
                 "Copie à examiner",
                 view_ids,
-                format_func=lambda source_id: views_by_id[source_id]["row"].display_name,
-                key="active-analysis-copy",
+                format_func=lambda source_id: (
+                    f"{views_by_id[source_id]['validation']} — "
+                    f"{views_by_id[source_id]['row'].display_name}"
+                ),
+                key=_ACTIVE_ANALYSIS_COPY_KEY,
             )
             selected_view = views_by_id[selected_source_id]
+            review_progress = tuple(
+                (
+                    view["item"].source_id,
+                    view["validation_reviewed"],
+                    view["validation_total"],
+                    view["reference"],
+                )
+                for view in visible_views
+            )
+            next_unverified_source_id = _next_unverified_copy_id(
+                review_progress, selected_source_id
+            )
             row = selected_view["row"]
             item = selected_view["item"]
             active_analysis = selected_view["analysis"]
@@ -1239,6 +1355,7 @@ def main() -> None:
                     active_analysis,
                     item.source_id,
                     selected_by_id[item.source_id].content_sha256,
+                    next_unverified_source_id,
                 )
             else:
                 st.info("Aucun aperçu corrigé n'est disponible pour cette copie.")

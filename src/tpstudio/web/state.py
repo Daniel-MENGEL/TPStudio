@@ -24,6 +24,7 @@ REVIEW_INDEX_KEY = "tpstudio_web_review_index"
 REVIEW_FILTER_KEY = "tpstudio_web_review_only_pending"
 REVIEW_MESSAGE_KEY = "tpstudio_web_review_message"
 SEMANTIC_ANALYSIS_ENABLED_KEY = "tpstudio_semantic_analysis_enabled"
+REGENERATE_GRAPH_OUTPUTS_KEY = "tpstudio-regenerate-graph-outputs"
 
 
 def default_output_dir() -> Path:
@@ -48,7 +49,8 @@ def initialize_session_state(state: MutableMapping) -> None:
     state.setdefault(REVIEW_INDEX_KEY, 0)
     state.setdefault(REVIEW_FILTER_KEY, True)
     state.setdefault(REVIEW_MESSAGE_KEY, None)
-    state.setdefault(SEMANTIC_ANALYSIS_ENABLED_KEY, False)
+    state.setdefault(SEMANTIC_ANALYSIS_ENABLED_KEY, True)
+    state.setdefault(REGENERATE_GRAPH_OUTPUTS_KEY, True)
 
 
 def clear_prepared_batch(state: MutableMapping) -> None:

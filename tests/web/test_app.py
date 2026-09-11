@@ -12,10 +12,14 @@ from tpstudio.web.app import (
     _focus_annotation_html,
     _input_signature,
     _navigate_annotation,
+    _next_unverified_copy_id,
     _open_local_html_artifact,
     _ordered_review_annotations,
     _render_first_lab_grading,
+    _rerun_copy_review,
+    _restore_reviewed_copy,
     _suggested_grade_label,
+    _validation_status_label,
     web_error_message,
 )
 from tpstudio.annotation import (
@@ -104,6 +108,70 @@ def test_review_keyboard_event_is_consumed_only_once():
         {"keyboard_action": "unknown", "event_id": "keyboard-2"},
         event_key="last-keyboard",
     ) is None
+
+
+def test_copy_review_rerun_preserves_the_active_copy():
+    class FakeStreamlit:
+        def __init__(self):
+            self.session_state = {}
+            self.rerun_called = False
+
+        def rerun(self):
+            self.rerun_called = True
+
+    st = FakeStreamlit()
+    _rerun_copy_review(st, "copy-ines-celia")
+
+    assert st.rerun_called
+    _restore_reviewed_copy(
+        st.session_state, ("copy-maire-lambin", "copy-ines-celia")
+    )
+    assert st.session_state["active-analysis-copy"] == "copy-ines-celia"
+
+
+def test_copy_review_restore_ignores_a_copy_no_longer_visible():
+    state = {"tpstudio-review-copy-to-restore": "copy-hidden"}
+
+    _restore_reviewed_copy(state, ("copy-visible",))
+
+    assert "active-analysis-copy" not in state
+    assert "tpstudio-review-copy-to-restore" not in state
+
+
+def test_next_unverified_copy_follows_batch_order_and_wraps():
+    progress = (
+        ("copy-1", 4, 4, False),
+        ("copy-2", 2, 4, False),
+        ("reference", 0, 4, True),
+        ("copy-3", 0, 4, False),
+    )
+
+    assert _next_unverified_copy_id(progress, "copy-1") == "copy-2"
+    assert _next_unverified_copy_id(progress, "copy-2") == "copy-3"
+    assert _next_unverified_copy_id(progress, "copy-3") == "copy-2"
+
+
+def test_next_unverified_copy_returns_none_when_the_batch_is_complete():
+    progress = (
+        ("copy-1", 4, 4, False),
+        ("copy-2", 4, 4, False),
+        ("reference", 0, 4, True),
+    )
+
+    assert _next_unverified_copy_id(progress, "copy-1") is None
+
+
+def test_validation_status_is_explicit_for_copy_selection():
+    assert _validation_status_label(0, 5) == "À vérifier"
+    assert _validation_status_label(2, 5) == "En cours (2/5)"
+    assert _validation_status_label(5, 5) == "✅ Vérifiée"
+    assert _validation_status_label(0, 0) == "—"
+
+
+def test_analysis_summary_table_is_collapsed_by_default():
+    source = Path(app.__file__).read_text(encoding="utf-8")
+
+    assert 'st.expander("Tableau récapitulatif du lot", expanded=False)' in source
 
 
 def test_annotation_navigation_selects_and_requests_one_scroll():

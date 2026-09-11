@@ -5,6 +5,7 @@ from tpstudio.web.state import (
     RUN_IN_PROGRESS_KEY, RUN_RESULT_KEY, RUN_SIGNATURE_KEY,
     clear_run_result, get_current_run_result, set_run_result, default_output_dir,
     REVIEW_INDEX_KEY,
+    SEMANTIC_ANALYSIS_ENABLED_KEY, REGENERATE_GRAPH_OUTPUTS_KEY,
     DISPATCH_RESULT_KEY, DISPATCH_SIGNATURE_KEY, invalidate_dispatch_if_signature_changed,
     set_dispatch_result,
     get_annotation_reviews, set_annotation_review,
@@ -18,6 +19,8 @@ def test_state_initialization_and_invalidation():
     state = {}
     initialize_session_state(state)
     assert state[PLAN_KEY] is None
+    assert state[SEMANTIC_ANALYSIS_ENABLED_KEY] is True
+    assert state[REGENERATE_GRAPH_OUTPUTS_KEY] is True
     set_prepared_batch(state, "plan", ("signature",))
     set_run_result(state, "result", ("signature",))
     assert state[PLAN_KEY] == "plan"
