@@ -232,7 +232,7 @@ def _semantic_annotation_message(analysis) -> tuple[str, TeacherReportSeverity]:
     ]
     parts = []
     if satisfied:
-        parts.append(sentence("Points repérés : ", satisfied))
+        parts.append(sentence("Points positifs : ", satisfied))
     if required_to_improve:
         parts.append(sentence("À compléter ou préciser : ", required_to_improve))
     if recommended_to_improve:

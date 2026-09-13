@@ -210,9 +210,36 @@ def _safe_component(value: str) -> str:
     return re.sub(r"-+", "-", value).strip("-")
 
 
+def _canonical_student_component(student: StudentIdentity) -> str:
+    """Format one student as FAMILY-given for exported artifact names."""
+
+    if student.family_name and student.given_names:
+        family_name = student.family_name.upper()
+        given_names = student.given_names.capitalize()
+    else:
+        words = student.display_name.split()
+        uppercase_words = [word for word in words if word.isupper()]
+        if uppercase_words:
+            family_name = " ".join(uppercase_words).upper()
+            given_names = " ".join(
+                word for word in words if not word.isupper()
+            ).capitalize()
+        elif len(words) >= 2:
+            family_name = " ".join(words[1:]).upper()
+            given_names = words[0].capitalize()
+        else:
+            family_name = words[0].upper()
+            given_names = ""
+    return _safe_component("-".join(
+        value for value in (family_name, given_names) if value
+    ))
+
+
 def build_canonical_copy_stem(tp_name: str, identity: CopyIdentity) -> str | None:
     if identity.status is not CopyIdentityStatus.CONFIRMED or not identity.students:
         return None
-    components = [_safe_component(tp_name)] + [_safe_component(student.display_name) for student in identity.students]
+    components = [_safe_component(tp_name)] + [
+        _canonical_student_component(student) for student in identity.students
+    ]
     components = [component for component in components if component]
     return "-".join(components) or None

@@ -10,7 +10,8 @@ from tpstudio.export import CopyExportOptions, export_snells_laws_copy
 import tpstudio.export.pipeline as pipeline
 from tpstudio.annotation import (
     AnnotationKind, AnnotationPlacement, AnnotationPlan, NotebookAnnotation,
-    AnnotationReview, AnnotationReviewAction, SkippedAnnotationReason,
+    AnnotationReview, AnnotationReviewAction, AnnotationReviewLevel,
+    SkippedAnnotationReason,
     StudentSummaryAnnotation,
 )
 from tpstudio.feedback import FeedbackAudience
@@ -99,6 +100,51 @@ def test_pipeline_applies_teacher_annotation_review_to_notebook_and_html(tmp_pat
     assert "Commentaire validé par le professeur." in html_text
     assert "Commentaire automatique." not in notebook_text
     assert "Commentaire automatique." not in html_text
+
+
+def test_export_keeps_only_validated_level_below_an_inserted_schematic(
+    tmp_path, monkeypatch,
+):
+    module = _fixture()
+    source = tmp_path / "copy.ipynb"
+    nbformat.write(module._notebook(), source)
+    analysis = analyze_snells_laws_copy(
+        NotebookCopySource("local-copy", source.name, source)
+    )
+    schematic = NotebookAnnotation(
+        "schematic-feedback", AnnotationKind.REVIEW, FeedbackAudience.STUDENT,
+        "Schéma inséré : vérifiez sa lisibilité, ses légendes et sa cohérence avec le protocole.",
+        ("schematic:dynamic_schematic",), "dynamic_schematic", None, 0,
+        AnnotationPlacement.APPEND_TO_MARKDOWN, TeacherReportSeverity.INFO,
+        (("origin", "attachment_check"),),
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "build_annotation_plan",
+        lambda *args, **kwargs: AnnotationPlan(
+            analysis.project_id, analysis.source_id, (schematic,)
+        ),
+    )
+    review = AnnotationReview(
+        schematic.annotation_id,
+        AnnotationReviewAction.KEEP,
+        level=AnnotationReviewLevel.VERY_GOOD,
+    )
+
+    preview = pipeline.render_analyzed_copy_html(
+        analysis.source, analysis, annotation_reviews=(review,)
+    )
+    result = pipeline.export_analyzed_copy(
+        analysis.source,
+        analysis,
+        tmp_path / "out",
+        annotation_reviews=(review,),
+    )
+    html_text = result.html_artifact.path.read_text(encoding="utf-8")
+
+    assert "Schéma inséré : vérifiez sa lisibilité" in preview
+    assert "Schéma inséré : vérifiez sa lisibilité" not in html_text
+    assert "<strong>Très bien</strong>" in html_text
 
 
 def test_reviewed_html_preview_creates_no_file_and_preserves_source(tmp_path, monkeypatch):

@@ -58,12 +58,13 @@ def render_notebook_annotation(annotation: NotebookAnnotation) -> str:
         raise TypeError("Le rendu exige exactement une NotebookAnnotation.")
     style, label = annotation_presentation(annotation)
     safe_message = html.escape(annotation.message, quote=False)
+    label_only = dict(annotation.metadata).get("label_only") == "true"
+    rendered_message = "" if label_only else f"\n\n{safe_message}"
     content = (
         f'<blockquote id="{html.escape(annotation.annotation_id, quote=True)}" '
         f'class="tpstudio-annotation tpstudio-severity-{style}" role="note" '
         f'style="{_INLINE_STYLES[style]}">\n'
-        f"<strong>{label}</strong>\n\n"
-        f"{safe_message}\n"
+        f"<strong>{label}</strong>{rendered_message}\n"
         "</blockquote>"
     )
     if annotation.placement is AnnotationPlacement.APPEND_TO_MARKDOWN:

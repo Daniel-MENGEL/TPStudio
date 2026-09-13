@@ -134,8 +134,23 @@ def test_strongly_contradictory_filename_requires_review():
 
 def test_canonical_stem_preserves_declared_order_and_sanitizes():
     identity = CopyIdentity((StudentIdentity("Jules BERNARD"), StudentIdentity("Léa D'Ange / Martin")), None, CopyIdentityStatus.CONFIRMED)
-    assert build_canonical_copy_stem(canonical_tp_name("snells-laws-mvp"), identity) == "Lois-de-Snell-Descartes-Jules-BERNARD-Léa-D-Ange-Martin"
+    assert build_canonical_copy_stem(canonical_tp_name("snells-laws-mvp"), identity) == "Lois-de-Snell-Descartes-BERNARD-Jules-D-ANGE-MARTIN-Léa"
     assert build_canonical_copy_stem("TP", replace_identity(identity, CopyIdentityStatus.TO_REVIEW)) is None
+
+
+def test_canonical_stem_uses_structured_family_and_given_names():
+    identity = CopyIdentity(
+        (
+            StudentIdentity("Célia Durand", "Durand", "Célia"),
+            StudentIdentity("Inès Martin", "Martin", "Inès"),
+        ),
+        None,
+        CopyIdentityStatus.CONFIRMED,
+    )
+
+    assert build_canonical_copy_stem("TP", identity) == (
+        "TP-DURAND-Célia-MARTIN-Inès"
+    )
 
 
 def replace_identity(identity, status):

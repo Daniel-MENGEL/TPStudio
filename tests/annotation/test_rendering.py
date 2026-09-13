@@ -63,6 +63,18 @@ def test_review_level_overrides_visible_annotation_label():
     assert "<strong>Très bien</strong>" not in rendered
 
 
+def test_label_only_annotation_hides_the_explanatory_message():
+    item = replace(
+        _item(AnnotationPlacement.AFTER_CELL),
+        metadata=(("review_level", "very_good"), ("label_only", "true")),
+    )
+
+    rendered = render_notebook_annotation(item)
+
+    assert "<strong>Très bien</strong>" in rendered
+    assert "Message inchangé" not in rendered
+
+
 def test_corrective_palette_progresses_from_amber_to_deep_red():
     css = annotation_css()
 

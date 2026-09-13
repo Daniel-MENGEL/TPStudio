@@ -11,7 +11,8 @@ from dataclasses import replace
 import nbformat
 
 from tpstudio.annotation import (
-    AnnotationOptions, AnnotationReview, apply_annotation_plan,
+    AnnotationOptions, AnnotationPlan, AnnotationReview, AnnotationReviewAction,
+    apply_annotation_plan,
     apply_annotation_reviews, build_annotation_plan,
 )
 from tpstudio.orchestration import (
@@ -37,6 +38,43 @@ def _inside_directory(path: Path, directory: Path) -> bool:
     except ValueError:
         return False
     return True
+
+
+def _compact_validated_schematic_feedback(
+    plan: AnnotationPlan, reviews: tuple[AnnotationReview, ...],
+) -> AnnotationPlan:
+    """Keep only the validated level in student exports for present schematics."""
+
+    compact_ids = {
+        review.annotation_id
+        for review in reviews
+        if review.action is AnnotationReviewAction.KEEP
+        and review.level is not None
+    }
+
+    def compact(items):
+        result = []
+        for item in items:
+            metadata = dict(item.metadata)
+            if (
+                item.annotation_id in compact_ids
+                and metadata.get("origin") == "attachment_check"
+                and item.message.startswith("Schéma inséré :")
+            ):
+                item = replace(
+                    item,
+                    metadata=tuple(
+                        pair for pair in item.metadata if pair[0] != "label_only"
+                    ) + (("label_only", "true"),),
+                )
+            result.append(item)
+        return tuple(result)
+
+    return replace(
+        plan,
+        annotations=compact(plan.annotations),
+        summary_annotations=compact(plan.summary_annotations),
+    )
 
 
 def _write_temp(directory: Path, suffix: str, content: bytes) -> Path:
@@ -191,6 +229,7 @@ def export_analyzed_copy(
         build_annotation_plan(analysis, report, annotation_options),
         annotation_reviews,
     )
+    plan = _compact_validated_schematic_feedback(plan, annotation_reviews)
     original_notebook = load_notebook_copy(source)
     annotated = apply_annotation_plan(original_notebook, plan, annotation_options)
     notebook_validation = validate_notebook_object(annotated.notebook)

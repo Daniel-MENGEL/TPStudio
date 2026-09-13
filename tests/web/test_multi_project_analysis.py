@@ -314,7 +314,7 @@ def test_export_active_copy_uses_confirmed_identity_in_html_name(tmp_path):
         selected_copies=(identified, copies[1]),
     )
     assert states["copy-001"].result.html_artifact.path.name == (
-        "Lois-de-Snell-Descartes-Jules-BERNARD-Daniel-MENGEL-Correction.html"
+        "Lois-de-Snell-Descartes-BERNARD-Jules-MENGEL-Daniel-Correction.html"
     )
 
 

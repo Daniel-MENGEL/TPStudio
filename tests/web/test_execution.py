@@ -142,7 +142,7 @@ def test_generic_export_name_uses_project_and_confirmed_students(tmp_path):
     )
     stem = export_output_stem(analysis, identity)
     assert stem == (
-        "Premières-mesures-au-labo-Jules-BERNARD-Daniel-MENGEL-Correction"
+        "Premières-mesures-au-labo-BERNARD-Jules-MENGEL-Daniel-Correction"
     )
 
 
@@ -167,10 +167,10 @@ def test_real_partial_filename_keeps_confirmed_identity_and_canonical_stem(tmp_p
     identified = identify_selected_copy(selected)
     assert identified.identity.status is CopyIdentityStatus.CONFIRMED
     plan = build_batch_plan_from_web_selection((identified,), tmp_path / "out")
-    assert plan.sources[0].output_stem == "Lois-de-Snell-Descartes-Jules-BERNARD-Daniel-MENGEL"
+    assert plan.sources[0].output_stem == "Lois-de-Snell-Descartes-BERNARD-Jules-MENGEL-Daniel"
     assert can_run_batch((identified,), plan)[0]
-    assert plan.planned_outputs[0].notebook_path.name == "Lois-de-Snell-Descartes-Jules-BERNARD-Daniel-MENGEL-correction.ipynb"
-    assert plan.planned_outputs[0].html_path.name == "Lois-de-Snell-Descartes-Jules-BERNARD-Daniel-MENGEL-correction.html"
+    assert plan.planned_outputs[0].notebook_path.name == "Lois-de-Snell-Descartes-BERNARD-Jules-MENGEL-Daniel-correction.ipynb"
+    assert plan.planned_outputs[0].html_path.name == "Lois-de-Snell-Descartes-BERNARD-Jules-MENGEL-Daniel-correction.html"
 
 
 def test_manual_identity_confirmation_unlocks_batch_and_candidates_are_deduplicated(tmp_path):

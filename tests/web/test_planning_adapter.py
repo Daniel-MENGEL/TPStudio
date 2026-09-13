@@ -86,9 +86,9 @@ def test_confirmed_notebook_identity_drives_canonical_output_stem(tmp_path):
     with WebWorkspace(tmp_path / "workspace") as workspace:
         copies = workspace.replace_selection((("tp.ipynb", content),))
         plan = build_batch_plan_from_web_selection(copies, tmp_path / "out")
-    assert plan.sources[0].output_stem == "Lois-de-Snell-Descartes-Jules-BERNARD-Daniel-MENGEL"
-    assert plan.planned_outputs[0].notebook_path.name == "Lois-de-Snell-Descartes-Jules-BERNARD-Daniel-MENGEL-correction.ipynb"
-    assert plan.planned_outputs[0].html_path.name == "Lois-de-Snell-Descartes-Jules-BERNARD-Daniel-MENGEL-correction.html"
+    assert plan.sources[0].output_stem == "Lois-de-Snell-Descartes-BERNARD-Jules-MENGEL-Daniel"
+    assert plan.planned_outputs[0].notebook_path.name == "Lois-de-Snell-Descartes-BERNARD-Jules-MENGEL-Daniel-correction.ipynb"
+    assert plan.planned_outputs[0].html_path.name == "Lois-de-Snell-Descartes-BERNARD-Jules-MENGEL-Daniel-correction.html"
 
 
 def test_identity_to_review_does_not_influence_output_name(tmp_path):
