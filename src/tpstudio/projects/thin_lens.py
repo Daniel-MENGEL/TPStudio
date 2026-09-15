@@ -73,6 +73,11 @@ def _plan() -> ScientificProductionPlan:
         "Productions scientifiques — Formation d'une image par une lentille mince",
         (
             ScientificProductionSpec("lens_identification", "Identification des lentilles", interpretation, (semantic,)),
+            ScientificProductionSpec(
+                "real_image_schematic", "Schéma annoté du montage objet-lentille-écran",
+                interpretation, (structural,),
+                description="Figure insérée par le binôme et validée visuellement par le professeur.",
+            ),
             ScientificProductionSpec("real_image_protocol", "Protocole de formation d'une image réelle", interpretation, (semantic,)),
             ScientificProductionSpec("gauss_observation", "Observation hors conditions de Gauss", interpretation, (semantic,)),
             ScientificProductionSpec("conjugation_relation", "Relation de conjugaison", relation, (declared,)),
@@ -141,6 +146,7 @@ def _bindings(plan: ScientificProductionPlan) -> NotebookBindingPlan:
         plan,
         (
             marker("identification-response", "lens_identification", "lens-identification-response"),
+            marker("real-image-schematic", "real_image_schematic", "real-image-protocol-response"),
             marker("real-image-protocol-response", "real_image_protocol", "real-image-protocol-response"),
             marker("gauss-observation-response", "gauss_observation", "gauss-observation-response"),
             marker("conjugation-relation-cell", "conjugation_relation", "1/OA' - 1/OA = 1/f'"),

@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 
-CONSIGNES_RAPPORT_URL = "https://www.pcsi2.net/fabert/wp-content/uploads/physique/Consignes-de-redaction-dun-rapport.pdf"
+CONSIGNES_RAPPORT_URL = "https://pcsi.daniel-mengel.net/Consignes-de-redaction-dun-rapport.pdf"
 
 REPORT_IDENTITY_MARKER = "tpstudio_report_identity"
 

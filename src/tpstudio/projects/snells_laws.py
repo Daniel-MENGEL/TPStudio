@@ -396,7 +396,6 @@ SEMANTIC_RESPONSE_EXPECTATIONS = (
     ExpectedSemanticResponse(
         "setup_understanding", SemanticRole.PROTOCOL,
         (
-            _criterion("own_annotated_diagram", "Présenter le schéma personnel annoté du montage et des rayons utiles."),
             _criterion("identify_angle_readings", "Repérer où et par rapport à quelle normale sont lus les angles d'incidence, de réflexion et de réfraction."),
             _criterion("justify_angle_uncertainties", "Proposer une incertitude-type pour chaque angle et signaler les principales erreurs de lecture."),
             _criterion("verify_zero_incidence", "Vérifier qu'une incidence nulle donne une réfraction nulle."),

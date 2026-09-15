@@ -2,6 +2,7 @@ from dataclasses import replace
 from pathlib import Path
 import importlib.util
 
+import nbformat
 import pytest
 
 from tpstudio.annotation import (
@@ -26,7 +27,11 @@ from tpstudio.semantic_analysis import (
     SemanticRole,
 )
 from tpstudio.orchestration import NotebookCopySource, SnellsLawsCopyAnalyzer
-from tpstudio.projects import first_lab_measurements_teacher_project, snells_laws_teacher_project
+from tpstudio.projects import (
+    first_lab_measurements_teacher_project,
+    snells_laws_teacher_project,
+    thin_lens_teacher_project,
+)
 
 
 def _module():
@@ -41,9 +46,20 @@ def test_default_plan_uses_only_existing_student_feedback(tmp_path) -> None:
     result = replace(result, semantic_response_analyses=())
     plan = build_annotation_plan(result)
     assert all(item.audience is FeedbackAudience.STUDENT for item in plan.annotations)
-    assert all(item.kind is AnnotationKind.FEEDBACK for item in plan.annotations)
+    assert all(
+        item.kind is AnnotationKind.FEEDBACK
+        or (
+            item.kind is AnnotationKind.REVIEW
+            and ("origin", "attachment_check") in item.metadata
+        )
+        for item in plan.annotations
+    )
     texts = {item.text for item in result.feedback if item.audience is FeedbackAudience.STUDENT}
-    assert all(item.message in texts for item in plan.annotations)
+    assert all(
+        item.message in texts
+        for item in plan.annotations
+        if ("origin", "attachment_check") not in item.metadata
+    )
 
 
 def test_semantic_results_supersede_overlapping_legacy_narrative_feedback() -> None:
@@ -127,6 +143,38 @@ def test_first_lab_schematics_are_localized_and_checked_for_attachments() -> Non
             ("Schéma inséré" in item.message) is expected_present
             for item in schematic_annotations
         )
+
+
+def test_thin_lens_schematic_is_localized_and_checked_for_attachment(tmp_path) -> None:
+    source = (
+        Path(__file__).parents[2]
+        / "reference-notebooks/session-02/thin-lens"
+        / "Formation-dune-image-par-une-lentille-mince.ipynb"
+    )
+    project = thin_lens_teacher_project()
+
+    for present in (False, True):
+        notebook = nbformat.read(source, as_version=4)
+        if present:
+            notebook.cells[6]["attachments"] = {
+                "schema.png": {"image/png": "aW1hZ2U="}
+            }
+        path = tmp_path / f"thin-lens-{present}.ipynb"
+        nbformat.write(notebook, path)
+        result = SnellsLawsCopyAnalyzer().analyze(
+            NotebookCopySource(path.name, path.name, path),
+            project=project,
+        )
+        schematic_annotations = tuple(
+            item
+            for item in build_annotation_plan(result).annotations
+            if ("origin", "attachment_check") in item.metadata
+        )
+
+        assert tuple(item.production_id for item in schematic_annotations) == (
+            "real_image_schematic",
+        )
+        assert ("Schéma inséré" in schematic_annotations[0].message) is present
         assert all(item.kind is AnnotationKind.REVIEW for item in schematic_annotations)
 
 

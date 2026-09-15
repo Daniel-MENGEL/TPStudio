@@ -278,7 +278,12 @@ def build_annotation_plan(
     # can verify that an attachment exists in the expected cell, while its
     # scientific correctness remains an explicit teacher decision.
     attachment_cells = set(result.technical_inspection.attachment_cell_indices)
-    for schematic_id in ("dynamic_schematic", "static_schematic"):
+    schematic_ids = tuple(
+        production.production_id
+        for production in report.productions
+        if production.production_id.endswith("_schematic")
+    )
+    for schematic_id in schematic_ids:
         resolution, reason = _target(result, schematic_id, None)
         if reason is not None or resolution is None or resolution.cell is None:
             continue

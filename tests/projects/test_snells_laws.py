@@ -71,7 +71,6 @@ def test_semantic_contracts_follow_the_aligned_notebook_order() -> None:
 def test_setup_contract_covers_the_new_tex_alignment_checks() -> None:
     setup = snells_laws_teacher_project().semantic_response_expectations[0]
     assert tuple(criterion.criterion_id for criterion in setup.criteria) == (
-        "own_annotated_diagram",
         "identify_angle_readings",
         "justify_angle_uncertainties",
         "verify_zero_incidence",
