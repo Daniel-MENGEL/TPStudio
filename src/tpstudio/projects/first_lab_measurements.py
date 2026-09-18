@@ -215,7 +215,7 @@ SEMANTIC_RESPONSE_EXPECTATIONS = (
         (
             _criterion(
                 "cite_both_stiffness_results",
-                "Rappeler les deux valeurs de raideur avec leurs incertitudes.",
+                "Rappeler les deux valeurs de raideur avec leurs incertitudes et leurs unités.",
             ),
             _criterion(
                 "normalized_error_classification",

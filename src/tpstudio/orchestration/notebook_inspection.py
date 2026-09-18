@@ -96,6 +96,19 @@ def _normalize_analysis_cell_ids(notebook: NotebookNode) -> NotebookNode:
         if isinstance(source, list) and all(isinstance(part, str) for part in source):
             cell["source"] = "".join(source)
         for output in cell.get("outputs", ()):
+            if output.get("output_type") == "error":
+                # Some notebook frontends persist partial error outputs.  The
+                # missing fields are display metadata, not student work, so
+                # complete them in memory to let the copy remain readable.
+                if not isinstance(output.get("ename"), str):
+                    output["ename"] = "Error"
+                if not isinstance(output.get("evalue"), str):
+                    output["evalue"] = ""
+                traceback = output.get("traceback")
+                if not isinstance(traceback, list) or not all(
+                    isinstance(line, str) for line in traceback
+                ):
+                    output["traceback"] = []
             if output.get("output_type") == "stream":
                 text = output.get("text")
                 if isinstance(text, list) and all(isinstance(part, str) for part in text):

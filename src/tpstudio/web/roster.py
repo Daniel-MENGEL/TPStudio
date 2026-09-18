@@ -116,18 +116,33 @@ def confirm_exact_roster_identity(
     if any(type(student) is not RosterStudent for student in students):
         raise TypeError("Le roster est invalide.")
     if (
-        identity.status is not CopyIdentityStatus.TO_REVIEW
+        identity.status not in {
+            CopyIdentityStatus.CONFIRMED,
+            CopyIdentityStatus.TO_REVIEW,
+        }
         or identity.source is not CopyIdentitySource.NOTEBOOK
         or not identity.students
     ):
         return identity
 
-    roster_by_name: dict[str, list[RosterStudent]] = {}
+    roster_by_name: dict[tuple[str, ...], list[RosterStudent]] = {}
+    roster_by_family: dict[tuple[str, ...], list[RosterStudent]] = {}
     for student in students:
-        roster_by_name.setdefault(_normalise_name(student.label), []).append(student)
+        roster_by_name.setdefault(
+            _normalise_name_tokens(student.label), []
+        ).append(student)
+        roster_by_family.setdefault(
+            _normalise_name_tokens(student.family_name), []
+        ).append(student)
     matches: list[RosterStudent] = []
     for detected in identity.students:
-        candidates = roster_by_name.get(_normalise_name(detected.display_name), ())
+        candidates = roster_by_name.get(
+            _normalise_name_tokens(detected.display_name), ()
+        )
+        if not candidates:
+            candidates = roster_by_family.get(
+                _normalise_name_tokens(detected.display_name), ()
+            )
         if len(candidates) != 1:
             return identity
         matches.append(candidates[0])
@@ -144,6 +159,12 @@ def confirm_exact_roster_identity(
 def _normalise_name(value: str) -> str:
     value = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode().casefold()
     return re.sub(r"[^a-z0-9]+", " ", value).strip()
+
+
+def _normalise_name_tokens(value: str) -> tuple[str, ...]:
+    """Match roster names independently of FAMILY/given ordering."""
+
+    return tuple(sorted(_normalise_name(value).split()))
 
 
 def suggest_roster_students(filename: str, students: tuple[RosterStudent, ...]) -> tuple[RosterStudent, ...]:
@@ -166,3 +187,74 @@ def suggest_roster_students(filename: str, students: tuple[RosterStudent, ...]) 
         for index in candidates
     }
     return tuple(student for index, student in enumerate(students) if index in selected)
+
+
+def enrich_identity_for_mail(
+    identity: CopyIdentity,
+    filename: str,
+    students: tuple[RosterStudent, ...],
+) -> CopyIdentity:
+    """Resolve mail recipients from the roster after teacher confirmation.
+
+    Notebook identity fields are sometimes incomplete (two students in one
+    field, family name only, or identity present only in the filename).  The
+    roster remains the authoritative source for email addresses.
+    """
+
+    if not isinstance(identity, CopyIdentity):
+        try:
+            source_value = getattr(identity.source, "value", identity.source)
+            status_value = getattr(identity.status, "value", identity.status)
+            identity = CopyIdentity(
+                tuple(
+                    StudentIdentity(
+                        student.display_name,
+                        student.family_name,
+                        student.given_names,
+                        student.email,
+                    )
+                    for student in identity.students
+                ),
+                CopyIdentitySource(source_value) if source_value else None,
+                CopyIdentityStatus(status_value),
+                identity.raw_value,
+                tuple(identity.warnings),
+            )
+        except (AttributeError, TypeError, ValueError) as exc:
+            raise TypeError("L'identité de copie est invalide.") from exc
+    students = tuple(students)
+    if any(type(student) is not RosterStudent for student in students):
+        raise TypeError("Le roster est invalide.")
+    if (
+        identity.status is CopyIdentityStatus.CONFIRMED
+        and identity.students
+        and all(student.email for student in identity.students)
+    ):
+        return identity
+
+    evidence = " ".join(
+        value
+        for value in (
+            identity.raw_value or "",
+            " ".join(student.display_name for student in identity.students),
+            Path(filename).stem,
+        )
+        if value
+    )
+    evidence_tokens = set(_normalise_name(evidence).split())
+    matched = tuple(
+        student
+        for student in students
+        if set(_normalise_name(student.family_name).split()) <= evidence_tokens
+    )
+    if not matched:
+        matched = suggest_roster_students(filename, students)
+    if not matched:
+        return identity
+    return CopyIdentity(
+        tuple(student.to_identity() for student in matched),
+        identity.source or CopyIdentitySource.FILENAME,
+        CopyIdentityStatus.CONFIRMED,
+        identity.raw_value,
+        identity.warnings,
+    )

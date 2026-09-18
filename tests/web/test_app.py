@@ -1,5 +1,6 @@
 from pathlib import Path
 from types import SimpleNamespace
+from decimal import Decimal
 
 import tpstudio.web.app as app
 from tpstudio.semantic_analysis import CachedSemanticAnalysisProvider
@@ -7,11 +8,13 @@ from tpstudio.web.app import (
     _analysis_signature,
     _build_semantic_provider,
     _copy_issue_count,
+    _coerce_rubric_level,
     _consume_preview_click_event,
     _consume_review_keyboard_event,
     _focus_annotation_html,
     _input_signature,
     _navigate_annotation,
+    _next_copy_id,
     _next_unverified_copy_id,
     _open_local_html_artifact,
     _ordered_review_annotations,
@@ -20,13 +23,17 @@ from tpstudio.web.app import (
     _restore_reviewed_copy,
     _suggested_grade_label,
     _validation_status_label,
+    _weighted_first_lab_score,
     web_error_message,
 )
 from tpstudio.annotation import (
-    AnnotationKind, AnnotationPlacement, AnnotationPlan, NotebookAnnotation,
+    AnnotationKind, AnnotationPlacement, AnnotationPlan, AnnotationReviewLevel,
+    NotebookAnnotation,
     SkippedAnnotationReason, StudentSummaryAnnotation,
 )
 from tpstudio.feedback import FeedbackAudience
+from tpstudio.grading import RubricDecision, RubricLevel
+from tpstudio.projects import FIRST_LAB_FORMATIVE_GRADING_PROFILE
 from tpstudio.reporting import TeacherReportSeverity
 from tpstudio.web.model import SelectedCopy, WebBatchOptions
 
@@ -36,6 +43,14 @@ def test_signature_changes_for_same_size_content_hashes():
     second = SelectedCopy("copy-001", "tp.ipynb", Path("tp.ipynb"), "b" * 64)
     options = WebBatchOptions()
     assert _input_signature((first,), Path("out"), options) != _input_signature((second,), Path("out"), options)
+
+
+def test_web_error_names_the_invalid_notebook():
+    from tpstudio.web.planning import WebInputError
+
+    assert web_error_message(
+        WebInputError("Notebook invalide : copie-problematique.ipynb.")
+    ) == "Notebook invalide : copie-problematique.ipynb."
 
 
 def test_review_preview_only_scrolls_for_an_explicit_navigation_request():
@@ -159,6 +174,17 @@ def test_next_unverified_copy_returns_none_when_the_batch_is_complete():
     )
 
     assert _next_unverified_copy_id(progress, "copy-1") is None
+
+
+def test_next_copy_follows_display_order_without_wrapping():
+    progress = (
+        ("copy-1", 4, 4, False),
+        ("reference", 0, 4, True),
+        ("copy-2", 2, 4, False),
+    )
+
+    assert _next_copy_id(progress, "copy-1") == "copy-2"
+    assert _next_copy_id(progress, "copy-2") is None
 
 
 def test_validation_status_is_explicit_for_copy_selection():
@@ -323,11 +349,27 @@ def test_compact_grade_label_is_hidden_without_first_lab_analysis():
     assert _suggested_grade_label(SimpleNamespace(project_id="snells-laws-mvp")) == "—"
 
 
+def test_cached_text_grading_levels_are_coerced_to_rubric_levels():
+    assert _coerce_rubric_level("Très bien", RubricLevel.ABSENT) is RubricLevel.VERY_GOOD
+    assert _coerce_rubric_level("PARTIAL", RubricLevel.ABSENT) is RubricLevel.PARTIAL
+    assert _coerce_rubric_level(
+        AnnotationReviewLevel.TO_REVIEW, RubricLevel.ABSENT
+    ) is RubricLevel.TO_REVIEW
+    assert _coerce_rubric_level(3, RubricLevel.ABSENT) is RubricLevel.GOOD
+    assert _coerce_rubric_level("ancienne-valeur", RubricLevel.GOOD) is RubricLevel.GOOD
+
+
 def test_first_lab_grading_panel_only_displays_the_proposed_grade():
     class FakeStreamlit:
         def __init__(self):
             self.metrics = []
             self.keys = []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
 
         def markdown(self, value):
             assert "Proposition de note formative" in value
@@ -342,6 +384,14 @@ def test_first_lab_grading_panel_only_displays_the_proposed_grade():
 
         def metric(self, label, value):
             self.metrics.append((label, value))
+
+        def columns(self, widths):
+            return self, self
+
+        def button(self, label, **kwargs):
+            assert label == "Copie suivante →"
+            assert kwargs["disabled"] is True
+            return False
 
     fake = FakeStreamlit()
     _render_first_lab_grading(
@@ -358,6 +408,24 @@ def test_first_lab_grading_panel_only_displays_the_proposed_grade():
     )
     assert fake.metrics == [("Note proposée", "4.0/20")]
     assert fake.keys == []
+
+
+def test_weighted_grade_counts_all_reviewed_answers_in_one_category():
+    suggestions = tuple(
+        SimpleNamespace(
+            decision=RubricDecision(criterion.criterion_id, RubricLevel.GOOD)
+        )
+        for criterion in FIRST_LAB_FORMATIVE_GRADING_PROFILE.criteria
+    )
+    levels = {
+        "results_presentation": (
+            RubricLevel.TO_REVIEW,
+            RubricLevel.TO_REVIEW,
+            RubricLevel.GOOD,
+        )
+    }
+
+    assert _weighted_first_lab_score(levels, suggestions) == Decimal("14.7")
 
 
 def test_first_lab_grading_panel_is_hidden_for_other_projects():

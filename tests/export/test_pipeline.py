@@ -147,6 +147,39 @@ def test_export_keeps_only_validated_level_below_an_inserted_schematic(
     assert "<strong>Très bien</strong>" in html_text
 
 
+def test_export_compacts_present_schematic_even_without_explicit_review(
+    tmp_path, monkeypatch,
+):
+    module = _fixture()
+    source = tmp_path / "copy.ipynb"
+    nbformat.write(module._notebook(), source)
+    analysis = analyze_snells_laws_copy(
+        NotebookCopySource("local-copy", source.name, source)
+    )
+    schematic = NotebookAnnotation(
+        "schematic-feedback", AnnotationKind.REVIEW, FeedbackAudience.STUDENT,
+        "Schéma inséré : vérifiez sa lisibilité, ses légendes et sa cohérence avec le protocole.",
+        ("schematic:dynamic_schematic",), "dynamic_schematic", None, 0,
+        AnnotationPlacement.APPEND_TO_MARKDOWN, TeacherReportSeverity.INFO,
+        (("origin", "attachment_check"),),
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "build_annotation_plan",
+        lambda *args, **kwargs: AnnotationPlan(
+            analysis.project_id, analysis.source_id, (schematic,)
+        ),
+    )
+
+    result = pipeline.export_analyzed_copy(
+        analysis.source, analysis, tmp_path / "out"
+    )
+    html_text = result.html_artifact.path.read_text(encoding="utf-8")
+
+    assert "Schéma inséré : vérifiez sa lisibilité" not in html_text
+    assert "<strong>Très bien</strong>" in html_text
+
+
 def test_reviewed_html_preview_creates_no_file_and_preserves_source(tmp_path, monkeypatch):
     module = _fixture()
     source = tmp_path / "copy.ipynb"

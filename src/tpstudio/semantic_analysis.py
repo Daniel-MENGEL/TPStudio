@@ -122,10 +122,31 @@ def extract_student_response(cell_source: str) -> str:
         raise TypeError("La cellule doit être textuelle.")
     match = re.search(r"(?is)(?:\*\*)?\s*r[ée]ponse\s*(?:\*\*)?\s*:\s*(.*)", cell_source)
     if match is None:
+        # Some notebook editors (or students) turn ``### Réponse :`` into a
+        # valid Markdown heading such as ``### Réponse ###``.  The heading is
+        # still an unambiguous answer boundary even though the colon vanished.
+        match = re.search(
+            r"(?ims)^[ \t]*(?:#{1,6}[ \t]*)?(?:\*\*)?[ \t]*"
+            r"r[ée]ponse[ \t]*(?:\*\*)?[ \t]*(?:#{1,6})?[ \t]*$"
+            r"[ \t]*(?:\r?\n|$)(.*)",
+            cell_source,
+        )
+    if match is None:
         return ""
     text = re.sub(r"<!--.*?-->", "", match.group(1), flags=re.DOTALL).strip()
     # Native Jupyter alert containers are presentation, not student content.
     text = re.sub(r"(?is)\s*</div>\s*$", "", text).strip()
+    # A student may leave the standalone placeholder line in place and write
+    # a genuine answer below it.  Discard only that line, not the content that
+    # follows.  Instructional placeholders such as ``À compléter : décrire…``
+    # remain empty responses.
+    placeholder_line = re.match(
+        r"(?is)^(?:\*\*)?\s*(?:à|a)\s+compl(?:é|e)ter\s*\.?\s*"
+        r"(?:\*\*)?\s*(?:\r?\n|$)(.*)",
+        text,
+    )
+    if placeholder_line is not None:
+        text = placeholder_line.group(1).strip()
     if text.casefold().startswith("à compléter") or text.casefold().startswith("a compléter"):
         return ""
     return text
@@ -154,6 +175,55 @@ def _empty_result(contract: ExpectedSemanticResponse, raw_response: str, code: s
     )
 
 
+def _apply_deterministic_semantic_guards(
+    contract: ExpectedSemanticResponse,
+    student_response: str,
+    result: SemanticAnalysisResult,
+) -> SemanticAnalysisResult:
+    """Downgrade claims that contradict directly observable answer structure."""
+
+    guarded = []
+    changed = False
+    has_uncertainty = bool(re.search(
+        r"(?i)(?:\\pm|±|\+\s*/\s*-|incertitud)", student_response
+    ))
+    has_stiffness_unit = bool(re.search(
+        r"(?ix)(?:N\s*/\s*m|N\s*[.·]\s*m\s*(?:\^?\s*-?1)?|"
+        r"kg\s*[.·]\s*s\s*(?:\^?\s*-?2)?)",
+        student_response,
+    ))
+    for criterion_result in result.criterion_results:
+        status = criterion_result.status
+        evidence = criterion_result.evidence
+        if (
+            criterion_result.criterion_id == "cite_both_stiffness_results"
+            and status is SemanticCriterionStatus.SATISFIED
+            and (not has_uncertainty or not has_stiffness_unit)
+        ):
+            missing = []
+            if not has_uncertainty:
+                missing.append("les incertitudes")
+            if not has_stiffness_unit:
+                missing.append("les unités")
+            status = SemanticCriterionStatus.PARTIAL
+            evidence = "Éléments absents de la réponse : " + " et ".join(missing) + "."
+            changed = True
+        guarded.append(SemanticCriterionResult(
+            criterion_result.criterion_id, status, evidence
+        ))
+    if not changed:
+        return result
+    return SemanticAnalysisResult(
+        result.production_id,
+        result.raw_response,
+        tuple(guarded),
+        result.contradictions,
+        result.confidence,
+        result.provider_metadata + (("deterministic_guard", "applied"),),
+        result.diagnostics,
+    )
+
+
 def analyze_semantic_response(
     contract: ExpectedSemanticResponse,
     student_response: str,
@@ -179,7 +249,9 @@ def analyze_semantic_response(
     actual_ids = [item.criterion_id for item in result.criterion_results]
     if set(actual_ids) != expected_ids or len(actual_ids) != len(set(actual_ids)):
         return _empty_result(contract, student_response, "SEMANTIC_CRITERIA_MISMATCH")
-    return result
+    return _apply_deterministic_semantic_guards(
+        contract, student_response, result
+    )
 
 
 def analyze_semantic_responses(
@@ -258,7 +330,9 @@ def analyze_semantic_responses(
                 contract, student_response, "SEMANTIC_CRITERIA_MISMATCH"
             )
             continue
-        results[index] = batch_result
+        results[index] = _apply_deterministic_semantic_guards(
+            contract, student_response, batch_result
+        )
     return tuple(item for item in results if item is not None)
 
 
@@ -520,6 +594,7 @@ class OpenAISemanticAnalysisProvider:
         response = client.responses.create(
             model=self.model,
             store=False,
+            reasoning={"effort": "low"},
             instructions=instruction,
             input=student_response,
             text={"format": {"type": "json_schema", "name": "semantic_analysis", "strict": True, "schema": semantic_output_json_schema(contract)}},
@@ -576,6 +651,7 @@ class OpenAISemanticAnalysisProvider:
         response = client.responses.create(
             model=self.model,
             store=False,
+            reasoning={"effort": "low"},
             instructions=instruction,
             input=json.dumps(inputs, ensure_ascii=False),
             text={

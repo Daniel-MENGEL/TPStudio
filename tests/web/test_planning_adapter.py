@@ -62,7 +62,7 @@ def test_invalid_notebook_is_rejected_before_plan(tmp_path):
     from tpstudio.web.workspace import WebWorkspace
     with WebWorkspace(tmp_path / "workspace") as workspace:
         copies = workspace.replace_selection((("bad.ipynb", b"not json"),))
-        with pytest.raises(ValueError, match="Notebook invalide"):
+        with pytest.raises(ValueError, match="Notebook invalide : bad.ipynb"):
             build_batch_plan_from_web_selection(copies, tmp_path / "out")
 
 

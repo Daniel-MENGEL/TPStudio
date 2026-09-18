@@ -31,7 +31,9 @@ def validate_selected_notebook(copy: SelectedCopy) -> None:
     try:
         load_and_normalize_notebook(copy.workspace_path)
     except Exception as exc:
-        raise WebInputError("Notebook invalide.") from exc
+        raise WebInputError(
+            f"Notebook invalide : {copy.original_filename}."
+        ) from exc
 
 
 def build_batch_plan_from_web_selection(

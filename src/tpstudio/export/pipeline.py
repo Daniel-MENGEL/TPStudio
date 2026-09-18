@@ -11,7 +11,7 @@ from dataclasses import replace
 import nbformat
 
 from tpstudio.annotation import (
-    AnnotationOptions, AnnotationPlan, AnnotationReview, AnnotationReviewAction,
+    AnnotationOptions, AnnotationPlan, AnnotationReview,
     apply_annotation_plan,
     apply_annotation_reviews, build_annotation_plan,
 )
@@ -40,25 +40,15 @@ def _inside_directory(path: Path, directory: Path) -> bool:
     return True
 
 
-def _compact_validated_schematic_feedback(
-    plan: AnnotationPlan, reviews: tuple[AnnotationReview, ...],
-) -> AnnotationPlan:
-    """Keep only the validated level in student exports for present schematics."""
-
-    compact_ids = {
-        review.annotation_id
-        for review in reviews
-        if review.action is AnnotationReviewAction.KEEP
-        and review.level is not None
-    }
+def _compact_present_schematic_feedback(plan: AnnotationPlan) -> AnnotationPlan:
+    """Keep only the appreciation in student exports for present schematics."""
 
     def compact(items):
         result = []
         for item in items:
             metadata = dict(item.metadata)
             if (
-                item.annotation_id in compact_ids
-                and metadata.get("origin") == "attachment_check"
+                metadata.get("origin") == "attachment_check"
                 and item.message.startswith("Schéma inséré :")
             ):
                 item = replace(
@@ -229,7 +219,7 @@ def export_analyzed_copy(
         build_annotation_plan(analysis, report, annotation_options),
         annotation_reviews,
     )
-    plan = _compact_validated_schematic_feedback(plan, annotation_reviews)
+    plan = _compact_present_schematic_feedback(plan)
     original_notebook = load_notebook_copy(source)
     annotated = apply_annotation_plan(original_notebook, plan, annotation_options)
     notebook_validation = validate_notebook_object(annotated.notebook)

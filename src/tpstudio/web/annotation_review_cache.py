@@ -30,19 +30,65 @@ def _cache_path(copy_sha256: str, cache_dir: Path) -> Path:
     return cache_dir / f"{copy_sha256}.json"
 
 
+def _hash_identity(identity: dict) -> str:
+    canonical = json.dumps(identity, ensure_ascii=False, sort_keys=True)
+    return sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _normalized_review_message(message: str) -> str:
+    """Ignore presentation-only renames while retaining pedagogical content."""
+
+    for prefix in ("Points repérés :", "Points positifs :"):
+        if message.startswith(prefix):
+            return "Points positifs :" + message[len(prefix):]
+    return message
+
+
 def _annotation_key(annotation) -> str:
+    """Build the stable v2 identity of a question-level annotation."""
+
     identity = {
+        "version": 2,
         "type": type(annotation).__name__,
-        "message": annotation.message,
+        "message": _normalized_review_message(annotation.message),
+        "source_ids": tuple(annotation.source_ids),
+        "production_id": annotation.production_id,
+        "comparison_id": annotation.comparison_id,
+        "reason": getattr(getattr(annotation, "reason", None), "value", None),
+        "origin": dict(getattr(annotation, "metadata", ())).get("origin"),
+    }
+    return _hash_identity(identity)
+
+
+def _legacy_annotation_key(annotation, message: str) -> str:
+    """Reproduce the v1 key used by already persisted teacher decisions."""
+
+    return _hash_identity({
+        "type": type(annotation).__name__,
+        "message": message,
         "source_ids": tuple(annotation.source_ids),
         "production_id": annotation.production_id,
         "comparison_id": annotation.comparison_id,
         "target_cell_index": getattr(annotation, "target_cell_index", None),
         "placement": getattr(getattr(annotation, "placement", None), "value", None),
         "reason": getattr(getattr(annotation, "reason", None), "value", None),
-    }
-    canonical = json.dumps(identity, ensure_ascii=False, sort_keys=True)
-    return sha256(canonical.encode("utf-8")).hexdigest()
+    })
+
+
+def _annotation_lookup_keys(annotation) -> tuple[str, ...]:
+    messages = [annotation.message]
+    if annotation.message.startswith("Points positifs :"):
+        messages.append(annotation.message.replace(
+            "Points positifs :", "Points repérés :", 1
+        ))
+    elif annotation.message.startswith("Points repérés :"):
+        messages.append(annotation.message.replace(
+            "Points repérés :", "Points positifs :", 1
+        ))
+    keys = [_annotation_key(annotation)] + [
+        _legacy_annotation_key(annotation, message) for message in messages
+    ]
+    return tuple(dict.fromkeys(keys))
 
 
 def _normalized_cell_source(notebook, annotation) -> str | None:
@@ -55,16 +101,24 @@ def _normalized_cell_source(notebook, annotation) -> str | None:
     return " ".join(source.split())
 
 
-def _shared_review_key(annotation, response: str) -> str:
+def _shared_review_key_from_annotation_key(
+    annotation_key: str, response: str,
+) -> str:
     canonical = json.dumps(
         {
-            "annotation": _annotation_key(annotation),
+            "annotation": annotation_key,
             "response": response,
         },
         ensure_ascii=False,
         sort_keys=True,
     )
     return sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _shared_review_key(annotation, response: str) -> str:
+    return _shared_review_key_from_annotation_key(
+        _annotation_key(annotation), response
+    )
 
 
 def load_annotation_reviews(
@@ -80,8 +134,9 @@ def load_annotation_reviews(
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
         current_by_key = {
-            _annotation_key(annotation): annotation.annotation_id
+            key: annotation.annotation_id
             for annotation in tuple(annotations)
+            for key in _annotation_lookup_keys(annotation)
         }
         return tuple(
             AnnotationReview(
@@ -154,8 +209,12 @@ def load_shared_response_reviews(
         response = _normalized_cell_source(notebook, annotation)
         if response is None:
             continue
-        path = directory / f"{_shared_review_key(annotation, response)}.json"
-        if not path.exists():
+        paths = tuple(
+            directory / f"{_shared_review_key_from_annotation_key(key, response)}.json"
+            for key in _annotation_lookup_keys(annotation)
+        )
+        path = next((candidate for candidate in paths if candidate.exists()), None)
+        if path is None:
             continue
         try:
             item = json.loads(path.read_text(encoding="utf-8"))

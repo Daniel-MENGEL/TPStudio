@@ -125,6 +125,29 @@ def test_common_loader_joins_multiline_stream_text_only_when_all_parts_are_strin
         load_and_normalize_notebook(bad)
 
 
+def test_common_loader_repairs_incomplete_error_outputs_in_memory_only(tmp_path: Path) -> None:
+    import json
+    path = tmp_path / "partial-error.ipynb"
+    payload = {
+        "cells": [{
+            "cell_type": "code", "execution_count": 1, "metadata": {},
+            "outputs": [{"output_type": "error", "evalue": "division impossible"}],
+            "source": "1 / 0",
+        }],
+        "metadata": {}, "nbformat": 4, "nbformat_minor": 5,
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    before = path.read_bytes()
+
+    loaded = load_and_normalize_notebook(path)
+
+    output = loaded.cells[0].outputs[0]
+    assert output.ename == "Error"
+    assert output.evalue == "division impossible"
+    assert output.traceback == []
+    assert path.read_bytes() == before
+
+
 def test_invalid_notebook_is_rejected(tmp_path: Path) -> None:
     path = tmp_path / "bad"
     path.write_text("not json", encoding="utf-8")

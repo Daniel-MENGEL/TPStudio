@@ -1,11 +1,13 @@
 import pytest
 
 from tpstudio.web.roster import (
-    RosterStudent, confirm_exact_roster_identity, load_roster, parse_roster_csv, save_roster,
+    RosterStudent, confirm_exact_roster_identity, enrich_identity_for_mail,
+    load_roster, parse_roster_csv, save_roster,
     suggest_roster_students,
 )
 from tpstudio.web.identity import (
     CopyIdentity, CopyIdentitySource, CopyIdentityStatus, StudentIdentity,
+    build_canonical_copy_stem,
 )
 
 
@@ -60,6 +62,82 @@ def test_exact_notebook_names_are_confirmed_automatically_against_roster():
     assert confirmed.warnings == ()
 
 
+def test_confirmed_notebook_identity_is_enriched_from_reversed_roster_name():
+    roster = (
+        RosterStudent("MEGLY", "Clara", "clara@example.test"),
+        RosterStudent("THOUVENOT", "Thomas", "thomas@example.test"),
+    )
+    identity = CopyIdentity(
+        (StudentIdentity("Mégly Clara"), StudentIdentity("Thouvenot Thomas")),
+        CopyIdentitySource.NOTEBOOK,
+        CopyIdentityStatus.CONFIRMED,
+        "Mégly Clara et Thouvenot Thomas",
+    )
+
+    confirmed = confirm_exact_roster_identity(identity, roster)
+
+    assert [student.family_name for student in confirmed.students] == [
+        "MEGLY", "THOUVENOT",
+    ]
+    assert [student.given_names for student in confirmed.students] == [
+        "Clara", "Thomas",
+    ]
+    assert build_canonical_copy_stem("TP", confirmed) == (
+        "TP-MEGLY-Clara-THOUVENOT-Thomas"
+    )
+
+
+def test_unique_uppercase_family_names_recover_given_names_from_roster():
+    roster = (
+        RosterStudent("MAIRE", "Manon", "manon@example.test"),
+        RosterStudent("LAMBIN", "Lise", "lise@example.test"),
+    )
+    identity = CopyIdentity(
+        (StudentIdentity("MAIRE"), StudentIdentity("LAMBIN")),
+        CopyIdentitySource.NOTEBOOK,
+        CopyIdentityStatus.CONFIRMED,
+        "MAIRE et LAMBIN",
+    )
+
+    confirmed = confirm_exact_roster_identity(identity, roster)
+
+    assert build_canonical_copy_stem("Premières-mesures-au-labo", confirmed) == (
+        "Premières-mesures-au-labo-MAIRE-Manon-LAMBIN-Lise"
+    )
+
+
+def test_unique_titlecase_family_name_recovers_given_name_from_roster():
+    roster = (
+        RosterStudent("GROSPERRIN", "Emilie", "emilie@example.test"),
+    )
+    identity = CopyIdentity(
+        (StudentIdentity("Grosperrin"),),
+        CopyIdentitySource.NOTEBOOK,
+        CopyIdentityStatus.CONFIRMED,
+        "Grosperrin",
+    )
+
+    confirmed = confirm_exact_roster_identity(identity, roster)
+
+    assert build_canonical_copy_stem("Premières-mesures-au-labo", confirmed) == (
+        "Premières-mesures-au-labo-GROSPERRIN-Emilie"
+    )
+
+
+def test_ambiguous_family_name_does_not_guess_a_given_name():
+    roster = (
+        RosterStudent("DUPONT", "Alice", "alice@example.test"),
+        RosterStudent("DUPONT", "Léa", "lea@example.test"),
+    )
+    identity = CopyIdentity(
+        (StudentIdentity("DUPONT"),),
+        CopyIdentitySource.NOTEBOOK,
+        CopyIdentityStatus.CONFIRMED,
+    )
+
+    assert confirm_exact_roster_identity(identity, roster) is identity
+
+
 def test_roster_confirmation_abstains_for_ambiguous_or_filename_only_identity():
     duplicate_names = (
         RosterStudent("DURAND", "Alice", "alice.1@example.test"),
@@ -77,6 +155,67 @@ def test_roster_confirmation_abstains_for_ambiguous_or_filename_only_identity():
     assert confirm_exact_roster_identity(filename_identity, duplicate_names) is filename_identity
 
 
+def test_mail_identity_uses_roster_for_two_names_combined_in_one_field():
+    roster = (
+        RosterStudent("BERTRAND", "Vincent", "vincent@example.test"),
+        RosterStudent("FIETTA", "Chloe", "chloe@example.test"),
+    )
+    identity = CopyIdentity(
+        (StudentIdentity("Vincent BERTRAND Chloé FIETTA"),),
+        CopyIdentitySource.NOTEBOOK,
+        CopyIdentityStatus.CONFIRMED,
+        "Vincent BERTRAND Chloé FIETTA",
+    )
+
+    enriched = enrich_identity_for_mail(
+        identity,
+        "Untitled-Vincent-Bertrand-et-Chloe-Fietta.ipynb",
+        roster,
+    )
+
+    assert [student.email for student in enriched.students] == [
+        "vincent@example.test", "chloe@example.test",
+    ]
+
+
+def test_mail_identity_recovers_family_name_and_email_from_roster():
+    roster = (RosterStudent("BEURVILLE", "Ewann", "ewann@example.test"),)
+    identity = CopyIdentity(
+        (StudentIdentity("BEURVILLE ELZEAR"),),
+        CopyIdentitySource.NOTEBOOK,
+        CopyIdentityStatus.CONFIRMED,
+        "BEURVILLE ELZEAR",
+    )
+
+    enriched = enrich_identity_for_mail(
+        identity, "Untitled BEURVILLE ELZEAR.ipynb", roster,
+    )
+
+    assert enriched.students[0].display_name == "Ewann BEURVILLE"
+    assert enriched.students[0].email == "ewann@example.test"
+
+
+def test_mail_identity_can_use_filename_when_notebook_identity_is_missing():
+    roster = (
+        RosterStudent("DOROSZEWSKI", "Alice", "alice@example.test"),
+        RosterStudent("DOUAIR", "Kenzo", "kenzo@example.test"),
+    )
+    identity = CopyIdentity(
+        (), CopyIdentitySource.FILENAME, CopyIdentityStatus.TO_REVIEW,
+    )
+
+    enriched = enrich_identity_for_mail(
+        identity,
+        "doroszewski douair 14.09.2026 Kenzo Alice.ipynb",
+        roster,
+    )
+
+    assert enriched.status is CopyIdentityStatus.CONFIRMED
+    assert [student.email for student in enriched.students] == [
+        "alice@example.test", "kenzo@example.test",
+    ]
+
+
 def test_filename_suggestions_are_only_suggestions():
     students = (
         RosterStudent("MASSON", "Antonin", "antonin@example.com"),
@@ -88,3 +227,30 @@ def test_filename_suggestions_are_only_suggestions():
     assert {student.email for student in suggested} == {"antonin@example.com", "nathan@example.com"}
     suggested = suggest_roster_students("TP-HugoMELE&CarlHIRSCHFELDER.ipynb", students)
     assert {student.email for student in suggested} == {"hugo@example.com", "carl@example.com"}
+
+
+def test_mail_identity_accepts_objects_kept_by_an_old_streamlit_session():
+    class OldEnum:
+        def __init__(self, value):
+            self.value = value
+
+    class OldStudent:
+        display_name = "Alice DOROSZEWSKI"
+        family_name = "DOROSZEWSKI"
+        given_names = "Alice"
+        email = "alice@example.test"
+
+    class OldIdentity:
+        students = (OldStudent(),)
+        source = OldEnum("manual")
+        status = OldEnum("confirmed")
+        raw_value = "Alice DOROSZEWSKI"
+        warnings = ()
+
+    enriched = enrich_identity_for_mail(
+        OldIdentity(), "copie.ipynb", (),
+    )
+
+    assert enriched.status is CopyIdentityStatus.CONFIRMED
+    assert enriched.source is CopyIdentitySource.MANUAL
+    assert enriched.students[0].email == "alice@example.test"

@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from dataclasses import replace
 from datetime import datetime, timezone
+from decimal import Decimal, ROUND_HALF_UP
 import json
 import os
 import webbrowser
@@ -32,6 +33,12 @@ from tpstudio.web.execution import (
     should_use_semantic_provider,
 )
 from tpstudio.web.model import WebBatchOptions
+from tpstudio.web.mail_drafts import (
+    load_sender_email,
+    open_correction_mail_in_apple_mail,
+    prepare_correction_mail_draft,
+    save_sender_email,
+)
 from tpstudio.web.identity import (
     CopyIdentityStatus, StudentIdentity, confirm_copy_identity,
     identify_selected_copy,
@@ -44,7 +51,6 @@ from tpstudio.projects import (
     suggest_first_lab_rubric,
 )
 from tpstudio.grading import (
-    RubricDecision,
     RubricLevel,
     build_formative_grade_proposal,
 )
@@ -56,6 +62,7 @@ from tpstudio.web.presenters import (
 )
 from tpstudio.web.roster import (
     confirm_exact_roster_identity, default_roster_path, load_roster,
+    enrich_identity_for_mail,
     parse_roster_csv, save_roster,
     suggest_roster_students,
 )
@@ -99,6 +106,7 @@ from tpstudio.web.annotation_review_cache import (
 
 _ACTIVE_ANALYSIS_COPY_KEY = "active-analysis-copy"
 _REVIEW_COPY_RESTORE_KEY = "tpstudio-review-copy-to-restore"
+_MAIL_DRAFTS_KEY = "tpstudio-mail-drafts"
 
 
 def _rerun_copy_review(st, source_id: str) -> None:
@@ -190,6 +198,32 @@ def _annotation_review_signature(reviews) -> tuple:
 def _grading_widget_key(source_id: str, criterion_id: str) -> str:
     profile = FIRST_LAB_FORMATIVE_GRADING_PROFILE
     return f"grading-{profile.profile_id}-{source_id}-{criterion_id}"
+
+
+def _coerce_rubric_level(value, fallback: RubricLevel) -> RubricLevel:
+    """Accept grading values left in Streamlit state by older UI versions."""
+
+    if type(value) is RubricLevel:
+        return value
+    if type(value) is AnnotationReviewLevel:
+        return RubricLevel[value.name]
+    if isinstance(value, str):
+        normalized = value.strip().casefold()
+        by_text = {
+            level.name.casefold(): level for level in RubricLevel
+        } | {
+            level.name.replace("_", " ").casefold(): level
+            for level in RubricLevel
+        } | {
+            label.casefold(): level for level, label in _RUBRIC_LEVEL_LABELS.items()
+        }
+        return by_text.get(normalized, fallback)
+    if type(value) is int:
+        try:
+            return RubricLevel(value)
+        except ValueError:
+            pass
+    return fallback
 
 
 def _annotation_grading_criterion(analysis, annotation) -> str | None:
@@ -355,6 +389,18 @@ def _next_unverified_copy_id(
     return None
 
 
+def _next_copy_id(
+    progress: tuple[tuple[str, int, int, bool], ...], current_source_id: str,
+) -> str | None:
+    """Return the next non-reference copy in the displayed batch order."""
+
+    student_ids = tuple(item[0] for item in progress if not item[3])
+    if current_source_id not in student_ids:
+        return None
+    index = student_ids.index(current_source_id)
+    return student_ids[index + 1] if index + 1 < len(student_ids) else None
+
+
 def _restore_cached_reviews(st, analysis, source_id: str, copy_sha256: str):
     plan = build_annotation_plan(analysis)
     annotations = _ordered_review_annotations(plan)
@@ -410,6 +456,7 @@ def _persist_cached_reviews(
 def _render_copy_review_workspace(
     st, analysis, source_id: str, copy_sha256: str,
     next_unverified_source_id: str | None = None,
+    next_copy_source_id: str | None = None,
 ) -> None:
     """Render one corrected copy beside its teacher validation controls."""
 
@@ -708,7 +755,13 @@ def _render_copy_review_workspace(
         ):
             st.divider()
             _render_first_lab_grading(
-                st, analysis, source_id, compact=True
+                st,
+                analysis,
+                source_id,
+                compact=True,
+                annotations=annotations,
+                reviews=get_annotation_reviews(st.session_state).get(source_id, ()),
+                next_copy_source_id=next_copy_source_id,
             )
 
 
@@ -722,8 +775,31 @@ _RUBRIC_LEVEL_LABELS = {
 }
 
 
+def _weighted_first_lab_score(levels_by_criterion, suggestions) -> Decimal:
+    """Combine every reviewed answer while preserving rubric weights."""
+
+    profile = FIRST_LAB_FORMATIVE_GRADING_PROFILE
+    fallback_by_criterion = {
+        item.decision.criterion_id: item.decision.level for item in suggestions
+    }
+    score = Decimal("0")
+    for criterion in profile.criteria:
+        levels = tuple(levels_by_criterion.get(criterion.criterion_id, ()))
+        if levels:
+            criterion_score = sum(
+                (Decimal(4 + 4 * int(level)) for level in levels),
+                Decimal("0"),
+            ) / Decimal(len(levels))
+        else:
+            fallback = fallback_by_criterion[criterion.criterion_id]
+            criterion_score = Decimal(4 + 4 * int(fallback))
+        score += criterion.weight * criterion_score
+    return score.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+
+
 def _render_first_lab_grading(
     st, analysis, source_id: str, *, compact: bool = False,
+    annotations=(), reviews=(), next_copy_source_id: str | None = None,
 ) -> None:
     """Render a teacher-only, non-exported formative grading experiment."""
 
@@ -737,22 +813,39 @@ def _render_first_lab_grading(
             "l’enseignant et n’est pas ajoutée au corrigé étudiant."
         )
     suggestions = suggest_first_lab_rubric(analysis)
-    by_criterion = {
-        item.decision.criterion_id: item for item in suggestions
-    }
-    session_state = getattr(st, "session_state", {})
-    decisions = tuple(
-        RubricDecision(
-            criterion.criterion_id,
-            session_state.get(
-                _grading_widget_key(source_id, criterion.criterion_id),
-                by_criterion[criterion.criterion_id].decision.level,
-            ),
+    reviewed_by_id = {item.annotation_id: item for item in tuple(reviews)}
+    levels_by_criterion = {item.criterion_id: [] for item in profile.criteria}
+    for annotation in tuple(annotations):
+        criterion_id = _annotation_grading_criterion(analysis, annotation)
+        if criterion_id not in levels_by_criterion:
+            continue
+        review = reviewed_by_id.get(annotation.annotation_id)
+        if review is not None and review.action is AnnotationReviewAction.REMOVE:
+            continue
+        level = (
+            review.level
+            if review is not None and review.level is not None
+            else _SEVERITY_DEFAULT_REVIEW_LEVEL[annotation.severity.value]
         )
-        for criterion in profile.criteria
+        levels_by_criterion[criterion_id].append(RubricLevel[level.name])
+
+    proposed_score = _weighted_first_lab_score(
+        levels_by_criterion, suggestions
     )
-    proposal = build_formative_grade_proposal(profile, decisions)
-    st.metric("Note proposée", f"{proposal.proposed_score}/20")
+
+    note_column, next_copy_column = st.columns((1.0, 1.0))
+    with note_column:
+        st.metric("Note proposée", f"{proposed_score}/20")
+    with next_copy_column:
+        st.button(
+            "Copie suivante →",
+            disabled=next_copy_source_id is None,
+            key=f"next-copy-from-grade-{source_id}",
+            on_click=(
+                _rerun_copy_review if next_copy_source_id is not None else None
+            ),
+            args=(st, next_copy_source_id) if next_copy_source_id is not None else (),
+        )
 
 
 def _copy_issue_count(row, overview_rows=(), graph_rows=(), semantic_rows=()) -> int:
@@ -769,12 +862,32 @@ def _copy_issue_count(row, overview_rows=(), graph_rows=(), semantic_rows=()) ->
     return count
 
 
-def _suggested_grade_label(analysis) -> str:
+def _suggested_grade_label(analysis, annotations=(), reviews=()) -> str:
     """Return the automatic first-session proposal for the compact table."""
 
     if analysis is None or analysis.project_id != FIRST_LAB_FORMATIVE_GRADING_PROFILE.project_id:
         return "—"
     suggestions = suggest_first_lab_rubric(analysis)
+    if annotations:
+        reviewed_by_id = {item.annotation_id: item for item in tuple(reviews)}
+        levels_by_criterion = {
+            item.criterion_id: []
+            for item in FIRST_LAB_FORMATIVE_GRADING_PROFILE.criteria
+        }
+        for annotation in tuple(annotations):
+            criterion_id = _annotation_grading_criterion(analysis, annotation)
+            if criterion_id not in levels_by_criterion:
+                continue
+            review = reviewed_by_id.get(annotation.annotation_id)
+            if review is not None and review.action is AnnotationReviewAction.REMOVE:
+                continue
+            level = (
+                review.level
+                if review is not None and review.level is not None
+                else _SEVERITY_DEFAULT_REVIEW_LEVEL[annotation.severity.value]
+            )
+            levels_by_criterion[criterion_id].append(RubricLevel[level.name])
+        return f"{_weighted_first_lab_score(levels_by_criterion, suggestions)}/20"
     proposal = build_formative_grade_proposal(
         FIRST_LAB_FORMATIVE_GRADING_PROFILE,
         tuple(item.decision for item in suggestions),
@@ -798,6 +911,8 @@ def _build_semantic_provider(enabled: bool, *, environ=None):
 
 def web_error_message(exc: BaseException) -> str:
     text = str(exc)
+    if isinstance(exc, WebInputError) and text.startswith("Notebook invalide : "):
+        return text
     safe_messages = {
         "Aucune copie sélectionnée.",
         "Le nom du fichier contient un chemin interdit.",
@@ -1055,7 +1170,6 @@ def main() -> None:
     if st.session_state.get(PLAN_KEY) is not None and st.session_state.get(SIGNATURE_KEY) == signature:
         plan = st.session_state[PLAN_KEY]
         st.success("Lot prêt")
-        st.write(f"Copies : {len(plan.sources)}")
         identity_by_id = {item.source_id: item.identity for item in copies}
         table_rows = []
         for row in batch_plan_rows(plan, identity_by_id):
@@ -1066,7 +1180,11 @@ def main() -> None:
                 "Statut identité": row.identity_status,
                 "Source": row.identity_source,
             })
-        st.table(table_rows)
+        with st.expander(
+            f"Copies du lot ({len(plan.sources)})",
+            expanded=False,
+        ):
+            st.table(table_rows)
         unresolved = [item for item in copies if item.identity and item.identity.status is CopyIdentityStatus.TO_REVIEW]
         if unresolved:
             st.markdown("### Résolution des identités")
@@ -1242,6 +1360,8 @@ def main() -> None:
                 selected_copy = selected_by_id.get(item.source_id)
                 validation_reviewed = 0
                 validation_total = 0
+                validation_annotations = ()
+                validation_reviews = ()
                 if active_analysis is not None and selected_copy is not None:
                     _, validation_annotations, validation_reviews = (
                         _restore_cached_reviews(
@@ -1273,6 +1393,8 @@ def main() -> None:
                     ),
                     "validation_reviewed": validation_reviewed,
                     "validation_total": validation_total,
+                    "validation_annotations": validation_annotations,
+                    "validation_reviews": validation_reviews,
                 })
 
             attention_count = sum(
@@ -1309,7 +1431,11 @@ def main() -> None:
                             "État": view["row"].status,
                             "Validation": view["validation"],
                             "Points à examiner": view["issues"],
-                            "Note proposée": _suggested_grade_label(view["analysis"]),
+                            "Note proposée": _suggested_grade_label(
+                                view["analysis"],
+                                view["validation_annotations"],
+                                view["validation_reviews"],
+                            ),
                         }
                         for view in visible_views
                     ],
@@ -1341,6 +1467,9 @@ def main() -> None:
             next_unverified_source_id = _next_unverified_copy_id(
                 review_progress, selected_source_id
             )
+            next_copy_source_id = _next_copy_id(
+                review_progress, selected_source_id
+            )
             row = selected_view["row"]
             item = selected_view["item"]
             active_analysis = selected_view["analysis"]
@@ -1356,6 +1485,7 @@ def main() -> None:
                     item.source_id,
                     selected_by_id[item.source_id].content_sha256,
                     next_unverified_source_id,
+                    next_copy_source_id,
                 )
             else:
                 st.info("Aucun aperçu corrigé n'est disponible pour cette copie.")
@@ -1411,9 +1541,119 @@ def main() -> None:
                                 ),
                             ),
                         )
+                        st.session_state.pop(_MAIL_DRAFTS_KEY, None)
                         st.rerun()
                     except (TypeError, ValueError, OSError) as exc:
                         st.error(web_error_message(exc))
+
+                successful_exports = {
+                    source_id: state.result
+                    for source_id, state in export_results.items()
+                    if state.result is not None and state.result.html_generated
+                }
+                if successful_exports:
+                    st.divider()
+                    st.markdown("#### Transmission aux étudiants")
+                    st.caption(
+                        "TPStudio prépare uniquement des brouillons .eml. "
+                        "Aucun courriel n'est envoyé automatiquement."
+                    )
+                    sender_email = st.text_input(
+                        "Adresse d'expédition",
+                        value=load_sender_email(),
+                        placeholder="professeur@exemple.fr",
+                        key="mail-drafts-sender-email",
+                        help=(
+                            "Cette adresse est enregistrée uniquement sur ce Mac "
+                            "et ajoutée au champ De des brouillons."
+                        ),
+                    )
+                    overwrite_drafts = st.checkbox(
+                        "Remplacer les brouillons existants",
+                        value=False,
+                        key="mail-drafts-overwrite",
+                    )
+                    if st.button(
+                        "Préparer les brouillons de courriel",
+                        key="prepare-mail-drafts",
+                    ):
+                        drafts = {}
+                        errors = {}
+                        try:
+                            save_sender_email(sender_email)
+                        except (TypeError, ValueError, OSError) as exc:
+                            st.error(str(exc) or type(exc).__name__)
+                            st.session_state[_MAIL_DRAFTS_KEY] = ({}, {})
+                            st.stop()
+                        for source_id, export_result in successful_exports.items():
+                            selected_copy = selected_by_id.get(source_id)
+                            view = next(
+                                (
+                                    candidate for candidate in copy_views
+                                    if candidate["item"].source_id == source_id
+                                ),
+                                None,
+                            )
+                            try:
+                                if selected_copy is None or selected_copy.identity is None:
+                                    raise ValueError("L'identité de la copie est absente.")
+                                if view is None or view["analysis"] is None:
+                                    raise ValueError("L'analyse de la copie est absente.")
+                                mail_identity = enrich_identity_for_mail(
+                                    selected_copy.identity,
+                                    selected_copy.original_filename,
+                                    roster,
+                                )
+                                drafts[source_id] = prepare_correction_mail_draft(
+                                    source_id=source_id,
+                                    identity=mail_identity,
+                                    html_path=export_result.html_artifact.path,
+                                    output_dir=export_result.html_artifact.path.parent / "Brouillons",
+                                    tp_title=view["analysis"].project.identity.title,
+                                    sender_email=sender_email,
+                                    overwrite=overwrite_drafts,
+                                )
+                            except (TypeError, ValueError, FileNotFoundError, OSError) as exc:
+                                errors[source_id] = str(exc) or type(exc).__name__
+                        st.session_state[_MAIL_DRAFTS_KEY] = (drafts, errors)
+
+                    drafts, draft_errors = st.session_state.get(
+                        _MAIL_DRAFTS_KEY, ({}, {})
+                    )
+                    if drafts:
+                        st.success(f"{len(drafts)} brouillon(s) prêt(s).")
+                        for source_id, draft in drafts.items():
+                            draft_label = " · ".join(draft.student_names)
+                            download_column, mail_column = st.columns(2)
+                            with download_column:
+                                st.download_button(
+                                    "Télécharger le brouillon — " + draft_label,
+                                    data=draft.draft_path.read_bytes(),
+                                    file_name=draft.draft_path.name,
+                                    mime="message/rfc822",
+                                    key=f"download-mail-draft-{source_id}",
+                                )
+                            with mail_column:
+                                if st.button(
+                                    "Ouvrir dans Mail — " + draft_label,
+                                    key=f"open-apple-mail-draft-{source_id}",
+                                ):
+                                    try:
+                                        open_correction_mail_in_apple_mail(draft)
+                                    except (TypeError, ValueError, FileNotFoundError, OSError) as exc:
+                                        st.error(str(exc) or type(exc).__name__)
+                                    else:
+                                        st.success(
+                                            "Le courriel est ouvert dans Mail. "
+                                            "Vérifiez-le puis cliquez sur Envoyer."
+                                        )
+                    for source_id, message in draft_errors.items():
+                        display_name = selected_by_id.get(source_id)
+                        label = (
+                            display_name.original_filename
+                            if display_name is not None else source_id
+                        )
+                        st.warning(f"{label} : {message}")
     if st.button("Réinitialiser"):
         workspace.reset()
         reset_web_session(st.session_state)

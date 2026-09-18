@@ -9,6 +9,8 @@ from tpstudio.annotation import (
 from tpstudio.feedback import FeedbackAudience
 from tpstudio.reporting import TeacherReportSeverity
 from tpstudio.web.annotation_review_cache import (
+    _legacy_annotation_key,
+    _shared_review_key_from_annotation_key,
     load_annotation_reviews,
     load_shared_response_reviews,
     save_annotation_reviews,
@@ -71,6 +73,72 @@ def test_annotation_review_cache_invalidates_changed_expectation(tmp_path):
     assert load_annotation_reviews(
         "b" * 64,
         (_annotation("annotation-copy-001", "Nouvelle attente"),),
+        cache_dir=tmp_path,
+    ) == ()
+
+
+def test_annotation_review_cache_reads_v1_key_after_positive_label_rename(tmp_path):
+    previous = _annotation(
+        "annotation-old", "Points repérés : Mesurer la période."
+    )
+    current = _annotation(
+        "annotation-new", "Points positifs : Mesurer la période."
+    )
+    digest = "c" * 64
+    payload = {
+        "copy_sha256": digest,
+        "reviews": [{
+            "annotation_key": _legacy_annotation_key(
+                previous, previous.message
+            ),
+            "action": "keep",
+            "message": None,
+            "level": "very_good",
+        }],
+    }
+    (tmp_path / f"{digest}.json").write_text(
+        __import__("json").dumps(payload), encoding="utf-8"
+    )
+
+    assert load_annotation_reviews(
+        digest, (current,), cache_dir=tmp_path
+    ) == (
+        AnnotationReview(
+            "annotation-new",
+            AnnotationReviewAction.KEEP,
+            level=AnnotationReviewLevel.VERY_GOOD,
+        ),
+    )
+
+
+def test_cache_identity_ignores_cell_relocation_but_not_new_expectation(tmp_path):
+    first = _annotation("annotation-first")
+    relocated = NotebookAnnotation(
+        annotation_id="annotation-relocated",
+        kind=first.kind,
+        audience=first.audience,
+        message=first.message,
+        source_ids=first.source_ids,
+        production_id=first.production_id,
+        comparison_id=first.comparison_id,
+        target_cell_index=20,
+        placement=AnnotationPlacement.APPEND_TO_MARKDOWN,
+        severity=first.severity,
+    )
+    digest = "d" * 64
+    save_annotation_reviews(
+        digest,
+        (AnnotationReview(first.annotation_id, AnnotationReviewAction.KEEP),),
+        (first,),
+        cache_dir=tmp_path,
+    )
+
+    assert load_annotation_reviews(
+        digest, (relocated,), cache_dir=tmp_path
+    )[0].annotation_id == "annotation-relocated"
+    assert load_annotation_reviews(
+        digest,
+        (_annotation("annotation-new", "Attente réellement différente"),),
         cache_dir=tmp_path,
     ) == ()
 
@@ -148,3 +216,35 @@ def test_shared_review_does_not_cross_questions(tmp_path):
     assert load_shared_response_reviews(
         notebook, (second,), cache_dir=tmp_path / "shared"
     ) == ()
+
+
+def test_shared_review_reads_v1_key_after_positive_label_rename(tmp_path):
+    notebook = tmp_path / "copy.ipynb"
+    cells = [nbformat.v4.new_markdown_cell("Réponse") for _ in range(13)]
+    nbformat.write(nbformat.v4.new_notebook(cells=cells), notebook)
+    previous = _annotation(
+        "annotation-old", "Points repérés : Mesurer la période."
+    )
+    current = _annotation(
+        "annotation-new", "Points positifs : Mesurer la période."
+    )
+    legacy_annotation_key = _legacy_annotation_key(previous, previous.message)
+    legacy_shared_key = _shared_review_key_from_annotation_key(
+        legacy_annotation_key, "Réponse"
+    )
+    shared_dir = tmp_path / "shared"
+    shared_dir.mkdir()
+    (shared_dir / f"{legacy_shared_key}.json").write_text(
+        '{"action":"keep","level":"good","message":null}',
+        encoding="utf-8",
+    )
+
+    assert load_shared_response_reviews(
+        notebook, (current,), cache_dir=shared_dir
+    ) == (
+        AnnotationReview(
+            "annotation-new",
+            AnnotationReviewAction.KEEP,
+            level=AnnotationReviewLevel.GOOD,
+        ),
+    )
