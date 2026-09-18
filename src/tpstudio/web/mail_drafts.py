@@ -10,11 +10,9 @@ import json
 from pathlib import Path
 import os
 import re
-import shutil
 import subprocess
 import tempfile
 import unicodedata
-from zipfile import ZIP_DEFLATED, ZipFile
 
 from .identity import CopyIdentity, CopyIdentityStatus
 
@@ -26,25 +24,22 @@ class CorrectionMailDraft:
     student_names: tuple[str, ...]
     subject: str
     sender_email: str
+    body: str
     html_path: Path
     draft_path: Path
 
 
-_MAIL_BODY_HTML = (
-    "Bonjour,\n\n"
-    "Vous trouverez en pièce jointe la correction de votre compte rendu "
-    "de TP au format HTML. Ce fichier peut être ouvert directement dans "
-    "un navigateur.\n\n"
-    "Cordialement.\n"
-)
-
-_MAIL_BODY_ZIP = (
-    "Bonjour,\n\n"
-    "Vous trouverez en pièce jointe la correction de votre compte rendu "
-    "de TP. Décompressez l’archive ZIP, puis ouvrez le fichier HTML dans "
-    "un navigateur.\n\n"
-    "Cordialement.\n"
-)
+def _mail_body(given_names: tuple[str, ...]) -> str:
+    if not given_names or any(not name.strip() for name in given_names):
+        raise ValueError("Le prénom d'un étudiant manque dans le roster.")
+    greeting = ", bonjour ".join(name.strip() for name in given_names)
+    return (
+        f"Bonjour {greeting}\n\n"
+        "Vous trouverez en pièce jointe la correction de votre compte rendu "
+        "de TP au format HTML.\n\n"
+        "Cordialement.\n\n"
+        "Daniel MENGEL\n"
+    )
 
 
 def default_mail_settings_path() -> Path:
@@ -116,20 +111,9 @@ def open_correction_mail_in_apple_mail(
     if not isinstance(draft, CorrectionMailDraft):
         raise TypeError("Le brouillon de courriel est invalide.")
     if not draft.html_path.is_file():
-        raise FileNotFoundError("La correction HTML est introuvable.")
+        raise FileNotFoundError("La correction à joindre est introuvable.")
 
-    # Apple Mail opens HTML attachments through a short-lived SavedAttachment
-    # path.  On some macOS versions that file is removed before Safari reads
-    # it (NSURLErrorDomain -3001).  A ZIP bypasses that broken preview path and
-    # leaves the actual HTML available after normal extraction.
-    attachment_dir = draft.draft_path.parent / "Pieces-jointes"
-    attachment_dir.mkdir(parents=True, exist_ok=True)
-    safe_html_name = _mail_safe_attachment_name(draft.html_path.name)
-    stable_html_path = attachment_dir / safe_html_name
-    shutil.copyfile(draft.html_path, stable_html_path)
-    attachment_path = attachment_dir / f"{Path(safe_html_name).stem}.zip"
-    with ZipFile(attachment_path, "w", compression=ZIP_DEFLATED) as archive:
-        archive.write(stable_html_path, arcname=safe_html_name)
+    attachment_path = draft.html_path
 
     recipients = "\n".join(
         "make new to recipient at end of to recipients with properties "
@@ -138,7 +122,7 @@ def open_correction_mail_in_apple_mail(
     )
     script = f'''set attachmentFile to POSIX file "{_applescript_string(str(attachment_path))}"
 tell application "Mail"
-    set newMessage to make new outgoing message with properties {{subject:"{_applescript_string(draft.subject)}", content:"{_applescript_string(_MAIL_BODY_ZIP)}", visible:true}}
+    set newMessage to make new outgoing message with properties {{subject:"{_applescript_string(draft.subject)}", content:"{_applescript_string(draft.body)}", visible:true}}
     tell newMessage
         try
             set sender to "{_applescript_string(draft.sender_email)}"
@@ -183,7 +167,7 @@ def prepare_correction_mail_draft(
     if identity.status is not CopyIdentityStatus.CONFIRMED or not identity.students:
         raise ValueError("L'identité doit être confirmée avant de préparer le courriel.")
     if not isinstance(html_path, Path) or html_path.suffix.casefold() != ".html":
-        raise ValueError("La correction HTML est invalide.")
+        raise ValueError("La correction à joindre est invalide.")
     if not html_path.is_file():
         raise FileNotFoundError("La correction HTML est introuvable.")
     if not isinstance(output_dir, Path):
@@ -203,12 +187,17 @@ def prepare_correction_mail_draft(
         raise ValueError("Une même adresse électronique apparaît plusieurs fois.")
 
     names = tuple(student.display_name for student in identity.students)
+    given_names = tuple(
+        student.given_names or student.display_name.split()[0]
+        for student in identity.students
+    )
     subject = f"TP corrigé — {tp_title}"
+    body = _mail_body(given_names)
     message = EmailMessage(policy=SMTP)
     message["From"] = sender
     message["To"] = ", ".join(recipients)
     message["Subject"] = subject
-    message.set_content(_MAIL_BODY_HTML)
+    message.set_content(body)
     message.add_attachment(
         html_path.read_bytes(),
         maintype="text",
@@ -238,6 +227,7 @@ def prepare_correction_mail_draft(
         student_names=names,
         subject=subject,
         sender_email=sender,
+        body=body,
         html_path=html_path,
         draft_path=draft_path,
     )

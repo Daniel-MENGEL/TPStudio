@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from hashlib import sha256
 import os
 from pathlib import Path
 import tempfile
+import unicodedata
 from dataclasses import replace
 
 import nbformat
@@ -65,6 +67,35 @@ def _compact_present_schematic_feedback(plan: AnnotationPlan) -> AnnotationPlan:
         annotations=compact(plan.annotations),
         summary_annotations=compact(plan.summary_annotations),
     )
+
+
+def _without_submission_instructions(notebook):
+    """Remove pre-submission reminders from an already corrected copy."""
+
+    def normalized(value: str) -> str:
+        value = unicodedata.normalize("NFKD", value)
+        value = "".join(character for character in value if not unicodedata.combining(character))
+        return value.casefold().replace("’", "'")
+
+    removable_markers = (
+        "liste d'auto-verification avant rendu",
+        "notebook termine ?",
+        "deposer le notebook complete",
+        "dropbox.com/request/",
+    )
+    filtered = deepcopy(notebook)
+    filtered.cells = [
+        cell
+        for cell in notebook.cells
+        if not (
+            cell.cell_type == "markdown"
+            and any(
+                marker in normalized(str(cell.source))
+                for marker in removable_markers
+            )
+        )
+    ]
+    return filtered
 
 
 def _write_temp(directory: Path, suffix: str, content: bytes) -> Path:
@@ -183,7 +214,8 @@ def export_analyzed_copy(
     notebook_existed = notebook_path.exists()
     html_existed = html_path.exists()
     if not options.overwrite and (
-        html_existed or (options.include_notebook and notebook_existed)
+        html_existed
+        or (options.include_notebook and notebook_existed)
     ):
         raise FileExistsError("Une destination d'export existe déjà.")
 
@@ -222,17 +254,18 @@ def export_analyzed_copy(
     plan = _compact_present_schematic_feedback(plan)
     original_notebook = load_notebook_copy(source)
     annotated = apply_annotation_plan(original_notebook, plan, annotation_options)
-    notebook_validation = validate_notebook_object(annotated.notebook)
+    corrected_notebook = _without_submission_instructions(annotated.notebook)
+    notebook_validation = validate_notebook_object(corrected_notebook)
     if not notebook_validation.valid:
         raise ValueError("Le notebook annoté est invalide.")
     title = f"{analysis.project.identity.title} — Correction"
-    html = render_annotated_notebook_html(annotated.notebook, options=options, title=title)
+    html = render_annotated_notebook_html(corrected_notebook, options=options, title=title)
     if not html.strip():
         raise ValueError("Le rendu HTML est vide.")
 
     temp_html = _write_temp(output_dir, ".html", html.encode("utf-8"))
     if options.include_notebook:
-        notebook_bytes = nbformat.writes(annotated.notebook).encode("utf-8")
+        notebook_bytes = nbformat.writes(corrected_notebook).encode("utf-8")
         temp_notebook = _write_temp(output_dir, ".ipynb", notebook_bytes)
         exported_validation = validate_exported_notebook(temp_notebook)
         if not exported_validation.valid:

@@ -1493,7 +1493,7 @@ def main() -> None:
             with st.expander("Options d'export du lot", expanded=False):
                 st.caption(
                     "Un seul fichier HTML autonome sera créé par copie. Il pourra "
-                    "ultérieurement être joint directement à un courriel."
+                    "être joint directement à un courriel."
                 )
                 export_output_text = st.text_input(
                     "Dossier des corrections",
@@ -1508,7 +1508,11 @@ def main() -> None:
                 embed_images = st.checkbox("Inclure les images", value=True, key="export-embed-images")
                 include_input_prompts = st.checkbox("Inclure les invites d'entrée", key="export-input-prompts")
                 include_output_prompts = st.checkbox("Inclure les invites de sortie", key="export-output-prompts")
-                overwrite = st.checkbox("Autoriser le remplacement des fichiers existants", key="export-overwrite")
+                overwrite = st.checkbox(
+                    "Autoriser le remplacement des fichiers existants",
+                    value=True,
+                    key="export-overwrite",
+                )
                 st.write(
                     f"Copies prêtes à exporter : {ready_count} · "
                     f"Copies sans analyse active : {non_exportable_count(dispatch_result, overrides)} "

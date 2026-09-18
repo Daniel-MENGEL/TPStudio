@@ -38,6 +38,36 @@ def test_pipeline_creates_two_derived_artifacts_and_preserves_source(tmp_path):
     assert "Retour TPStudio" not in feedback
 
 
+def test_corrected_exports_remove_pre_submission_checklist_and_dropbox_box(tmp_path):
+    module = _fixture()
+    notebook = module._notebook()
+    notebook.cells.extend(
+        (
+            nbformat.v4.new_markdown_cell(
+                "## Liste d’auto-vérification avant rendu\n\n- Les noms sont indiqués."
+            ),
+            nbformat.v4.new_markdown_cell(
+                "**Notebook terminé ?** Déposer le notebook complété sur "
+                "https://www.dropbox.com/request/example"
+            ),
+        )
+    )
+    source = tmp_path / "copy.ipynb"
+    nbformat.write(notebook, source)
+
+    result = export_snells_laws_copy(source, tmp_path / "out")
+
+    exported_notebook = result.notebook_artifact.path.read_text(encoding="utf-8")
+    exported_html = result.html_artifact.path.read_text(encoding="utf-8")
+    for text in (
+        "Liste d’auto-vérification avant rendu",
+        "Notebook terminé ?",
+        "dropbox.com/request/",
+    ):
+        assert text not in exported_notebook
+        assert text not in exported_html
+
+
 def test_pipeline_exports_student_summary_to_notebook_and_html(tmp_path, monkeypatch):
     module = _fixture()
     source = tmp_path / "copy.ipynb"

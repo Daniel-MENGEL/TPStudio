@@ -1,6 +1,5 @@
 from email import policy
 from email.parser import BytesParser
-from zipfile import ZipFile
 
 import pytest
 
@@ -46,6 +45,13 @@ def test_prepare_draft_attaches_html_and_never_sends(tmp_path) -> None:
     assert message["Subject"] == "TP corrigé — Lois de Snell-Descartes"
     assert message["From"] == "professeur@example.net"
     assert draft.sender_email == "professeur@example.net"
+    assert message.get_body().get_content().replace("\r\n", "\n") == (
+        "Bonjour Alice, bonjour Paul\n\n"
+        "Vous trouverez en pièce jointe la correction de votre compte rendu "
+        "de TP au format HTML.\n\n"
+        "Cordialement.\n\n"
+        "Daniel MENGEL\n"
+    )
     attachment = next(message.iter_attachments())
     assert attachment.get_filename() == "Lois-de-Snell-DURAND-Alice-ROUX-Paul-Correction.html"
     assert attachment.get_content_type() == "text/html"
@@ -136,16 +142,7 @@ def test_open_in_apple_mail_creates_visible_outgoing_message_without_sending(tmp
     assert 'set sender to "professeur@example.net"' in script
     assert 'address:"alice@example.net"' in script
     assert 'address:"paul@example.net"' in script
-    html_copy = (
-        draft.draft_path.parent
-        / "Pieces-jointes"
-        / 'Correction-eleve.html'
-    )
-    attachment_copy = html_copy.with_suffix(".zip")
-    assert str(attachment_copy) in script
-    assert html_copy.read_bytes() == html.read_bytes()
-    with ZipFile(attachment_copy) as archive:
-        assert archive.namelist() == ["Correction-eleve.html"]
-        assert archive.read("Correction-eleve.html") == html.read_bytes()
+    assert str(html).replace('"', '\\"') in script
+    assert ".zip" not in script
     assert "send newMessage" not in script
     assert kwargs == {"check": True, "capture_output": True, "text": True}
