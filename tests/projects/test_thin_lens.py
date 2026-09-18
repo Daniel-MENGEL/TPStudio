@@ -19,7 +19,17 @@ def test_thin_lens_project_identity_and_graph_contract() -> None:
     assert graph.slope_quantity_id == "conjugation_slope"
     assert graph.index_quantity_id is None
     assert graph.slope_index_relation_id == "conjugation_relation"
-    assert project.identity.version == "A79f1"
+    assert project.identity.version == "A79f3"
+
+
+def test_teacher_supplied_montage_is_not_a_student_production() -> None:
+    project = thin_lens_teacher_project()
+    production_ids = tuple(item.id for item in project.scientific_production_plan)
+    assert "real_image_schematic" not in production_ids
+    protocol = project.semantic_response_expectations[1]
+    assert "own_annotated_diagram" not in tuple(
+        criterion.criterion_id for criterion in protocol.criteria
+    )
 
 
 def test_thin_lens_quantities_and_comparisons_are_physically_homogeneous() -> None:

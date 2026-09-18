@@ -749,16 +749,21 @@ def _render_copy_review_workspace(
                 )
                 _rerun_copy_review(st, destination_source_id)
 
-        if (
-            analysis.project_id
-            == FIRST_LAB_FORMATIVE_GRADING_PROFILE.project_id
-        ):
-            st.divider()
+        st.divider()
+        if analysis.project_id == FIRST_LAB_FORMATIVE_GRADING_PROFILE.project_id:
             _render_first_lab_grading(
                 st,
                 analysis,
                 source_id,
                 compact=True,
+                annotations=annotations,
+                reviews=get_annotation_reviews(st.session_state).get(source_id, ()),
+                next_copy_source_id=next_copy_source_id,
+            )
+        else:
+            _render_annotation_grade_summary(
+                st,
+                source_id,
                 annotations=annotations,
                 reviews=get_annotation_reviews(st.session_state).get(source_id, ()),
                 next_copy_source_id=next_copy_source_id,
@@ -848,6 +853,62 @@ def _render_first_lab_grading(
         )
 
 
+def _annotation_grade_score(annotations=(), reviews=()) -> Decimal | None:
+    """Average the stricter five-level scale used by graded autonomous TPs."""
+
+    reviewed_by_id = {item.annotation_id: item for item in tuple(reviews)}
+    levels = []
+    for annotation in tuple(annotations):
+        review = reviewed_by_id.get(annotation.annotation_id)
+        if review is not None and review.action is AnnotationReviewAction.REMOVE:
+            continue
+        level = (
+            review.level
+            if review is not None and review.level is not None
+            else _SEVERITY_DEFAULT_REVIEW_LEVEL[annotation.severity.value]
+        )
+        levels.append(RubricLevel[level.name])
+    if not levels:
+        return None
+    points_by_level = {
+        RubricLevel.ABSENT: Decimal("0"),
+        RubricLevel.TO_REVIEW: Decimal("6"),
+        RubricLevel.PARTIAL: Decimal("10"),
+        RubricLevel.GOOD: Decimal("16"),
+        RubricLevel.VERY_GOOD: Decimal("20"),
+    }
+    score = sum(
+        (points_by_level[level] for level in levels), Decimal("0")
+    ) / Decimal(len(levels))
+    return score.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+
+
+def _render_annotation_grade_summary(
+    st, source_id: str, *, annotations=(), reviews=(),
+    next_copy_source_id: str | None = None,
+) -> None:
+    """Render a provisional score and direct navigation for graded projects."""
+
+    st.markdown("#### Note de la copie")
+    score = _annotation_grade_score(annotations, reviews)
+    note_column, next_copy_column = st.columns((1.0, 1.0))
+    with note_column:
+        st.metric(
+            "Note indicative",
+            "—" if score is None else f"{score}/20",
+        )
+    with next_copy_column:
+        st.button(
+            "Copie suivante →",
+            disabled=next_copy_source_id is None,
+            key=f"next-copy-from-grade-{source_id}",
+            on_click=(
+                _rerun_copy_review if next_copy_source_id is not None else None
+            ),
+            args=(st, next_copy_source_id) if next_copy_source_id is not None else (),
+        )
+
+
 def _copy_issue_count(row, overview_rows=(), graph_rows=(), semantic_rows=()) -> int:
     """Count teacher-facing review signals for one compact copy row."""
 
@@ -865,8 +926,11 @@ def _copy_issue_count(row, overview_rows=(), graph_rows=(), semantic_rows=()) ->
 def _suggested_grade_label(analysis, annotations=(), reviews=()) -> str:
     """Return the automatic first-session proposal for the compact table."""
 
-    if analysis is None or analysis.project_id != FIRST_LAB_FORMATIVE_GRADING_PROFILE.project_id:
+    if analysis is None:
         return "—"
+    if analysis.project_id != FIRST_LAB_FORMATIVE_GRADING_PROFILE.project_id:
+        score = _annotation_grade_score(annotations, reviews)
+        return "—" if score is None else f"{score}/20"
     suggestions = suggest_first_lab_rubric(analysis)
     if annotations:
         reviewed_by_id = {item.annotation_id: item for item in tuple(reviews)}

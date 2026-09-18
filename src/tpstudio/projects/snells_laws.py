@@ -171,12 +171,12 @@ def _binding_plan(plan: ScientificProductionPlan) -> NotebookBindingPlan:
     bindings = (
         _marker_binding("setup-response", "setup_understanding", "snell-setup-response"),
         _marker_binding("critical-protocol-response", "critical_protocol", "critical-protocol-response"),
-        _marker_binding("critical-angle-cell", "critical_angle", "il= ? #degrés"),
-        _marker_binding("incidence-angle-cell", "incidence_angle", "i1 = ?*np.pi/180"),
-        _marker_binding("refraction-angle-cell", "refraction_angle", "i2 = ?*np.pi/180"),
+        _marker_binding("critical-angle-cell", "critical_angle", "il_deg ="),
+        _marker_binding("incidence-angle-cell", "incidence_angle", "i1_deg ="),
+        _marker_binding("refraction-angle-cell", "refraction_angle", "i2_deg ="),
         _marker_binding("snell-section", "snell_relation", "# Vérification de la loi de la réfraction"),
-        _marker_binding("direct-relation-cell", "direct_index_relation", "n=1/np.sin(il)"),
-        _marker_binding("geometric-relation-cell", "geometric_index_relation", "n=np.sin(i1)/np.sin(i2)"),
+        _marker_binding("direct-relation-cell", "direct_index_relation", "n_direct_samples = 1 / np.sin("),
+        _marker_binding("geometric-relation-cell", "geometric_index_relation", "n_geometric_samples = np.sin(i1"),
         _marker_binding("direct-index-cell", "direct_index", "### Résultat — Première méthode de mesure de l'indice"),
         _marker_binding("direct-comment-response", "direct_result_comment", "### Résultat — Première méthode de mesure de l'indice"),
         _marker_binding("single-pair-protocol-response", "single_pair_protocol", "single-pair-protocol-response"),
@@ -188,7 +188,7 @@ def _binding_plan(plan: ScientificProductionPlan) -> NotebookBindingPlan:
         _marker_binding("graph-analysis-response", "graph_analysis", "graph-analysis-response"),
         _marker_binding("slope-index-cell", "slope_index_relation", "# Affichage de l'équation de la droite"),
         _marker_binding("regression-index-cell", "regression_index", "# Méthode statistique"),
-        _marker_binding("normalized-error-cell", "normalized_error_relation", "En=abs(n.mean()-n0)"),
+        _marker_binding("normalized-error-cell", "normalized_error_relation", "En12 = abs(n2 - n1)"),
         _marker_binding("first-comparison-response", "compare_direct_geometric", "### Résultat — Seconde méthode de mesure de l'indice"),
         _marker_binding("second-comparison-response", "compare_geometric_regression", "### Comparaison des résultats obtenus"),
         _marker_binding("final-conclusion-response", "final_conclusion", "### Conclusion / bilan"),
@@ -482,7 +482,7 @@ def snells_laws_teacher_project() -> TeacherProjectConfiguration:
     configuration = TeacherProjectConfiguration(
         TeacherProjectIdentity(
             "snells-laws-mvp", "Lois de Snell-Descartes", "Physique", "CPGE",
-            "A79e2", "fr", "Configuration professeur réalignée avec l'énoncé TeX du 4 septembre 2026.",
+            "A79e3", "fr", "Configuration professeur alignée sur les cellules actuelles du notebook.",
         ),
         (
             NotebookReference("statement", NotebookReferenceRole.STATEMENT, "Lois-de-Snell-Descartes.ipynb"),

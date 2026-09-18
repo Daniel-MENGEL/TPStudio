@@ -158,7 +158,11 @@ def test_descriptive_symbol_wins_over_repeated_single_letter_symbol() -> None:
 
 def _priority_detection(markdown: str, code: str, output: str = ""):
     project = snells_laws_teacher_project()
-    code_cell = nbformat.v4.new_code_cell("n=1/np.sin(il)\n" + code, execution_count=1)
+    code_cell = nbformat.v4.new_code_cell(
+        "n_direct_samples = 1 / np.sin(il_samples)\n"
+        "n=1/np.sin(il)\n" + code,
+        execution_count=1,
+    )
     if output:
         code_cell.outputs = [nbformat.v4.new_output(
             "execute_result", execution_count=1, data={"text/plain": output}

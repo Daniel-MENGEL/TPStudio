@@ -50,14 +50,34 @@ def _notebook(*, placeholder=False, error=False, inverted_graph=False, omit_mark
             markers.append(marker)
     cells = []
     for marker in markers:
-        source = marker
+        source = {
+            "n_direct_samples = 1 / np.sin(": "n_direct_samples = 1 / np.sin(il_samples)",
+            "n_geometric_samples = np.sin(i1": (
+                "n_geometric_samples = np.sin(i1_samples) / np.sin(i2_samples)"
+            ),
+        }.get(marker, marker)
         cell_type = (
             "markdown" if marker.startswith("###")
-            else "code" if marker.startswith(("#", "il=", "i1 =", "i2 =", "n=", "En="))
+            else "code" if marker.startswith((
+                "#", "il=", "il_deg =", "i1 =", "i1_deg =", "i2 =", "i2_deg =",
+                "n=", "n_direct_samples =", "n_geometric_samples =", "En=", "En12 =",
+            ))
             else "markdown"
         )
         if marker == "### Résultat — Première méthode de mesure de l'indice":
             source += "\nn = (1.50 ± 0.05)"
+        elif marker == "il_deg =":
+            source += "\n# il= ? #degrés"
+        elif marker == "i1_deg =":
+            source += "\n# i1 = ?*np.pi/180"
+        elif marker == "i2_deg =":
+            source += "\n# i2 = ?*np.pi/180"
+        elif marker == "n_direct_samples = 1 / np.sin(":
+            source += "\n# n=1/np.sin(il)"
+        elif marker == "n_geometric_samples = np.sin(i1":
+            source += "\n# n=np.sin(i1)/np.sin(i2)"
+        elif marker == "En12 = abs(n2 - n1)":
+            source += "\n# En=abs(n.mean()-n0)"
         elif marker == "### Résultat — Seconde méthode de mesure de l'indice":
             source += "\nn = (1.52 ± 0.05)\nEn = 0,28. Comme En < 2, Les mesures sont cohérentes"
         elif marker == "# Méthode statistique":

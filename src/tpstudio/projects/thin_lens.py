@@ -73,11 +73,6 @@ def _plan() -> ScientificProductionPlan:
         "Productions scientifiques — Formation d'une image par une lentille mince",
         (
             ScientificProductionSpec("lens_identification", "Identification des lentilles", interpretation, (semantic,)),
-            ScientificProductionSpec(
-                "real_image_schematic", "Schéma annoté du montage objet-lentille-écran",
-                interpretation, (structural,),
-                description="Figure insérée par le binôme et validée visuellement par le professeur.",
-            ),
             ScientificProductionSpec("real_image_protocol", "Protocole de formation d'une image réelle", interpretation, (semantic,)),
             ScientificProductionSpec("gauss_observation", "Observation hors conditions de Gauss", interpretation, (semantic,)),
             ScientificProductionSpec("conjugation_relation", "Relation de conjugaison", relation, (declared,)),
@@ -146,10 +141,9 @@ def _bindings(plan: ScientificProductionPlan) -> NotebookBindingPlan:
         plan,
         (
             marker("identification-response", "lens_identification", "lens-identification-response"),
-            marker("real-image-schematic", "real_image_schematic", "real-image-protocol-response"),
             marker("real-image-protocol-response", "real_image_protocol", "real-image-protocol-response"),
             marker("gauss-observation-response", "gauss_observation", "gauss-observation-response"),
-            marker("conjugation-relation-cell", "conjugation_relation", "1/OA' - 1/OA = 1/f'"),
+            marker("conjugation-relation-cell", "conjugation_relation", "## 3. Relation de conjugaison"),
             marker("single-focal-cell", "single_focal_length", "f1 = f_single_samples.mean()"),
             marker("theoretical-focal-cell", "theoretical_focal_length", "f_th = 100 / 3.3"),
             marker("single-theory-comparison-cell", "compare_single_theory", "En_single_theory ="),
@@ -250,7 +244,6 @@ SEMANTIC_RESPONSE_EXPECTATIONS = (
         "real_image_protocol", SemanticRole.PROTOCOL,
         (
             _criterion("real_image_objective", "Identifier la formation d'une image réelle de bonne qualité comme objectif de la manipulation."),
-            _criterion("own_annotated_diagram", "Présenter le schéma personnel annoté du montage objet-lentille-écran."),
             _criterion("condenser_adjustment", "Décrire le réglage du condenseur pour éclairer le centre de la lentille."),
             _criterion("sharpness_search", "Décrire la recherche d'une position donnant une image nette."),
             _criterion("alignment_precautions", "Préciser le centrage, la hauteur et la perpendicularité de la lentille."),
@@ -369,8 +362,8 @@ def thin_lens_teacher_project() -> TeacherProjectConfiguration:
         TeacherProjectIdentity(
             "thin-lens-image",
             "Formation d'une image par une lentille mince",
-            "Physique", "Lycée", "A79f1", "fr",
-            "Configuration déclarative du notebook aligné avec l'énoncé TeX.",
+            "Physique", "Lycée", "A79f3", "fr",
+            "Configuration alignée avec le montage fourni dans l'énoncé TeX.",
         ),
         (
             NotebookReference("statement", NotebookReferenceRole.STATEMENT, "Formation-dune-image-par-une-lentille-mince.ipynb"),

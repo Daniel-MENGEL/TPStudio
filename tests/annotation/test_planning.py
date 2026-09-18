@@ -145,7 +145,7 @@ def test_first_lab_schematics_are_localized_and_checked_for_attachments() -> Non
         )
 
 
-def test_thin_lens_schematic_is_localized_and_checked_for_attachment(tmp_path) -> None:
+def test_thin_lens_teacher_montage_is_not_checked_as_a_student_attachment(tmp_path) -> None:
     source = (
         Path(__file__).parents[2]
         / "reference-notebooks/session-02/thin-lens"
@@ -153,29 +153,22 @@ def test_thin_lens_schematic_is_localized_and_checked_for_attachment(tmp_path) -
     )
     project = thin_lens_teacher_project()
 
-    for present in (False, True):
-        notebook = nbformat.read(source, as_version=4)
-        if present:
-            notebook.cells[6]["attachments"] = {
-                "schema.png": {"image/png": "aW1hZ2U="}
-            }
-        path = tmp_path / f"thin-lens-{present}.ipynb"
-        nbformat.write(notebook, path)
-        result = SnellsLawsCopyAnalyzer().analyze(
-            NotebookCopySource(path.name, path.name, path),
-            project=project,
-        )
-        schematic_annotations = tuple(
-            item
-            for item in build_annotation_plan(result).annotations
-            if ("origin", "attachment_check") in item.metadata
-        )
+    notebook = nbformat.read(source, as_version=4)
+    notebook.cells[6]["attachments"] = {
+        "Banc-optique.png": {"image/png": "aW1hZ2U="}
+    }
+    path = tmp_path / "thin-lens-teacher-montage.ipynb"
+    nbformat.write(notebook, path)
+    result = SnellsLawsCopyAnalyzer().analyze(
+        NotebookCopySource(path.name, path.name, path),
+        project=project,
+    )
 
-        assert tuple(item.production_id for item in schematic_annotations) == (
-            "real_image_schematic",
-        )
-        assert ("Schéma inséré" in schematic_annotations[0].message) is present
-        assert all(item.kind is AnnotationKind.REVIEW for item in schematic_annotations)
+    assert not tuple(
+        item
+        for item in build_annotation_plan(result).annotations
+        if ("origin", "attachment_check") in item.metadata
+    )
 
 
 def test_low_priority_corrective_feedback_is_attention_not_positive_info() -> None:
@@ -296,13 +289,24 @@ def test_unknown_or_ambiguous_comparison_is_skipped(tmp_path) -> None:
 
 
 def test_code_placement_option_is_effective_while_markdown_remains_allowed(tmp_path) -> None:
-    module = _module(); result = module._analyze(tmp_path)
+    path = (
+        Path(__file__).parents[2]
+        / "reference-notebooks/session-02/snells-descartes"
+        / "Lois-de-Snell-Descartes-Corrige.ipynb"
+    )
+    result = SnellsLawsCopyAnalyzer().analyze(
+        NotebookCopySource("snell-reference", "Correction Snell", path),
+        project=snells_laws_teacher_project(),
+    )
     code, reason = _target(result, "critical_angle", None)
-    markdown, markdown_reason = _target(result, "direct_index", None)
-    assert reason is markdown_reason is None
+    direct_index, direct_index_reason = _target(result, "direct_index", None)
+    markdown, markdown_reason = _target(result, "final_conclusion", None)
+    assert reason is direct_index_reason is markdown_reason is None
     assert _placement(code.cell.cell_type, AnnotationOptions()).value == "after_cell"
+    assert _placement(direct_index.cell.cell_type, AnnotationOptions()).value == "append_to_markdown"
+    assert _placement(markdown.cell.cell_type, AnnotationOptions()).value == "append_to_markdown"
     assert _placement(code.cell.cell_type, AnnotationOptions(annotate_code_by_adjacent_markdown=False)) is None
-    assert _placement(markdown.cell.cell_type, AnnotationOptions(annotate_code_by_adjacent_markdown=False)).value == "append_to_markdown"
+    assert _placement(direct_index.cell.cell_type, AnnotationOptions(annotate_code_by_adjacent_markdown=False)).value == "append_to_markdown"
     assert _placement("raw", AnnotationOptions(annotate_code_by_adjacent_markdown=False)) is None
 
 

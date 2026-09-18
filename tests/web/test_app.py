@@ -6,6 +6,7 @@ import tpstudio.web.app as app
 from tpstudio.semantic_analysis import CachedSemanticAnalysisProvider
 from tpstudio.web.app import (
     _analysis_signature,
+    _annotation_grade_score,
     _build_semantic_provider,
     _copy_issue_count,
     _coerce_rubric_level,
@@ -19,6 +20,7 @@ from tpstudio.web.app import (
     _open_local_html_artifact,
     _ordered_review_annotations,
     _render_first_lab_grading,
+    _render_annotation_grade_summary,
     _rerun_copy_review,
     _restore_reviewed_copy,
     _suggested_grade_label,
@@ -27,7 +29,8 @@ from tpstudio.web.app import (
     web_error_message,
 )
 from tpstudio.annotation import (
-    AnnotationKind, AnnotationPlacement, AnnotationPlan, AnnotationReviewLevel,
+    AnnotationKind, AnnotationPlacement, AnnotationPlan, AnnotationReview,
+    AnnotationReviewAction, AnnotationReviewLevel,
     NotebookAnnotation,
     SkippedAnnotationReason, StudentSummaryAnnotation,
 )
@@ -408,6 +411,85 @@ def test_first_lab_grading_panel_only_displays_the_proposed_grade():
     )
     assert fake.metrics == [("Note proposée", "4.0/20")]
     assert fake.keys == []
+
+
+def test_annotation_grade_uses_current_levels_and_ignores_removed_comments():
+    def annotation(annotation_id, severity):
+        return NotebookAnnotation(
+            annotation_id, AnnotationKind.FEEDBACK, FeedbackAudience.STUDENT,
+            annotation_id, (annotation_id,), None, None, 0,
+            AnnotationPlacement.AFTER_CELL, severity,
+        )
+
+    annotations = (
+        annotation("good", TeacherReportSeverity.INFO),
+        annotation("partial", TeacherReportSeverity.ATTENTION),
+        annotation("removed", TeacherReportSeverity.BLOCKING),
+    )
+    reviews = (
+        AnnotationReview(
+            "good", AnnotationReviewAction.KEEP,
+            level=AnnotationReviewLevel.GOOD,
+        ),
+        AnnotationReview("removed", AnnotationReviewAction.REMOVE),
+    )
+
+    assert _annotation_grade_score(annotations, reviews) == Decimal("13.0")
+
+
+def test_autonomous_tp_scale_targets_fragile_and_average_calibration_levels():
+    def annotation(annotation_id, severity):
+        return NotebookAnnotation(
+            annotation_id, AnnotationKind.FEEDBACK, FeedbackAudience.STUDENT,
+            annotation_id, (annotation_id,), None, None, 0,
+            AnnotationPlacement.AFTER_CELL, severity,
+        )
+
+    partial = annotation("partial", TeacherReportSeverity.ATTENTION)
+    fragile = annotation("fragile", TeacherReportSeverity.IMPORTANT)
+
+    assert _annotation_grade_score((partial,)) == Decimal("10.0")
+    assert _annotation_grade_score((fragile,)) == Decimal("6.0")
+
+
+def test_generic_grading_panel_displays_note_and_next_copy_button():
+    class FakeStreamlit:
+        def __init__(self):
+            self.metrics = []
+            self.buttons = []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+        def markdown(self, value):
+            assert value == "#### Note de la copie"
+
+        def columns(self, widths):
+            return self, self
+
+        def metric(self, label, value):
+            self.metrics.append((label, value))
+
+        def button(self, label, **kwargs):
+            self.buttons.append((label, kwargs["disabled"]))
+            return False
+
+    annotation = NotebookAnnotation(
+        "answer", AnnotationKind.FEEDBACK, FeedbackAudience.STUDENT,
+        "Réponse correcte", ("answer",), None, None, 0,
+        AnnotationPlacement.AFTER_CELL, TeacherReportSeverity.INFO,
+    )
+    fake = FakeStreamlit()
+    _render_annotation_grade_summary(
+        fake, "copy-001", annotations=(annotation,),
+        next_copy_source_id="copy-002",
+    )
+
+    assert fake.metrics == [("Note indicative", "20.0/20")]
+    assert fake.buttons == [("Copie suivante →", False)]
 
 
 def test_weighted_grade_counts_all_reviewed_answers_in_one_category():

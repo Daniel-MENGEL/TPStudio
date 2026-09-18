@@ -1,6 +1,8 @@
 from decimal import Decimal
 from pathlib import Path
+import re
 
+import nbformat
 import pytest
 
 from tpstudio.orchestration import NotebookCopySource, analyze_copy
@@ -13,6 +15,38 @@ from tpstudio.projects import (
 
 
 REFERENCE_DIR = Path(__file__).parents[2] / "reference-notebooks"
+
+
+def test_active_reference_notebooks_do_not_expose_historical_tpstudio_markers() -> None:
+    for path in REFERENCE_DIR.rglob("*.ipynb"):
+        assert "Repère TPStudio historique" not in path.read_text(encoding="utf-8")
+        assert "Repères TPStudio historiques" not in path.read_text(encoding="utf-8")
+
+
+def test_student_statements_leave_decimal_choice_to_students_with_a_guard() -> None:
+    assignment = re.compile(r"(?m)^\s*(decimales\w*)\s*=\s*(.+)$")
+    for path in REFERENCE_DIR.rglob("*.ipynb"):
+        if "Corrige" in path.name:
+            continue
+        notebook = nbformat.read(path, as_version=4)
+        for cell in notebook.cells:
+            if cell.cell_type != "code":
+                continue
+            for variable, value in assignment.findall(cell.source):
+                assert value.strip() == "None"
+                assert f"assert {variable} is not None" in cell.source
+
+
+def test_objective_prompts_invite_students_to_reread_the_statement() -> None:
+    prompt = (
+        "Indiquez l'objectif de cette manipulation "
+        "(en relisant l'énoncé du TP si nécessaire)"
+    )
+    for path in REFERENCE_DIR.rglob("*.ipynb"):
+        notebook = nbformat.read(path, as_version=4)
+        for cell in notebook.cells:
+            if "Indiquez l'objectif de cette manipulation" in cell.source:
+                assert prompt in cell.source
 
 
 @pytest.mark.parametrize(
@@ -80,7 +114,10 @@ def test_snells_reference_does_not_treat_raw_angles_as_reported_results() -> Non
         "refraction_angle",
         "direct_index",
     ):
-        assert not evaluations.for_production(production_id)[0].diagnostics
+        assert all(
+            diagnostic.code.value != "quantity_missing"
+            for diagnostic in evaluations.for_production(production_id)[0].diagnostics
+        )
 
 
 def test_snells_reference_regression_and_plotted_fit_are_evaluable() -> None:

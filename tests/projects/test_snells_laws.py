@@ -26,7 +26,7 @@ def test_project_identity_and_notebook_references_are_public_safe() -> None:
     assert project.identity.project_id == "snells-laws-mvp"
     assert project.identity.title == "Lois de Snell-Descartes"
     assert project.identity.level == "CPGE"
-    assert project.identity.version == "A79e2"
+    assert project.identity.version == "A79e3"
     assert [item.expected_filename for item in project.notebook_references] == [
         "Lois-de-Snell-Descartes.ipynb",
         "Lois-de-Snell-Descartes-Corrige.ipynb",
@@ -49,6 +49,21 @@ def test_bindings_use_source_markers_and_share_the_project_plan() -> None:
     assert project.notebook_binding_plan.production_plan is project.scientific_production_plan
     assert len(project.notebook_binding_plan.bindings) == 24
     assert all(binding.selector.kind.value == "source_marker" for binding in project.notebook_binding_plan)
+
+
+def test_bindings_follow_current_notebook_symbols_instead_of_historical_placeholders() -> None:
+    selectors = {
+        binding.production_id: binding.selector.value
+        for binding in snells_laws_teacher_project().notebook_binding_plan.bindings
+    }
+    assert selectors["critical_angle"] == "il_deg ="
+    assert selectors["incidence_angle"] == "i1_deg ="
+    assert selectors["refraction_angle"] == "i2_deg ="
+    assert selectors["direct_index_relation"] == "n_direct_samples = 1 / np.sin("
+    assert selectors["geometric_index_relation"] == "n_geometric_samples = np.sin(i1"
+    assert selectors["direct_index"] == "### Résultat — Première méthode de mesure de l'indice"
+    assert selectors["geometric_index"] == "### Résultat — Seconde méthode de mesure de l'indice"
+    assert selectors["normalized_error_relation"] == "En12 = abs(n2 - n1)"
 
 
 def test_semantic_contracts_follow_the_aligned_notebook_order() -> None:
