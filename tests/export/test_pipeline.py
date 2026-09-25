@@ -132,6 +132,33 @@ def test_pipeline_applies_teacher_annotation_review_to_notebook_and_html(tmp_pat
     assert "Commentaire automatique." not in html_text
 
 
+def test_pipeline_appends_grade_at_the_very_end_of_corrected_copy(tmp_path):
+    module = _fixture()
+    source = tmp_path / "copy.ipynb"
+    nbformat.write(module._notebook(), source)
+    analysis = analyze_snells_laws_copy(
+        NotebookCopySource("local-copy", source.name, source)
+    )
+
+    result = pipeline.export_analyzed_copy(
+        analysis.source,
+        analysis,
+        tmp_path / "out",
+        grade="14.5/20",
+        session_average="12.3/20",
+    )
+
+    exported = nbformat.read(
+        result.notebook_artifact.path, as_version=nbformat.NO_CONVERT
+    )
+    assert "Note : 14.5/20" in exported.cells[-1].source
+    assert "Moyenne des copies corrigées de ce TP : 12.3/20" in exported.cells[-1].source
+    html_text = result.html_artifact.path.read_text(encoding="utf-8")
+    assert "Note : 14.5/20" in html_text
+    assert "Moyenne des copies corrigées de ce TP : 12.3/20" in html_text
+    assert html_text.rfind("Note : 14.5/20") > html_text.rfind("tpstudio-annotation")
+
+
 def test_export_keeps_only_validated_level_below_an_inserted_schematic(
     tmp_path, monkeypatch,
 ):
@@ -239,6 +266,20 @@ def test_reviewed_html_preview_creates_no_file_and_preserves_source(tmp_path, mo
     assert "Visible dans l'aperçu." not in html
     assert source.read_bytes() == before
     assert tuple(tmp_path.iterdir()) == (source,)
+
+
+def test_corrected_preview_hides_standalone_answer_placeholder():
+    notebook = nbformat.v4.new_notebook(cells=[
+        nbformat.v4.new_markdown_cell(
+            "### Réponse :\n\nL'incertitude-type vaut 1°.\nÀ compléter.\n</div>"
+        )
+    ])
+
+    cleaned = pipeline._without_response_placeholders(notebook)
+
+    assert "À compléter" not in cleaned.cells[0].source
+    assert "L'incertitude-type vaut 1°." in cleaned.cells[0].source
+    assert "À compléter" in notebook.cells[0].source
 
 
 def test_pipeline_renders_multiline_stream_output_as_text(tmp_path):

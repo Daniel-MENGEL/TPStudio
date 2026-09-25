@@ -93,6 +93,7 @@ def test_enum_values() -> None:
         "uncertainty_not_strictly_positive",
         "uncertainty_significant_digits_invalid",
         "uncertainty_decimal_place_mismatch",
+        "uncertainty_symbol_on_standard_uncertainty",
     ]
 
 
@@ -147,6 +148,13 @@ def test_enum_values() -> None:
             UncertaintyQualityCriterion.DECIMAL_PLACE_ALIGNMENT,
             EvaluationStatus.UNSATISFIED,
             "diagnostic.quantity.uncertainty_decimal_place_mismatch",
+        ),
+        (
+            QuantityDiagnosticCode.UNCERTAINTY_SYMBOL_ON_STANDARD_UNCERTAINTY,
+            QuantityDiagnosticSource.UNCERTAINTY_QUALITY,
+            UncertaintyQualityCriterion.DECIMAL_PLACE_ALIGNMENT,
+            EvaluationStatus.UNSATISFIED,
+            "diagnostic.quantity.uncertainty_symbol_on_standard_uncertainty",
         ),
     ],
 )

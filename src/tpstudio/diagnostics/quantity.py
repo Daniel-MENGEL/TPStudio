@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from dataclasses import dataclass
 from enum import Enum
+import re
 
 from tpstudio.evaluation import (
     EvaluationStatus,
@@ -39,6 +40,9 @@ class QuantityDiagnosticCode(str, Enum):
     )
     UNCERTAINTY_DECIMAL_PLACE_MISMATCH = (
         "uncertainty_decimal_place_mismatch"
+    )
+    UNCERTAINTY_SYMBOL_ON_STANDARD_UNCERTAINTY = (
+        "uncertainty_symbol_on_standard_uncertainty"
     )
 
     @property
@@ -118,6 +122,13 @@ _DIAGNOSTIC_DEFINITIONS = (
         UncertaintyQualityCriterion.DECIMAL_PLACE_ALIGNMENT,
         EvaluationStatus.UNSATISFIED,
         "diagnostic.quantity.uncertainty_decimal_place_mismatch",
+    ),
+    _QuantityDiagnosticDefinition(
+        QuantityDiagnosticCode.UNCERTAINTY_SYMBOL_ON_STANDARD_UNCERTAINTY,
+        QuantityDiagnosticSource.UNCERTAINTY_QUALITY,
+        UncertaintyQualityCriterion.DECIMAL_PLACE_ALIGNMENT,
+        EvaluationStatus.UNSATISFIED,
+        "diagnostic.quantity.uncertainty_symbol_on_standard_uncertainty",
     ),
 )
 
@@ -229,6 +240,20 @@ def _derive_diagnostics(
                 failure.status,
             )
             diagnostics.append(QuantityDiagnostic(code, production_id, observation))
+
+    if (
+        observation is not None
+        and observation.uncertainty is not None
+        and re.search(
+            r"(?i)u\s*\([^)]*\)\s*=\s*(?:±|\+/-|\\pm)",
+            observation.matched_text,
+        )
+    ):
+        diagnostics.append(QuantityDiagnostic(
+            QuantityDiagnosticCode.UNCERTAINTY_SYMBOL_ON_STANDARD_UNCERTAINTY,
+            production_id,
+            observation,
+        ))
 
     for deferred in structural_evaluation.required_deferred:
         if (

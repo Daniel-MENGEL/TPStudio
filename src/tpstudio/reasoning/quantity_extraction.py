@@ -13,7 +13,9 @@ UNCERTAINTY_MARKERS = ("±", "+/-", r"\pm")
 
 _NUMBER_PATTERN = (
     r"[+-]?(?:\d+(?:[.,]\d+)?|[.,]\d+)(?:[eE][+-]?\d+)?"
-    r"(?![\d.,eE/(])"
+    # A final full stop is ordinary sentence punctuation, while a full stop
+    # followed by a digit still belongs to (or corrupts) a numeric token.
+    r"(?![\d,eE/(]|\.(?=\d))"
 )
 _MARKER_PATTERN = r"(?:±|\+/-|\\pm)"
 _PARENTHESIZED_BODY = re.compile(
@@ -192,6 +194,24 @@ class LiteralQuantityExtractor:
                 marker = body_match.group("marker")
                 uncertainty_text = body_match.group("uncertainty")
                 end = body_match.end()
+
+                # Also accept a nearby, explicit uncertainty declaration such
+                # as ``n = 1.48 avec u(n) = +/- 0.17``.  Keeping it attached to
+                # the same observation avoids the misleading conclusion that
+                # the uncertainty is absent.  A malformed or inconsistent
+                # numerical value is then handled by the usual quality checks.
+                if marker is None:
+                    separated_uncertainty = re.compile(
+                        rf"\s*\$?\s*(?:avec\s+)?\$?\s*u\s*\(\s*"
+                        rf"{re.escape(symbol)}\s*\)\s*=\s*"
+                        rf"(?P<marker>{_MARKER_PATTERN})\s*"
+                        rf"(?P<uncertainty>{_NUMBER_PATTERN})\s*\$?",
+                        re.IGNORECASE,
+                    ).match(text, end)
+                    if separated_uncertainty is not None:
+                        marker = separated_uncertainty.group("marker")
+                        uncertainty_text = separated_uncertainty.group("uncertainty")
+                        end = separated_uncertainty.end()
                 unit: str | None = None
 
                 separator = _UNIT_SEPARATOR.match(text, end)

@@ -24,6 +24,7 @@ from tpstudio.interpretation import apply_interpretation_reviews
 from tpstudio.interpretation import InterpretationDiagnostic, InterpretationFeedbackItem
 from tpstudio.reporting import build_teacher_copy_report
 from tpstudio.review_store import load_interpretation_reviews, review_store_path
+from tpstudio.semantic_analysis import strip_standalone_response_placeholders
 
 from .html import render_annotated_notebook_html
 from .model import CopyExportOptions, CopyExportResult, ExportArtifact, ExportArtifactKind
@@ -96,6 +97,42 @@ def _without_submission_instructions(notebook):
         )
     ]
     return filtered
+
+
+def _without_response_placeholders(notebook):
+    """Hide unused answer-template lines in corrected previews and exports."""
+
+    filtered = deepcopy(notebook)
+    for cell in filtered.cells:
+        if cell.cell_type == "markdown":
+            cell.source = strip_standalone_response_placeholders(str(cell.source))
+    return filtered
+
+
+def _with_final_grade(notebook, grade: str | None, session_average: str | None = None):
+    """Append the teacher-facing grade as the final corrected-copy block."""
+
+    if grade is None:
+        return notebook
+    grade = grade.strip()
+    if not grade:
+        return notebook
+    if not grade.endswith("/20"):
+        grade = f"{grade}/20"
+    average_html = ""
+    if session_average is not None and session_average.strip():
+        average = session_average.strip()
+        if not average.endswith("/20"):
+            average = f"{average}/20"
+        average_html = f'<br><span>Moyenne des copies corrigées de ce TP : {average}</span>'
+    result = deepcopy(notebook)
+    result.cells.append(nbformat.v4.new_markdown_cell(
+        '<div class="tpstudio-final-grade" '
+        'style="margin-top:2em;padding:1em 1.2em;border:2px solid #334155;'
+        'border-radius:6px;background:#f8fafc;font-size:1.15em">'
+        f'<strong>Note : {grade}</strong>{average_html}</div>'
+    ))
+    return result
 
 
 def _write_temp(directory: Path, suffix: str, content: bytes) -> Path:
@@ -177,6 +214,8 @@ def export_analyzed_copy(
     notebook_output_path: Path | None = None,
     html_output_path: Path | None = None,
     annotation_reviews: tuple[AnnotationReview, ...] = (),
+    grade: str | None = None,
+    session_average: str | None = None,
 ) -> CopyExportResult:
     """Export an already completed analysis without running analysis again."""
     if not isinstance(source, NotebookCopySource):
@@ -254,7 +293,13 @@ def export_analyzed_copy(
     plan = _compact_present_schematic_feedback(plan)
     original_notebook = load_notebook_copy(source)
     annotated = apply_annotation_plan(original_notebook, plan, annotation_options)
-    corrected_notebook = _without_submission_instructions(annotated.notebook)
+    corrected_notebook = _with_final_grade(
+        _without_response_placeholders(
+            _without_submission_instructions(annotated.notebook)
+        ),
+        grade,
+        session_average,
+    )
     notebook_validation = validate_notebook_object(corrected_notebook)
     if not notebook_validation.valid:
         raise ValueError("Le notebook annoté est invalide.")
@@ -331,7 +376,8 @@ def render_analyzed_copy_html(
     original = load_notebook_copy(source)
     annotated = apply_annotation_plan(original, plan, annotation_options)
     title = f"{analysis.project.identity.title} — Aperçu corrigé"
-    return render_annotated_notebook_html(annotated.notebook, options=options, title=title)
+    corrected_notebook = _without_response_placeholders(annotated.notebook)
+    return render_annotated_notebook_html(corrected_notebook, options=options, title=title)
 
 
 def summarize_copy_export(result: CopyExportResult) -> str:

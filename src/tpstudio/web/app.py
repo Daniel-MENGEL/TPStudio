@@ -39,12 +39,17 @@ from tpstudio.web.mail_drafts import (
     prepare_correction_mail_draft,
     save_sender_email,
 )
+from tpstudio.web.grade_export import WebGradeEntry, build_web_gradebook_csv
 from tpstudio.web.identity import (
     CopyIdentityStatus, StudentIdentity, confirm_copy_identity,
     identify_selected_copy,
 )
 from tpstudio.web.model import WebCopyOverride
-from tpstudio.web.planning import WebInputError, build_batch_plan_from_web_selection, build_dispatch_requests_from_web_selection, resolve_output_dir
+from tpstudio.web.planning import (
+    WebInputError, build_batch_plan_from_web_selection,
+    build_dispatch_requests_from_web_selection,
+    project_preview_for_selected_copy, resolve_output_dir,
+)
 from tpstudio.projects import project_descriptor
 from tpstudio.projects import (
     FIRST_LAB_FORMATIVE_GRADING_PROFILE,
@@ -261,6 +266,26 @@ def _ordered_review_annotations(plan) -> tuple:
     # Summary comments are rendered in a dedicated cell immediately after
     # the notebook heading, before every localized annotation.
     return tuple(plan.summary_annotations) + localized
+
+
+def _answer_group_positions(annotations) -> dict[str, tuple[int, int, int, int]]:
+    """Map each comment to its answer and its position within that answer."""
+
+    groups: dict[tuple, list] = {}
+    for annotation in annotations:
+        key = (
+            ("cell", annotation.target_cell_index)
+            if hasattr(annotation, "target_cell_index")
+            else ("summary", annotation.annotation_id)
+        )
+        groups.setdefault(key, []).append(annotation)
+    positions = {}
+    for group_index, items in enumerate(groups.values(), 1):
+        for comment_index, annotation in enumerate(items, 1):
+            positions[annotation.annotation_id] = (
+                group_index, len(groups), comment_index, len(items)
+            )
+    return positions
 
 
 def _focus_annotation_html(document: str, annotation_id: str | None) -> str:
@@ -634,6 +659,13 @@ def _render_copy_review_workspace(
         if annotations:
             selected_id = st.session_state[choice_key]
             selected_index = annotation_ids.index(selected_id)
+            answer_index, answer_total, comment_index, comment_total = (
+                _answer_group_positions(annotations)[selected_id]
+            )
+            st.caption(
+                f"Réponse {answer_index}/{answer_total} · "
+                f"Remarque {comment_index}/{comment_total}"
+            )
             previous_column, position_column, next_column = st.columns((1, 1, 1))
             with previous_column:
                 st.button(
@@ -854,10 +886,10 @@ def _render_first_lab_grading(
 
 
 def _annotation_grade_score(annotations=(), reviews=()) -> Decimal | None:
-    """Average the stricter five-level scale used by graded autonomous TPs."""
+    """Grade each answer once, even when it has several feedback items."""
 
     reviewed_by_id = {item.annotation_id: item for item in tuple(reviews)}
-    levels = []
+    levels_by_answer = {}
     for annotation in tuple(annotations):
         review = reviewed_by_id.get(annotation.annotation_id)
         if review is not None and review.action is AnnotationReviewAction.REMOVE:
@@ -867,8 +899,18 @@ def _annotation_grade_score(annotations=(), reviews=()) -> Decimal | None:
             if review is not None and review.level is not None
             else _SEVERITY_DEFAULT_REVIEW_LEVEL[annotation.severity.value]
         )
-        levels.append(RubricLevel[level.name])
-    if not levels:
+        # Local comments on the same notebook cell assess one student answer.
+        # Summary comments lack a local answer and remain separate items.
+        answer_key = (
+            ("cell", annotation.target_cell_index)
+            if hasattr(annotation, "target_cell_index")
+            else ("summary", annotation.annotation_id)
+        )
+        level = RubricLevel[level.name]
+        previous = levels_by_answer.get(answer_key)
+        if previous is None or level < previous:
+            levels_by_answer[answer_key] = level
+    if not levels_by_answer:
         return None
     points_by_level = {
         RubricLevel.ABSENT: Decimal("0"),
@@ -878,8 +920,9 @@ def _annotation_grade_score(annotations=(), reviews=()) -> Decimal | None:
         RubricLevel.VERY_GOOD: Decimal("20"),
     }
     score = sum(
-        (points_by_level[level] for level in levels), Decimal("0")
-    ) / Decimal(len(levels))
+        (points_by_level[level] for level in levels_by_answer.values()),
+        Decimal("0"),
+    ) / Decimal(len(levels_by_answer))
     return score.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
 
 
@@ -897,6 +940,7 @@ def _render_annotation_grade_summary(
             "Note indicative",
             "—" if score is None else f"{score}/20",
         )
+        st.caption("Une seule appréciation compte par réponse : la plus sévère des remarques conservées.")
     with next_copy_column:
         st.button(
             "Copie suivante →",
@@ -1235,15 +1279,37 @@ def main() -> None:
         plan = st.session_state[PLAN_KEY]
         st.success("Lot prêt")
         identity_by_id = {item.source_id: item.identity for item in copies}
+        project_by_id = {
+            item.source_id: project_preview_for_selected_copy(item)
+            for item in copies
+        }
         table_rows = []
         for row in batch_plan_rows(plan, identity_by_id):
+            project = project_by_id[row.source_id]
             table_rows.append({
                 "Copie": row.copy_label,
                 "Fichier déposé": row.original_filename,
+                "TP détecté": project.title,
                 "Étudiants détectés": row.students_display,
                 "Statut identité": row.identity_status,
                 "Source": row.identity_source,
             })
+        detected_titles = tuple(dict.fromkeys(
+            item.title for item in project_by_id.values()
+            if item.project_id is not None
+        ))
+        if len(detected_titles) > 1:
+            st.info(
+                f"Lot mixte : {len(detected_titles)} TP détectés — "
+                + " ; ".join(detected_titles)
+            )
+        unresolved_projects = sum(
+            item.project_id is None for item in project_by_id.values()
+        )
+        if unresolved_projects:
+            st.warning(
+                f"TP à confirmer pour {unresolved_projects} copie(s)."
+            )
         with st.expander(
             f"Copies du lot ({len(plan.sources)})",
             expanded=False,
@@ -1582,6 +1648,57 @@ def main() -> None:
                     f"Copies sans analyse active : {non_exportable_count(dispatch_result, overrides)} "
                     f"(dont {dispatch_result.resolved_not_ready_count} reconnue(s) sans couverture)"
                 )
+                grade_entries = []
+                grades_by_source = {}
+                reviewed_source_ids = set()
+                for view in copy_views:
+                    analysis = view["analysis"]
+                    selected_copy = selected_by_id.get(view["item"].source_id)
+                    identity = getattr(selected_copy, "identity", None)
+                    if analysis is None or identity is None or view["reference"]:
+                        continue
+                    grade = _suggested_grade_label(
+                        analysis,
+                        view["validation_annotations"],
+                        view["validation_reviews"],
+                    )
+                    if grade != "—":
+                        grades_by_source[view["item"].source_id] = grade
+                    fully_reviewed = (
+                        view["validation_total"] > 0
+                        and view["validation_reviewed"] == view["validation_total"]
+                    )
+                    if fully_reviewed:
+                        reviewed_source_ids.add(view["item"].source_id)
+                    grade_identity = enrich_identity_for_mail(
+                        identity,
+                        selected_copy.original_filename,
+                        roster,
+                    )
+                    for student in grade_identity.students:
+                        if grade == "—":
+                            continue
+                        grade_entries.append(WebGradeEntry(
+                            student.family_name,
+                            student.given_names,
+                            student.email,
+                            analysis.project.identity.title,
+                            grade.removesuffix("/20"),
+                            fully_reviewed,
+                            student.display_name,
+                        ))
+                if grade_entries:
+                    st.download_button(
+                        "Télécharger le relevé des notes (CSV)",
+                        data=build_web_gradebook_csv(tuple(grade_entries), roster),
+                        file_name="releve-notes-tp.csv",
+                        mime="text/csv",
+                        key="download-web-gradebook",
+                        help=(
+                            "Une ligne par étudiant et une colonne par TP. "
+                            "Les notes non entièrement validées restent vides."
+                        ),
+                    )
                 if st.button("Exporter les copies analysées", disabled=ready_count == 0, key="export-active-copies"):
                     try:
                         output_dir = resolve_output_dir(export_output_text)
@@ -1607,6 +1724,8 @@ def main() -> None:
                                 annotation_reviews=get_annotation_reviews(
                                     st.session_state
                                 ),
+                                grades=grades_by_source,
+                                reviewed_source_ids=reviewed_source_ids,
                             ),
                         )
                         st.session_state.pop(_MAIL_DRAFTS_KEY, None)

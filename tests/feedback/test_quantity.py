@@ -275,6 +275,14 @@ def test_empty_diagnostics_never_invent_positive_feedback() -> None:
             FeedbackPriority.LOW,
             True,
         ),
+        (
+            "g=9,7 avec u(g)=+/-0,4 m·s⁻²",
+            QuantityDiagnosticCode.UNCERTAINTY_SYMBOL_ON_STANDARD_UNCERTAINTY,
+            "Écrivez l’incertitude-type comme une grandeur positive, par exemple u(n) = 0,07. "
+            "Le symbole ± s’emploie dans le résultat complet : n = 1,52 ± 0,07.",
+            FeedbackPriority.NORMAL,
+            True,
+        ),
     ],
 )
 def test_french_student_feedback_cases(
@@ -458,6 +466,7 @@ def test_french_catalog_is_complete_exact_and_fresh() -> None:
         FeedbackAudience.STUDENT,
         FeedbackAudience.STUDENT,
         FeedbackAudience.STUDENT,
+        FeedbackAudience.STUDENT,
     ]
     assert [item.priority for item in first] == [
         FeedbackPriority.HIGH,
@@ -467,6 +476,7 @@ def test_french_catalog_is_complete_exact_and_fresh() -> None:
         FeedbackPriority.HIGH,
         FeedbackPriority.LOW,
         FeedbackPriority.LOW,
+        FeedbackPriority.NORMAL,
     ]
 
 

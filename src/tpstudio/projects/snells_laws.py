@@ -397,9 +397,12 @@ SEMANTIC_RESPONSE_EXPECTATIONS = (
         "setup_understanding", SemanticRole.PROTOCOL,
         (
             _criterion("identify_angle_readings", "Repérer où et par rapport à quelle normale sont lus les angles d'incidence, de réflexion et de réfraction."),
-            _criterion("justify_angle_uncertainties", "Proposer une incertitude-type pour chaque angle et signaler les principales erreurs de lecture."),
+            _criterion(
+                "angle_uncertainties",
+                "Proposer une incertitude-type pour les angles. Une même valeur annoncée collectivement pour l'ensemble des angles satisfait ce critère.",
+            ),
+            _criterion("angle_reading_errors", "Signaler les principales erreurs ou difficultés de lecture angulaire."),
             _criterion("verify_zero_incidence", "Vérifier qu'une incidence nulle donne une réfraction nulle."),
-            _criterion("correct_laser_alignment", "En cas de décalage, expliquer que le laser doit être réaligné pour traverser le centre du disque suivant un rayon du demi-cylindre."),
         ),
     ),
     ExpectedSemanticResponse(
@@ -442,7 +445,6 @@ SEMANTIC_RESPONSE_EXPECTATIONS = (
             _criterion("series_method_objective", "Identifier la vérification graphique de la loi et une nouvelle détermination de l'indice comme objectifs."),
             _criterion("at_least_fifteen_pairs", "Prévoir au moins quinze couples d'angles."),
             _criterion("span_useful_angle_range", "Répartir les mesures sur une plage angulaire exploitable."),
-            _criterion("consistent_geometry_and_reading", "Conserver la géométrie et les conventions de lecture pendant la série."),
         ),
     ),
     ExpectedSemanticResponse(

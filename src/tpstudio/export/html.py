@@ -20,10 +20,36 @@ _BANNER = "<div class=\"tpstudio-banner\"><strong>Copie corrigée</strong>Docume
 _MARKDOWN_ATTACHMENT = re.compile(
     r"!\[(?P<label>[^\]]*)\]\(attachment:(?P<name>[^)]*)\)"
 )
+_DIV_TAG = re.compile(r"<\s*(?P<closing>/?)\s*div\b[^>]*>", re.IGNORECASE)
 
 
-def _sanitize_missing_attachment_references(notebook: NotebookNode) -> NotebookNode:
-    """Make incomplete student image placeholders safe for nbconvert."""
+def _remove_unmatched_closing_divs(source: str) -> str:
+    """Remove stray ``</div>`` tags without rewriting student content.
+
+    Student notebook templates keep each styled answer block in one Markdown
+    cell.  An accidental second closing tag can make nbconvert close one of its
+    own layout containers and leave a very large blank area in the preview.
+    """
+
+    depth = 0
+    pieces: list[str] = []
+    cursor = 0
+    for match in _DIV_TAG.finditer(source):
+        pieces.append(source[cursor:match.start()])
+        if match.group("closing"):
+            if depth:
+                depth -= 1
+                pieces.append(match.group(0))
+        else:
+            depth += 1
+            pieces.append(match.group(0))
+        cursor = match.end()
+    pieces.append(source[cursor:])
+    return "".join(pieces)
+
+
+def _sanitize_notebook_for_html(notebook: NotebookNode) -> NotebookNode:
+    """Make incomplete attachments and malformed answer HTML safe to render."""
 
     sanitized = deepcopy(notebook)
     for cell in sanitized.cells:
@@ -41,7 +67,8 @@ def _sanitize_missing_attachment_references(notebook: NotebookNode) -> NotebookN
         source = cell.source
         if not isinstance(source, str):
             source = "".join(source)
-        cell.source = _MARKDOWN_ATTACHMENT.sub(replace_missing, source)
+        source = _MARKDOWN_ATTACHMENT.sub(replace_missing, source)
+        cell.source = _remove_unmatched_closing_divs(source)
     return sanitized
 
 
@@ -75,7 +102,7 @@ def render_annotated_notebook_html(
     if type(options) is not CopyExportOptions:
         raise TypeError("Les options d'export sont invalides.")
     nbformat.validate(notebook)
-    renderable_notebook = _sanitize_missing_attachment_references(notebook)
+    renderable_notebook = _sanitize_notebook_for_html(notebook)
     exporter = HTMLExporter(template_name="lab")
     exporter.exclude_input = not options.include_code
     exporter.exclude_output = not options.include_outputs

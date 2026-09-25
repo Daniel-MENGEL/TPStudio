@@ -44,13 +44,13 @@ def _normalized_review_message(message: str) -> str:
     return message
 
 
-def _annotation_key(annotation) -> str:
+def _annotation_key(annotation, message: str | None = None) -> str:
     """Build the stable v2 identity of a question-level annotation."""
 
     identity = {
         "version": 2,
         "type": type(annotation).__name__,
-        "message": _normalized_review_message(annotation.message),
+        "message": _normalized_review_message(annotation.message if message is None else message),
         "source_ids": tuple(annotation.source_ids),
         "production_id": annotation.production_id,
         "comparison_id": annotation.comparison_id,
@@ -58,6 +58,31 @@ def _annotation_key(annotation) -> str:
         "origin": dict(getattr(annotation, "metadata", ())).get("origin"),
     }
     return _hash_identity(identity)
+
+
+def _semantic_review_key(annotation) -> str | None:
+    """Keep a teacher decision attached to its question, not generated prose."""
+
+    origin = dict(getattr(annotation, "metadata", ())).get("origin")
+    if origin != "semantic_analysis":
+        return None
+    return _hash_identity({
+        "version": 3,
+        "type": type(annotation).__name__,
+        "source_ids": tuple(annotation.source_ids),
+        "production_id": annotation.production_id,
+        "origin": origin,
+    })
+
+
+_SHORT_FOCAL_CRITERION = (
+    "Donner la distance focale issue de la mesure unique avec son incertitude et un arrondi cohérent"
+)
+_OLD_FOCAL_CRITERION = (
+    _SHORT_FOCAL_CRITERION
+    + ". Cette incertitude sur f' est l'écart-type de la distribution obtenue par propagation Monte-Carlo : "
+    "elle peut être nettement inférieure aux incertitudes de position utilisées en entrée, sans que cela constitue une contradiction"
+)
 
 
 def _legacy_annotation_key(annotation, message: str) -> str:
@@ -85,9 +110,14 @@ def _annotation_lookup_keys(annotation) -> tuple[str, ...]:
         messages.append(annotation.message.replace(
             "Points repérés :", "Points positifs :", 1
         ))
-    keys = [_annotation_key(annotation)] + [
-        _legacy_annotation_key(annotation, message) for message in messages
-    ]
+    if _SHORT_FOCAL_CRITERION in annotation.message:
+        messages.extend(
+            message.replace(_SHORT_FOCAL_CRITERION, _OLD_FOCAL_CRITERION, 1)
+            for message in tuple(messages)
+        )
+    keys = [key for key in (_semantic_review_key(annotation),) if key is not None]
+    keys.extend(_annotation_key(annotation, message) for message in messages)
+    keys.extend(_legacy_annotation_key(annotation, message) for message in messages)
     return tuple(dict.fromkeys(keys))
 
 
@@ -169,11 +199,28 @@ def save_annotation_reviews(
     annotation_by_id = {
         annotation.annotation_id: annotation for annotation in tuple(annotations)
     }
+    existing_reviews = []
+    if path.exists():
+        try:
+            existing_reviews = json.loads(path.read_text(encoding="utf-8")).get("reviews", [])
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            pass
+    current_keys = {
+        key
+        for annotation in annotation_by_id.values()
+        for key in _annotation_lookup_keys(annotation)
+    }
     payload = {
         "copy_sha256": copy_sha256,
         "reviews": [
+            item for item in existing_reviews
+            if isinstance(item, dict) and item.get("annotation_key") not in current_keys
+        ] + [
             {
-                "annotation_key": _annotation_key(annotation_by_id[item.annotation_id]),
+                "annotation_key": (
+                    _semantic_review_key(annotation_by_id[item.annotation_id])
+                    or _annotation_key(annotation_by_id[item.annotation_id])
+                ),
                 "action": item.action.value,
                 "message": item.message,
                 "level": item.level.value if item.level is not None else None,

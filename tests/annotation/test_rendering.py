@@ -28,7 +28,7 @@ def test_dedicated_render_is_deterministic() -> None:
 def test_severity_maps_to_explicit_accessible_presentation() -> None:
     labels = {
         TeacherReportSeverity.INFO: ("info", "Très bien"),
-        TeacherReportSeverity.ATTENTION: ("attention", "À vérifier"),
+        TeacherReportSeverity.ATTENTION: ("review", "À vérifier"),
         TeacherReportSeverity.IMPORTANT: ("important", "Remarque"),
         TeacherReportSeverity.BLOCKING: ("blocking", "Problème"),
     }
@@ -61,6 +61,24 @@ def test_review_level_overrides_visible_annotation_label():
     rendered = render_notebook_annotation(item)
     assert "<strong>Bien</strong>" in rendered
     assert "<strong>Très bien</strong>" not in rendered
+
+
+def test_to_verify_is_blue_while_partial_and_to_review_keep_their_colors():
+    item = _item(AnnotationPlacement.AFTER_CELL)
+    to_verify = replace(item, severity=TeacherReportSeverity.ATTENTION)
+    partial = replace(to_verify, metadata=(("review_level", "partial"),))
+    to_review = replace(
+        item,
+        severity=TeacherReportSeverity.IMPORTANT,
+        metadata=(("review_level", "to_review"),),
+    )
+
+    assert "tpstudio-severity-review" in render_notebook_annotation(to_verify)
+    assert "background:#e8f2ff" in render_notebook_annotation(to_verify)
+    assert "tpstudio-severity-attention" in render_notebook_annotation(partial)
+    assert "background:#fff4dc" in render_notebook_annotation(partial)
+    assert "tpstudio-severity-important" in render_notebook_annotation(to_review)
+    assert "<strong>À revoir</strong>" in render_notebook_annotation(to_review)
 
 
 def test_label_only_annotation_hides_the_explanatory_message():

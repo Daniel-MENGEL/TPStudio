@@ -10,6 +10,7 @@ from tpstudio.feedback import FeedbackAudience
 from tpstudio.reporting import TeacherReportSeverity
 from tpstudio.web.annotation_review_cache import (
     _legacy_annotation_key,
+    _annotation_key,
     _shared_review_key_from_annotation_key,
     load_annotation_reviews,
     load_shared_response_reviews,
@@ -19,7 +20,7 @@ from tpstudio.web.annotation_review_cache import (
 import nbformat
 
 
-def _annotation(annotation_id: str, message: str = "À compléter"):
+def _annotation(annotation_id: str, message: str = "À compléter", *, semantic=False):
     return NotebookAnnotation(
         annotation_id=annotation_id,
         kind=AnnotationKind.FEEDBACK,
@@ -31,6 +32,7 @@ def _annotation(annotation_id: str, message: str = "À compléter"):
         target_cell_index=12,
         placement=AnnotationPlacement.AFTER_CELL,
         severity=TeacherReportSeverity.ATTENTION,
+        metadata=(("origin", "semantic_analysis"),) if semantic else (),
     )
 
 
@@ -75,6 +77,56 @@ def test_annotation_review_cache_invalidates_changed_expectation(tmp_path):
         (_annotation("annotation-copy-001", "Nouvelle attente"),),
         cache_dir=tmp_path,
     ) == ()
+
+
+def test_semantic_teacher_edit_survives_changed_generated_comment(tmp_path):
+    digest = "e" * 64
+    original = _annotation("old", "Ancienne proposition", semantic=True)
+    updated = _annotation("new", "Nouvelle proposition", semantic=True)
+    save_annotation_reviews(
+        digest,
+        (AnnotationReview("old", AnnotationReviewAction.EDIT,
+                          "Ma remarque personnelle", AnnotationReviewLevel.GOOD),),
+        (original,), cache_dir=tmp_path,
+    )
+
+    assert load_annotation_reviews(digest, (updated,), cache_dir=tmp_path) == (
+        AnnotationReview("new", AnnotationReviewAction.EDIT,
+                         "Ma remarque personnelle", AnnotationReviewLevel.GOOD),
+    )
+
+
+def test_previous_focal_comment_edit_is_migrated_without_erasing_other_reviews(tmp_path):
+    digest = "f" * 64
+    short = "Donner la distance focale issue de la mesure unique avec son incertitude et un arrondi cohérent"
+    long = (
+        short + ". Cette incertitude sur f' est l'écart-type de la distribution obtenue par propagation Monte-Carlo : "
+        "elle peut être nettement inférieure aux incertitudes de position utilisées en entrée, sans que cela constitue une contradiction"
+    )
+    old = _annotation("old", f"Points positifs : {long}.", semantic=True)
+    current = _annotation("new", f"Points positifs : {short}.", semantic=True)
+    payload = {
+        "copy_sha256": digest,
+        "reviews": [
+            {"annotation_key": _annotation_key(old), "action": "edit",
+             "message": "Texte corrigé par le professeur", "level": "good"},
+            {"annotation_key": "unmatched-old-key", "action": "edit",
+             "message": "Autre décision à conserver", "level": "partial"},
+        ],
+    }
+    path = tmp_path / f"{digest}.json"
+    path.write_text(__import__("json").dumps(payload), encoding="utf-8")
+    assert load_annotation_reviews(digest, (current,), cache_dir=tmp_path)[0].message == (
+        "Texte corrigé par le professeur"
+    )
+    save_annotation_reviews(
+        digest,
+        (AnnotationReview("new", AnnotationReviewAction.EDIT,
+                          "Texte corrigé par le professeur", AnnotationReviewLevel.GOOD),),
+        (current,), cache_dir=tmp_path,
+    )
+    saved = __import__("json").loads(path.read_text(encoding="utf-8"))
+    assert any(item["message"] == "Autre décision à conserver" for item in saved["reviews"])
 
 
 def test_annotation_review_cache_reads_v1_key_after_positive_label_rename(tmp_path):

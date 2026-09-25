@@ -167,13 +167,29 @@ def _text_for(notebook: Any, filename: str | None) -> tuple[str, str, str]:
     return _normalise(markdown), _normalise(code), _normalise(filename or "")
 
 
+def _metadata_project_id(notebook: Any) -> str | None:
+    """Return the aligned project id embedded in a TPStudio notebook, if any."""
+    metadata = getattr(notebook, "metadata", None)
+    if metadata is None and isinstance(notebook, Mapping):
+        metadata = notebook.get("metadata")
+    if not isinstance(metadata, Mapping):
+        return None
+    tpstudio = metadata.get("tpstudio")
+    if not isinstance(tpstudio, Mapping):
+        return None
+    project_id = tpstudio.get("project_id")
+    return project_id.strip() if isinstance(project_id, str) and project_id.strip() else None
+
+
 def _evidence(kind: str, text: str, category: ProjectEvidenceCategory) -> ProjectResolutionEvidence:
     return ProjectResolutionEvidence(kind, text[:180], category)
 
 
 def _snell_evidence(markdown: str, code: str, filename: str) -> tuple[ProjectResolutionEvidence, ...]:
     evidence: list[ProjectResolutionEvidence] = []
-    if re.search(r"lois?\s+de\s+snell|snell[- ]descartes", markdown):
+    # Keep this title signature deliberately narrow: a student may mention a
+    # "formule de Snell-Descartes" in an otherwise unrelated optics report.
+    if re.search(r"lois\s+de\s+snell[- ]descartes", markdown):
         evidence.append(_evidence("title", "Titre Snell-Descartes", ProjectEvidenceCategory.STRONG))
     if re.search(r"r[eé]fraction|loi\s+de\s+snell|indice\s+de\s+r[eé]fraction", markdown):
         evidence.append(_evidence("relation", "Réfraction / indice de réfraction", ProjectEvidenceCategory.STRONG))
@@ -316,6 +332,22 @@ def resolve_project_for_copy(
             (ProjectResolutionCandidate(
                 explicit_project_id, ProjectResolutionConfidence.HIGH,
                 (_evidence("explicit", "Projet fourni explicitement", ProjectEvidenceCategory.STRONG),),
+            ),),
+            False,
+        )
+    metadata_project_id = _metadata_project_id(notebook)
+    if metadata_project_id is not None and any(
+        item.project_id == metadata_project_id for item in descriptors
+    ):
+        return ProjectResolutionResult(
+            metadata_project_id,
+            (ProjectResolutionCandidate(
+                metadata_project_id, ProjectResolutionConfidence.HIGH,
+                (_evidence(
+                    "metadata",
+                    "Projet TPStudio enregistré dans le notebook",
+                    ProjectEvidenceCategory.STRONG,
+                ),),
             ),),
             False,
         )

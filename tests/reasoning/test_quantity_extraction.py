@@ -220,6 +220,32 @@ def test_three_uncertainty_markers_are_observed(
     assert observation.unit == unit
 
 
+def test_uncertainty_before_sentence_period_is_observed() -> None:
+    observation = extract_expected_quantity(
+        "On a trouvé g = 9,7 +/- 0,4. Le résultat est exploitable.",
+        _expectation(),
+    ).first_observation
+
+    assert observation is not None
+    assert observation.value == Decimal("9.7")
+    assert observation.uncertainty_marker == "+/-"
+    assert observation.uncertainty == Decimal("0.4")
+    assert observation.matched_text == "g = 9,7 +/- 0,4"
+
+
+def test_separately_declared_uncertainty_is_attached_to_value() -> None:
+    observation = extract_expected_quantity(
+        "$g = 9,7$ avec $u(g) = +/- 0,4$.",
+        _expectation(),
+    ).first_observation
+
+    assert observation is not None
+    assert observation.value == Decimal("9.7")
+    assert observation.uncertainty_marker == "+/-"
+    assert observation.uncertainty == Decimal("0.4")
+    assert "u(g) = +/- 0,4" in observation.matched_text
+
+
 def test_parenthesized_value_and_uncertainty_are_observed() -> None:
     text = "g = (9,7 ± 0,4) m·s⁻²"
 

@@ -25,6 +25,7 @@ from tpstudio.feedback import (
     QuantityFeedbackTemplate,
     french_quantity_feedback_catalog,
 )
+from tpstudio.projects import snells_laws_teacher_project
 
 
 def _quantity_set(
@@ -154,6 +155,28 @@ def test_missing_uncertainty_has_no_quality_double_penalty() -> None:
     assert _codes(result) == (QuantityDiagnosticCode.UNCERTAINTY_MISSING,)
     assert result.uncertainty_evaluation is not None
     assert not result.uncertainty_evaluation.is_applicable
+
+
+def test_separate_standard_uncertainty_is_present_even_with_plus_minus_marker() -> None:
+    project = snells_laws_teacher_project()
+    result = assess_quantity_text(
+        "On a trouvé n = 1.48 avec u(n) = +/- 2. L'écart normalisé vaut 0.03.",
+        "geometric_index",
+        project.quantity_expectation_set,
+        project.uncertainty_expectation_set,
+        french_quantity_feedback_catalog(),
+    )
+
+    assert result.selected_observation is not None
+    assert result.selected_observation.uncertainty_text == "2"
+    assert QuantityDiagnosticCode.UNCERTAINTY_MISSING not in _codes(result)
+    assert (
+        QuantityDiagnosticCode.UNCERTAINTY_SYMBOL_ON_STANDARD_UNCERTAINTY
+        in _codes(result)
+    )
+    assert "Précisez l’incertitude associée à cette valeur." not in tuple(
+        item.text for item in result.student_feedback
+    )
 
 
 def test_missing_quantity_exposes_no_observation() -> None:

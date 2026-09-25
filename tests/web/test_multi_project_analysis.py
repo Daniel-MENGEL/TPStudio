@@ -357,3 +357,48 @@ def test_export_error_isolated_per_copy(tmp_path, monkeypatch):
     assert states["copy-001"].result is None
     assert states["copy-001"].error_type == "OSError"
     assert states["copy-002"].result is not None
+
+
+def test_export_averages_only_reviewed_copies_of_the_same_tp(tmp_path, monkeypatch):
+    copies = _copies(tmp_path)
+    result = run_selected_dispatch(copies)
+    observed = {}
+
+    def fake_export(source, analysis, output_dir, **kwargs):
+        observed[source.source_id] = (analysis.project_id, kwargs["session_average"])
+        return real_export_analyzed_copy(source, analysis, output_dir, **kwargs)
+
+    monkeypatch.setattr(execution, "export_analyzed_copy", fake_export)
+    export_active_copies(
+        result, {}, output_dir=tmp_path / "average-exports",
+        options=CopyExportOptions(),
+        grades={"copy-001": "12.0/20", "copy-002": "18.0/20"},
+        reviewed_source_ids={"copy-001", "copy-002"},
+    )
+    assert observed["copy-001"][1] == "12.0"
+    assert observed["copy-002"][1] == "18.0"
+
+
+def test_export_uses_one_average_for_reviewed_copies_of_one_tp(tmp_path, monkeypatch):
+    copies = _copies(tmp_path)
+    result = run_selected_dispatch(copies)
+    second = result.get("copy-002").dispatch.analysis
+    override = WebCopyOverride(
+        "copy-002", "snells-laws-mvp",
+        analyze_selected_copy(second.source, "snells-laws-mvp").analysis,
+    )
+    observed = {}
+
+    def fake_export(source, analysis, output_dir, **kwargs):
+        observed[source.source_id] = kwargs["session_average"]
+        return real_export_analyzed_copy(source, analysis, output_dir, **kwargs)
+
+    monkeypatch.setattr(execution, "export_analyzed_copy", fake_export)
+    export_active_copies(
+        result, {"copy-002": override},
+        output_dir=tmp_path / "shared-average-exports",
+        options=CopyExportOptions(),
+        grades={"copy-001": "12.0/20", "copy-002": "18.0/20"},
+        reviewed_source_ids={"copy-001", "copy-002"},
+    )
+    assert observed == {"copy-001": "15.0", "copy-002": "15.0"}

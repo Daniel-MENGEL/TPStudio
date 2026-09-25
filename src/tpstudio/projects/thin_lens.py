@@ -268,8 +268,11 @@ SEMANTIC_RESPONSE_EXPECTATIONS = (
     ExpectedSemanticResponse(
         "single_result_comment", SemanticRole.INTERPRETATION,
         (
-            _criterion("single_result_with_uncertainty", "Donner la distance focale issue de la mesure unique avec son incertitude et un arrondi cohérent."),
-            _criterion("single_theory_normalized_error", "Utiliser l'écart normalisé et le seuil 2 pour comparer à la valeur théorique."),
+            _criterion(
+                "single_result_with_uncertainty",
+                "Donner la distance focale issue de la mesure unique avec son incertitude et un arrondi cohérent.",
+            ),
+            _criterion("single_theory_normalized_error", "Donner l'écart normalisé et le comparer explicitement au seuil 2 pour conclure sur la compatibilité avec la valeur théorique. Une formulation telle que « 0,12 inférieur à 2, donc compatible » satisfait ce critère."),
             _criterion("single_measurement_limitation", "Discuter une limite de la mesure unique.", SemanticCriterionImportance.RECOMMENDED),
         ),
     ),
@@ -297,7 +300,12 @@ SEMANTIC_RESPONSE_EXPECTATIONS = (
         (
             _criterion("multiple_result_with_uncertainty", "Donner la distance focale moyenne avec son incertitude."),
             _criterion("both_normalized_errors", "Interpréter les comparaisons à la théorie et à la mesure unique avec les écarts normalisés et le seuil 2."),
-            _criterion("method_precision_comparison", "Comparer la précision et la fiabilité des deux méthodes."),
+            _criterion(
+                "method_precision_comparison",
+                "Comparer la précision et la fiabilité des deux méthodes. Dire que la seconde méthode repose sur "
+                "un plus grand nombre de mesures ou de points et réduit ainsi l'incertitude constitue une justification suffisante ; "
+                "le détail du calcul d'incertitude n'est pas exigé dans cette réponse.",
+            ),
         ),
     ),
     ExpectedSemanticResponse(

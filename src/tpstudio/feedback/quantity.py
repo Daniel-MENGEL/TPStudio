@@ -308,5 +308,12 @@ def french_quantity_feedback_catalog() -> QuantityFeedbackCatalog:
                 "Présentez la valeur et son incertitude au même rang décimal.",
                 priority=FeedbackPriority.LOW,
             ),
+            QuantityFeedbackTemplate(
+                QuantityDiagnosticCode.UNCERTAINTY_SYMBOL_ON_STANDARD_UNCERTAINTY,
+                "Écrivez l’incertitude-type comme une grandeur positive, par exemple "
+                "u(n) = 0,07. Le symbole ± s’emploie dans le résultat complet : "
+                "n = 1,52 ± 0,07.",
+                priority=FeedbackPriority.NORMAL,
+            ),
         ),
     )

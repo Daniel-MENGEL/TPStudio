@@ -29,6 +29,7 @@ _ANNOTATION_CSS = """<style>
 .tpstudio-severity-info { background: #edf7ee; border-color: #6aa56f; }
 .tpstudio-severity-important { background: #fcefee; border-color: #d25555; }
 .tpstudio-severity-attention { background: #fff4dc; border-color: #d49a2a; }
+.tpstudio-severity-review { background: #e8f2ff; border-color: #3b82c4; }
 .tpstudio-severity-blocking { background: #fde8e8; border-color: #b91c1c; }
 @media print { .tpstudio-annotation { background: transparent !important; } }
 </style>"""
@@ -37,6 +38,7 @@ _INLINE_STYLES = {
     "info": "background:#edf7ee;border-left:.35em solid #6aa56f",
     "important": "background:#fcefee;border-left:.35em solid #d25555",
     "attention": "background:#fff4dc;border-left:.35em solid #d49a2a",
+    "review": "background:#e8f2ff;border-left:.35em solid #3b82c4",
     "blocking": "background:#fde8e8;border-left:.35em solid #b91c1c",
 }
 
@@ -46,7 +48,10 @@ def annotation_presentation(annotation: NotebookAnnotation) -> tuple[str, str]:
         raise TypeError("Le rendu exige exactement une NotebookAnnotation.")
     style, label = _PRESENTATION[annotation.severity]
     review_level = dict(annotation.metadata).get("review_level")
-    return style, _REVIEW_LABELS.get(review_level, label)
+    label = _REVIEW_LABELS.get(review_level, label)
+    if label == "À vérifier":
+        style = "review"
+    return style, label
 
 
 def annotation_css() -> str:

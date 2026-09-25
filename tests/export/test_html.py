@@ -58,6 +58,22 @@ def test_html_tolerates_missing_student_attachment_without_mutation():
         assert reference in notebook.cells[0].source
 
 
+def test_html_removes_stray_closing_div_without_mutating_student_copy():
+    source = '<div class="answer">Réponse complète.</div>\n</div>\n\n## Question 2'
+    notebook = nbformat.v4.new_notebook(
+        cells=[nbformat.v4.new_markdown_cell(source)]
+    )
+
+    html = render_annotated_notebook_html(
+        notebook,
+        options=CopyExportOptions(),
+    )
+
+    assert "Réponse complète." in html
+    assert "Question 2" in html
+    assert notebook.cells[0].source == source
+
+
 def test_html_multiple_annotations_use_one_global_palette_and_escape_message():
     cells = [
         nbformat.v4.new_markdown_cell('<blockquote class="tpstudio-annotation tpstudio-severity-info" style="background:#edf7ee"><strong>Très bien</strong><br>Premier</blockquote>'),

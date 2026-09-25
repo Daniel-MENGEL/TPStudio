@@ -6,7 +6,10 @@ from hashlib import sha256
 
 from tpstudio.batch import BatchOptions
 from tpstudio.web.model import SelectedCopy, WebBatchOptions
-from tpstudio.web.planning import build_batch_plan_from_web_selection, resolve_output_dir, WebInputError
+from tpstudio.web.planning import (
+    WebInputError, build_batch_plan_from_web_selection,
+    project_preview_for_selected_copy, resolve_output_dir,
+)
 
 
 def _copy(tmp_path, source_id, name):
@@ -104,3 +107,35 @@ def test_identity_to_review_does_not_influence_output_name(tmp_path):
     assert identified.identity is not None and identified.identity.status.value == "to_review"
     assert plan.sources[0].output_stem is None
     assert plan.planned_outputs[0].notebook_path.name == "Paul-DURAND-correction.ipynb"
+
+
+@pytest.mark.parametrize(
+    ("filename", "heading", "expected_project", "expected_title"),
+    (
+        (
+            "snell.ipynb", "# Lois de Snell-Descartes\n\nRéfraction et indice de réfraction",
+            "snells-laws-mvp", "Lois de Snell-Descartes",
+        ),
+        (
+            "lentille.ipynb", "# Formation d'une image par une lentille mince\n\nRelation de conjugaison",
+            "thin-lens-image", "Formation d'une image par une lentille mince",
+        ),
+    ),
+)
+def test_batch_verification_previews_each_detected_project(
+    tmp_path, filename, heading, expected_project, expected_title,
+):
+    path = tmp_path / filename
+    nbformat.write(
+        nbformat.v4.new_notebook(cells=[nbformat.v4.new_markdown_cell(heading)]),
+        path,
+    )
+    copy = SelectedCopy(
+        "copy-001", filename, path, sha256(path.read_bytes()).hexdigest(),
+    )
+
+    preview = project_preview_for_selected_copy(copy)
+
+    assert preview.project_id == expected_project
+    assert preview.title == expected_title
+    assert preview.requires_teacher_choice is False

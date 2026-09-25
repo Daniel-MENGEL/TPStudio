@@ -161,6 +161,31 @@ def test_explicit_project_bypasses_detection() -> None:
     assert result.candidates[0].evidence[0].category is ProjectEvidenceCategory.STRONG
 
 
+def test_aligned_project_metadata_takes_priority_over_student_vocabulary() -> None:
+    value = notebook(
+        "# Formation d'une image par une lentille mince",
+        "Nous avons appelé par erreur cette relation formule de Snell-Descartes.",
+        "Relation de conjugaison : 1/OA' - 1/OA = 1/f'.",
+    )
+    value.metadata["tpstudio"] = {"project_id": "thin-lens-image"}
+
+    result = resolve_project_for_copy(value)
+
+    assert result.selected_project_id == "thin-lens-image"
+    assert result.requires_teacher_choice is False
+    assert result.candidates[0].evidence[0].kind == "metadata"
+
+
+def test_student_mention_of_snell_descartes_is_not_a_snell_title() -> None:
+    result = resolve_project_for_copy(notebook(
+        "# Formation d'une image par une lentille mince",
+        "Relation de conjugaison de Snell-Descartes : 1/OA' - 1/OA = 1/f'.",
+    ))
+
+    assert result.selected_project_id == "thin-lens-image"
+    assert result.requires_teacher_choice is False
+
+
 def test_unknown_explicit_project_is_rejected() -> None:
     try:
         resolve_project_for_copy(notebook(), explicit_project_id="unknown")

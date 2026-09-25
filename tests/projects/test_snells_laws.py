@@ -83,14 +83,32 @@ def test_semantic_contracts_follow_the_aligned_notebook_order() -> None:
     assert project.semantic_response_expectations[-1].semantic_role is SemanticRole.CONCLUSION
 
 
+def test_series_protocol_does_not_grade_unrequested_geometry_repetition() -> None:
+    contract = next(
+        item for item in snells_laws_teacher_project().semantic_response_expectations
+        if item.production_id == "series_protocol"
+    )
+    assert tuple(item.criterion_id for item in contract.criteria) == (
+        "series_method_objective",
+        "at_least_fifteen_pairs",
+        "span_useful_angle_range",
+    )
+
+
 def test_setup_contract_covers_the_new_tex_alignment_checks() -> None:
     setup = snells_laws_teacher_project().semantic_response_expectations[0]
     assert tuple(criterion.criterion_id for criterion in setup.criteria) == (
         "identify_angle_readings",
-        "justify_angle_uncertainties",
+        "angle_uncertainties",
+        "angle_reading_errors",
         "verify_zero_incidence",
-        "correct_laser_alignment",
     )
+
+    uncertainty = next(
+        criterion for criterion in setup.criteria
+        if criterion.criterion_id == "angle_uncertainties"
+    )
+    assert "annoncée collectivement" in uncertainty.description
 
 
 def test_quantities_declare_angles_and_dimensionless_results() -> None:

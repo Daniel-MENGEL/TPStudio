@@ -7,6 +7,7 @@ from tpstudio.semantic_analysis import CachedSemanticAnalysisProvider
 from tpstudio.web.app import (
     _analysis_signature,
     _annotation_grade_score,
+    _answer_group_positions,
     _build_semantic_provider,
     _copy_issue_count,
     _coerce_rubric_level,
@@ -414,17 +415,17 @@ def test_first_lab_grading_panel_only_displays_the_proposed_grade():
 
 
 def test_annotation_grade_uses_current_levels_and_ignores_removed_comments():
-    def annotation(annotation_id, severity):
+    def annotation(annotation_id, severity, cell):
         return NotebookAnnotation(
             annotation_id, AnnotationKind.FEEDBACK, FeedbackAudience.STUDENT,
-            annotation_id, (annotation_id,), None, None, 0,
+            annotation_id, (annotation_id,), None, None, cell,
             AnnotationPlacement.AFTER_CELL, severity,
         )
 
     annotations = (
-        annotation("good", TeacherReportSeverity.INFO),
-        annotation("partial", TeacherReportSeverity.ATTENTION),
-        annotation("removed", TeacherReportSeverity.BLOCKING),
+        annotation("good", TeacherReportSeverity.INFO, 0),
+        annotation("partial", TeacherReportSeverity.ATTENTION, 1),
+        annotation("removed", TeacherReportSeverity.BLOCKING, 2),
     )
     reviews = (
         AnnotationReview(
@@ -452,6 +453,36 @@ def test_autonomous_tp_scale_targets_fragile_and_average_calibration_levels():
     assert _annotation_grade_score((fragile,)) == Decimal("6.0")
 
 
+def test_autonomous_tp_grades_an_answer_once_with_several_comments():
+    def annotation(annotation_id, cell, severity):
+        return NotebookAnnotation(
+            annotation_id, AnnotationKind.FEEDBACK, FeedbackAudience.STUDENT,
+            annotation_id, (annotation_id,), None, None, cell,
+            AnnotationPlacement.AFTER_CELL, severity,
+        )
+
+    annotations = (
+        annotation("answer-1", 4, TeacherReportSeverity.INFO),
+        annotation("answer-2-overview", 8, TeacherReportSeverity.ATTENTION),
+        annotation("answer-2-format", 8, TeacherReportSeverity.ATTENTION),
+        annotation("answer-2-notation", 8, TeacherReportSeverity.ATTENTION),
+    )
+    assert _annotation_grade_score(annotations) == Decimal("15.0")
+
+    reviews = (
+        AnnotationReview("answer-2-overview", AnnotationReviewAction.REMOVE),
+        AnnotationReview("answer-2-format", AnnotationReviewAction.REMOVE),
+        AnnotationReview("answer-2-notation", AnnotationReviewAction.REMOVE),
+    )
+    assert _annotation_grade_score(annotations, reviews) == Decimal("20.0")
+    assert _answer_group_positions(annotations) == {
+        "answer-1": (1, 2, 1, 1),
+        "answer-2-overview": (2, 2, 1, 3),
+        "answer-2-format": (2, 2, 2, 3),
+        "answer-2-notation": (2, 2, 3, 3),
+    }
+
+
 def test_generic_grading_panel_displays_note_and_next_copy_button():
     class FakeStreamlit:
         def __init__(self):
@@ -472,6 +503,9 @@ def test_generic_grading_panel_displays_note_and_next_copy_button():
 
         def metric(self, label, value):
             self.metrics.append((label, value))
+
+        def caption(self, value):
+            assert "Une seule appréciation compte par réponse" in value
 
         def button(self, label, **kwargs):
             self.buttons.append((label, kwargs["disabled"]))

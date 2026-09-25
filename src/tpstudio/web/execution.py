@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import replace
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from hashlib import sha256
 from pathlib import Path
 import json
@@ -213,6 +214,8 @@ def export_active_copies(
     options: CopyExportOptions,
     selected_copies=(),
     annotation_reviews: dict[str, tuple] | None = None,
+    grades: dict[str, str] | None = None,
+    reviewed_source_ids: set[str] | None = None,
 ) -> dict[str, WebCopyExportState]:
     """Export active analyses only; analysis and dispatch are never called here."""
     exported: dict[str, WebCopyExportState] = {}
@@ -223,6 +226,28 @@ def export_active_copies(
         if item.identity is not None
     }
     annotation_reviews = {} if annotation_reviews is None else dict(annotation_reviews)
+    grades = {} if grades is None else dict(grades)
+    reviewed_source_ids = set(grades) if reviewed_source_ids is None else set(reviewed_source_ids)
+    project_grades: dict[str, list[Decimal]] = {}
+    for item in result.copies:
+        if item.source_id not in reviewed_source_ids:
+            continue
+        analysis = active_analysis_for_source(result, overrides, item.source_id)
+        if analysis is None:
+            continue
+        raw_grade = grades.get(item.source_id, "").removesuffix("/20").strip()
+        try:
+            value = Decimal(raw_grade)
+        except InvalidOperation:
+            continue
+        if value.is_finite() and Decimal(0) <= value <= Decimal(20):
+            project_grades.setdefault(analysis.project_id, []).append(value)
+    project_averages = {
+        project_id: str(
+            (sum(values) / len(values)).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+        )
+        for project_id, values in project_grades.items()
+    }
     for item in result.copies:
         analysis = active_analysis_for_source(result, overrides, item.source_id)
         if analysis is None:
@@ -239,6 +264,8 @@ def export_active_copies(
                         analysis, identities.get(item.source_id)
                     ),
                     annotation_reviews=annotation_reviews.get(item.source_id, ()),
+                    grade=grades.get(item.source_id),
+                    session_average=project_averages.get(analysis.project_id),
                 ),
             )
         except Exception as exc:

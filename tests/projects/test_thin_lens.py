@@ -71,6 +71,37 @@ def test_thin_lens_semantic_contracts_follow_notebook_order() -> None:
     assert project.semantic_response_expectations[-1].semantic_role is SemanticRole.CONCLUSION
 
 
+def test_single_focal_uncertainty_criterion_stays_concise_for_student_feedback() -> None:
+    project = thin_lens_teacher_project()
+    contract = next(
+        item for item in project.semantic_response_expectations
+        if item.production_id == "single_result_comment"
+    )
+    criterion = next(
+        item for item in contract.criteria
+        if item.criterion_id == "single_result_with_uncertainty"
+    )
+
+    assert criterion.description == (
+        "Donner la distance focale issue de la mesure unique avec son incertitude et un arrondi cohérent."
+    )
+
+
+def test_multiple_measurement_points_are_sufficient_method_comparison() -> None:
+    project = thin_lens_teacher_project()
+    contract = next(
+        item for item in project.semantic_response_expectations
+        if item.production_id == "multiple_result_comment"
+    )
+    criterion = next(
+        item for item in contract.criteria
+        if item.criterion_id == "method_precision_comparison"
+    )
+
+    assert "un plus grand nombre de mesures ou de points" in criterion.description
+    assert "le détail du calcul d'incertitude n'est pas exigé" in criterion.description
+
+
 def test_thin_lens_references_are_real_resource_names() -> None:
     project = thin_lens_teacher_project()
     assert project.statement_reference.expected_filename == "Formation-dune-image-par-une-lentille-mince.ipynb"
