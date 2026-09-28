@@ -151,12 +151,12 @@ def test_pipeline_appends_grade_at_the_very_end_of_corrected_copy(tmp_path):
     exported = nbformat.read(
         result.notebook_artifact.path, as_version=nbformat.NO_CONVERT
     )
-    assert "Note : 14.5/20" in exported.cells[-1].source
+    assert "Note indicative : 14.5/20" in exported.cells[-1].source
     assert "Moyenne des copies corrigées de ce TP : 12.3/20" in exported.cells[-1].source
     html_text = result.html_artifact.path.read_text(encoding="utf-8")
-    assert "Note : 14.5/20" in html_text
+    assert "Note indicative : 14.5/20" in html_text
     assert "Moyenne des copies corrigées de ce TP : 12.3/20" in html_text
-    assert html_text.rfind("Note : 14.5/20") > html_text.rfind("tpstudio-annotation")
+    assert html_text.rfind("Note indicative : 14.5/20") > html_text.rfind("tpstudio-annotation")
 
 
 def test_export_keeps_only_validated_level_below_an_inserted_schematic(

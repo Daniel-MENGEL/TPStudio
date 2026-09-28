@@ -68,6 +68,34 @@ def test_semantic_contracts_follow_student_responses_only() -> None:
     )
     settings = project.semantic_response_expectations[0]
     assert any(item.criterion_id == "own_instrument" for item in settings.criteria)
+    assert not any(item.criterion_id == "collimator_criterion" for item in settings.criteria)
+    minimum = next(
+        item for item in project.semantic_response_expectations
+        if item.production_id == "minimum_deviation_protocol"
+    )
+    assert any(item.criterion_id == "collimator_criterion" for item in minimum.criteria)
+
+
+def test_collimator_follows_prism_angle_measurement_in_both_notebooks() -> None:
+    for filename in (
+        PRISM_GONIOMETER_STATEMENT_FILENAME,
+        PRISM_GONIOMETER_CORRECTION_FILENAME,
+    ):
+        notebook = _read(filename)
+        sources = [str(cell.source) for cell in notebook.cells]
+        angle_result_index = next(
+            i for i, source in enumerate(sources)
+            if "<!-- prism-angle-result-response -->" in source
+        )
+        collimator_index = next(
+            i for i, source in enumerate(sources)
+            if "## 3. Réglage du collimateur" in source
+        )
+        minimum_index = next(
+            i for i, source in enumerate(sources)
+            if "<!-- minimum-deviation-protocol-response -->" in source
+        )
+        assert angle_result_index < collimator_index < minimum_index
 
 
 def test_all_bindings_resolve_once_in_statement_and_correction() -> None:

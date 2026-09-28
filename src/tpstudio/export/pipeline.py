@@ -130,7 +130,7 @@ def _with_final_grade(notebook, grade: str | None, session_average: str | None =
         '<div class="tpstudio-final-grade" '
         'style="margin-top:2em;padding:1em 1.2em;border:2px solid #334155;'
         'border-radius:6px;background:#f8fafc;font-size:1.15em">'
-        f'<strong>Note : {grade}</strong>{average_html}</div>'
+        f'<strong>Note indicative : {grade}</strong>{average_html}</div>'
     ))
     return result
 

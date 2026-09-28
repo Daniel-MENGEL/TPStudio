@@ -68,7 +68,6 @@ SEMANTIC_RESPONSE_EXPECTATIONS = (
             _criterion("own_instrument", "Décrire les réglages réellement effectués par le binôme sur son propre goniomètre."),
             _criterion("eyepiece_and_autocollimation", "Mentionner le réglage de l'oculaire puis celui de l'objectif par autocollimation."),
             _criterion("mechanical_alignment", "Décrire le réglage mécanique de la lunette ou du plateau porte-prisme."),
-            _criterion("collimator_criterion", "Régler le collimateur pour obtenir une fente fine et nette à l'infini, sans parallaxe perceptible."),
             _criterion("setting_difficulty", "Signaler une difficulté ou une limite rencontrée lors des réglages.", SemanticCriterionImportance.RECOMMENDED),
         ),
     ),
@@ -96,6 +95,7 @@ SEMANTIC_RESPONSE_EXPECTATIONS = (
         SemanticRole.PROTOCOL,
         (
             _criterion("minimum_objective", "Identifier la mesure du minimum de déviation afin de déterminer l'indice."),
+            _criterion("collimator_criterion", "Après la mesure de A, régler le collimateur à l'aide de la lunette pour observer une fente fine et nette à l'infini."),
             _criterion("direction_reversal", "Repérer le minimum par le changement de sens de déplacement de l'image."),
             _criterion("two_symmetric_positions", "Effectuer la recherche dans les deux orientations symétriques du prisme."),
             _criterion("minimum_vernier_readings", "Relever les deux positions de la lunette et leurs intervalles d'incertitude."),
@@ -139,7 +139,7 @@ def _plan() -> ScientificProductionPlan:
         "prism-goniometer-productions",
         "Productions scientifiques — Mesure d'indice au goniomètre",
         (
-            spec("goniometer_settings", "Réglages du goniomètre", interpretation, (semantic,)),
+            spec("goniometer_settings", "Réglages de la lunette autocollimatrice", interpretation, (semantic,)),
             spec("prism_angle_protocol", "Protocole de mesure de A", interpretation, (semantic,)),
             spec("prism_angle", "Angle au sommet du prisme", quantity, (structural,)),
             spec("prism_angle_reference", "Angle constructeur", quantity, (structural,)),

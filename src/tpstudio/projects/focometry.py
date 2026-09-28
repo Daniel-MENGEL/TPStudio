@@ -189,8 +189,8 @@ def _plan() -> ScientificProductionPlan:
             spec("compare_bessel_collimator", "Comparaison Bessel / collimateur", comparison, (cross,), ("bessel_focal_length", "collimator_focal_length")),
             spec("collimator_result_comment", "Commentaire du collimateur", interpretation, (semantic,), ("compare_collimator_theory", "compare_bessel_collimator")),
             spec("vff_focal_length", "Focale au viseur à frontale fixe", quantity, (structural,), required=False),
-            spec("minus66_theoretical_focal_length", "Focale théorique −6,6", quantity, (structural,), required=False),
-            spec("compare_vff_theory", "Comparaison viseur / constructeur", comparison, (cross,), ("vff_focal_length", "minus66_theoretical_focal_length"), required=False),
+            spec("compare_vff_theory", "Comparaison viseur / constructeur", comparison, (cross,), ("vff_focal_length", "minus2_theoretical_focal_length"), required=False),
+            spec("compare_vff_box", "Comparaison viseur / boîte de verre", comparison, (cross,), ("vff_focal_length", "diverging_box_focal_length"), required=False),
             spec("final_conclusion", "Conclusion générale", interpretation, (semantic,), ("collimator_result_comment",)),
         ),
         "Contrat aligné sur le TP de deux heures ; la mesure au viseur reste facultative.",
@@ -233,9 +233,9 @@ def _bindings(plan: ScientificProductionPlan) -> NotebookBindingPlan:
             _binding("collimator-comparison-cell", "compare_collimator_theory", "E_n_collimateur_constructeur = ecart_normalise"),
             _binding("methods-comparison-cell", "compare_bessel_collimator", "E_n_bessel_collimateur = ecart_normalise"),
             _binding("collimator-result-response", "collimator_result_comment", "collimator-result-response"),
-            _binding("vff-focal-cell", "vff_focal_length", "f4 = f4_values.mean()"),
-            _binding("minus66-theory-cell", "minus66_theoretical_focal_length", "f4_constructeur = 100 / (-6.6)"),
-            _binding("vff-comparison-cell", "compare_vff_theory", "E_n_f4 = ecart_normalise"),
+            _binding("vff-focal-cell", "vff_focal_length", "f2_viseur = f2_viseur_values.mean()"),
+            _binding("vff-comparison-cell", "compare_vff_theory", "E_n_viseur_constructeur = ecart_normalise"),
+            _binding("vff-box-comparison-cell", "compare_vff_box", "E_n_viseur_boite = ecart_normalise"),
             _binding("final-conclusion-response", "final_conclusion", "focometry-final-conclusion-response"),
         ),
         "Les cellules du viseur sont facultatives mais leurs marqueurs restent stables.",
@@ -258,8 +258,7 @@ def focometry_teacher_project() -> TeacherProjectConfiguration:
             ExpectedQuantity("bessel_focal_length", "f'_{Bessel}", ("f3_bessel", "f'3 par Bessel"), "cm", (), required, required),
             ExpectedQuantity("plus33_theoretical_focal_length", "f'_{+3,3}", ("f3_constructeur", "Valeur constructeur"), "cm", (), required, ignored),
             ExpectedQuantity("collimator_focal_length", "f'_{collimateur}", ("f3_collimateur", "f'3 au collimateur"), "cm", (), required, required),
-            ExpectedQuantity("vff_focal_length", "f'_{VFF}", ("f4", "f'4 au viseur"), "cm", (), optional, optional),
-            ExpectedQuantity("minus66_theoretical_focal_length", "f'_{-6,6}", ("f4_constructeur", "Valeur constructeur"), "cm", (), optional, ignored),
+            ExpectedQuantity("vff_focal_length", "f'_2 (viseur)", ("f2_viseur", "f'2 au viseur"), "cm", (), optional, optional),
         ),
     )
     comparisons = QuantityComparisonExpectationSet(
@@ -271,7 +270,8 @@ def focometry_teacher_project() -> TeacherProjectConfiguration:
             ExpectedQuantityComparison("compare_bessel_theory", "bessel_focal_length", "plus33_theoretical_focal_length", pedagogical_context=ComparisonPedagogicalContext.COHERENCE_EXPECTED),
             ExpectedQuantityComparison("compare_collimator_theory", "collimator_focal_length", "plus33_theoretical_focal_length", pedagogical_context=ComparisonPedagogicalContext.COHERENCE_EXPECTED),
             ExpectedQuantityComparison("compare_bessel_collimator", "bessel_focal_length", "collimator_focal_length", pedagogical_context=ComparisonPedagogicalContext.COHERENCE_EXPECTED),
-            ExpectedQuantityComparison("compare_vff_theory", "vff_focal_length", "minus66_theoretical_focal_length", pedagogical_context=ComparisonPedagogicalContext.COHERENCE_EXPECTED),
+            ExpectedQuantityComparison("compare_vff_theory", "vff_focal_length", "minus2_theoretical_focal_length", pedagogical_context=ComparisonPedagogicalContext.COHERENCE_EXPECTED),
+            ExpectedQuantityComparison("compare_vff_box", "vff_focal_length", "diverging_box_focal_length", pedagogical_context=ComparisonPedagogicalContext.COHERENCE_EXPECTED),
         ),
     )
     student_errors = StudentNormalizedErrorExpectationSet(
@@ -284,7 +284,8 @@ def focometry_teacher_project() -> TeacherProjectConfiguration:
                 ("compare_bessel_theory", ("E_n_bessel", "Écart normalisé")),
                 ("compare_collimator_theory", ("E_n_collimateur_constructeur", "Écart normalisé")),
                 ("compare_bessel_collimator", ("E_n_bessel_collimateur", "Écart normalisé")),
-                ("compare_vff_theory", ("E_n_f4", "Écart normalisé")),
+                ("compare_vff_theory", ("E_n_viseur_constructeur", "Écart normalisé avec la valeur constructeur")),
+                ("compare_vff_box", ("E_n_viseur_boite", "Écart normalisé entre boîte de verre et viseur")),
             )
         ),
     )
